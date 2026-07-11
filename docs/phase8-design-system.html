@@ -1,0 +1,1793 @@
+<title>Phase 8 — Miza Dashboard Design System</title>
+<style>
+  :root {
+    --paper: #EEF0F0; --panel: #FFFFFF; --panel-2: #F5F6F6;
+    --ink: #171B1E; --muted: #5B6570; --faint: #8A939B;
+    --line: #D8DDE0; --line-soft: #E4E8EA;
+    --accent: #1F6F6B; --accent-ink: #0E4643; --accent-soft: #DDEDEC;
+    --accent-2: #7A4F9E; --accent-2-soft: #EFE6F5;
+    --ok: #2E7D4F; --ok-soft: #E1F1E6;
+    --warn: #9C6B14; --warn-soft: #FBF0DA;
+    --bad: #B23B3B; --bad-soft: #FBE6E6;
+    --info: #2D6CA2; --info-soft: #E2EDF6;
+    --retire: #6B7078; --retire-soft: #E9EAEC;
+    --shadow: 0 1px 2px rgba(20,24,27,0.04), 0 6px 20px -8px rgba(20,24,27,0.12);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #12161A; --panel: #1A2025; --panel-2: #1F262B; --ink: #E7EBEC;
+      --muted: #9AA6AC; --faint: #707A80; --line: #2A3238; --line-soft: #232A2F;
+      --accent: #4FBDB6; --accent-ink: #A9E7E2; --accent-soft: #17302E;
+      --accent-2: #B79BD6; --accent-2-soft: #2A2035;
+      --ok: #6FCB92; --ok-soft: #16281D; --warn: #E0B15C; --warn-soft: #2E260F;
+      --bad: #E58888; --bad-soft: #301A1A; --info: #7FB3DC; --info-soft: #16232E;
+      --retire: #8A939B; --retire-soft: #23262A;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 10px 30px -10px rgba(0,0,0,0.5);
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #12161A; --panel: #1A2025; --panel-2: #1F262B; --ink: #E7EBEC;
+    --muted: #9AA6AC; --faint: #707A80; --line: #2A3238; --line-soft: #232A2F;
+    --accent: #4FBDB6; --accent-ink: #A9E7E2; --accent-soft: #17302E;
+    --accent-2: #B79BD6; --accent-2-soft: #2A2035;
+    --ok: #6FCB92; --ok-soft: #16281D; --warn: #E0B15C; --warn-soft: #2E260F;
+    --bad: #E58888; --bad-soft: #301A1A; --info: #7FB3DC; --info-soft: #16232E;
+    --retire: #8A939B; --retire-soft: #23262A;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 10px 30px -10px rgba(0,0,0,0.5);
+  }
+  :root[data-theme="light"] {
+    --paper: #EEF0F0; --panel: #FFFFFF; --panel-2: #F5F6F6; --ink: #171B1E;
+    --muted: #5B6570; --faint: #8A939B; --line: #D8DDE0; --line-soft: #E4E8EA;
+    --accent: #1F6F6B; --accent-ink: #0E4643; --accent-soft: #DDEDEC;
+    --accent-2: #7A4F9E; --accent-2-soft: #EFE6F5;
+    --ok: #2E7D4F; --ok-soft: #E1F1E6; --warn: #9C6B14; --warn-soft: #FBF0DA;
+    --bad: #B23B3B; --bad-soft: #FBE6E6; --info: #2D6CA2; --info-soft: #E2EDF6;
+    --retire: #6B7078; --retire-soft: #E9EAEC;
+    --shadow: 0 1px 2px rgba(20,24,27,0.04), 0 6px 20px -8px rgba(20,24,27,0.12);
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); color: var(--ink);
+    font-family: -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    font-size: 16px; line-height: 1.55; overflow-x: hidden; }
+  ::selection { background: var(--accent-soft); color: var(--accent-ink); }
+  a { color: var(--accent); }
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .mono { font-family: ui-monospace, "Cascadia Code", "SF Mono", Consolas, monospace; font-variant-numeric: tabular-nums; }
+  .eyebrow { font-weight: 700; font-size: 0.72rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); }
+  h1, h2, h3, h4 { text-wrap: balance; font-weight: 800; letter-spacing: -0.01em; color: var(--ink); }
+  p { max-width: 76ch; }
+  .lead-p { color: var(--muted); max-width: 72ch; }
+
+  .shell { display: grid; grid-template-columns: 250px minmax(0,1fr); min-height: 100vh; }
+  @media (max-width: 900px) { .shell { grid-template-columns: 1fr; } }
+  nav.toc { position: sticky; top: 0; align-self: start; height: 100vh;
+    border-right: 1px solid var(--line); background: var(--panel-2); padding: 26px 16px; overflow-y: auto; }
+  @media (max-width: 900px) { nav.toc { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--line); } }
+  nav.toc .brand { font-weight: 800; font-size: 0.98rem; margin-bottom: 3px; }
+  nav.toc .brand-sub { font-size: 0.76rem; color: var(--muted); margin-bottom: 18px; }
+  nav.toc ol { list-style: none; margin: 0; padding: 0; counter-reset: sec; display: flex; flex-direction: column; gap: 0; }
+  nav.toc li { counter-increment: sec; }
+  nav.toc a { display: flex; gap: 9px; align-items: baseline; text-decoration: none; color: var(--muted);
+    font-size: 0.78rem; padding: 4px 8px; border-radius: 6px; }
+  nav.toc a:hover { background: var(--panel); color: var(--ink); }
+  nav.toc a::before { content: counter(sec, decimal-leading-zero); font-family: ui-monospace, monospace;
+    font-size: 0.66rem; color: var(--faint); flex: none; }
+  nav.toc .toc-add { border-top: 1px dashed var(--line); margin-top: 8px; padding-top: 8px; }
+
+  main { min-width: 0; }
+  header.hero { padding: 54px clamp(20px, 5vw, 64px) 38px; border-bottom: 1px solid var(--line); }
+  header.hero h1 { font-size: clamp(1.5rem, 3vw, 2.1rem); margin: 12px 0 10px; max-width: 24ch; }
+  header.hero p.lede { color: var(--muted); max-width: 66ch; font-size: 1rem; margin: 0 0 20px; }
+  .meta-row { display: flex; flex-wrap: wrap; gap: 10px 22px; font-size: 0.82rem; color: var(--muted); }
+  .meta-row b { color: var(--ink); font-weight: 700; }
+
+  section { padding: 42px clamp(20px, 5vw, 64px); border-bottom: 1px solid var(--line-soft); }
+  section:last-of-type { border-bottom: none; }
+  .sec-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 8px; }
+  .sec-head h2 { font-size: 1.3rem; margin: 0; }
+  .sec-intro { margin-bottom: 20px; }
+  h3.sub { font-size: 1rem; margin: 26px 0 10px; }
+
+  .callout { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--accent);
+    border-radius: 8px; padding: 16px 20px; box-shadow: var(--shadow); max-width: 80ch; margin: 18px 0 0; }
+  .callout h4 { font-size: 0.92rem; margin: 0 0 6px; }
+  .callout p { margin: 0; color: var(--muted); font-size: 0.92rem; }
+  .callout p + p { margin-top: 8px; }
+  .callout.decision { border-left-color: var(--accent-2); }
+  .callout.decision h4::before { content: "⚖ "; }
+  .callout.rule { border-left-color: var(--warn); }
+
+  .grid { display: grid; gap: 14px; }
+  .grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+  .grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
+  .grid.cols-4 { grid-template-columns: repeat(4, 1fr); }
+  @media (max-width: 860px) { .grid.cols-3, .grid.cols-2, .grid.cols-4 { grid-template-columns: 1fr; } }
+
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 15px 17px; box-shadow: var(--shadow); }
+  .card h4 { font-size: 0.88rem; margin: 0 0 6px; }
+  .card p { color: var(--muted); font-size: 0.85rem; margin: 0; }
+  .card p + p { margin-top: 6px; }
+
+  .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); margin-top: 14px; }
+  table { border-collapse: collapse; width: 100%; min-width: 560px; background: var(--panel); }
+  thead th { text-align: left; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted);
+    padding: 9px 14px; border-bottom: 1px solid var(--line); background: var(--panel-2); white-space: nowrap; }
+  tbody td { padding: 9px 14px; border-bottom: 1px solid var(--line-soft); font-size: 0.85rem; vertical-align: top; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover td { background: var(--panel-2); }
+  .group-row td { background: var(--panel-2); font-weight: 700; font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+
+  .chip { display: inline-flex; align-items: center; gap: 5px; font-size: 0.73rem; font-weight: 700;
+    padding: 3px 9px; border-radius: 99px; white-space: nowrap; line-height: 1.6; }
+  .chip.ok { background: var(--ok-soft); color: var(--ok); }
+  .chip.warn { background: var(--warn-soft); color: var(--warn); }
+  .chip.bad { background: var(--bad-soft); color: var(--bad); }
+  .chip.info { background: var(--info-soft); color: var(--info); }
+  .chip.neutral { background: var(--retire-soft); color: var(--retire); }
+  .chip.muted-o { background: transparent; color: var(--faint); border: 1px solid var(--line); }
+  .chip.accent { background: var(--accent-soft); color: var(--accent-ink); }
+  .chip .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+
+  code.inline { font-family: ui-monospace, monospace; background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: 4px; padding: 1px 5px; font-size: 0.85em; }
+
+  /* specimens */
+  .swatch-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+  .swatch { width: 130px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--panel); box-shadow: var(--shadow); }
+  .swatch .sw { height: 46px; }
+  .swatch .sw-meta { padding: 7px 10px; }
+  .swatch .sw-name { font-size: 0.72rem; font-weight: 700; }
+  .swatch .sw-val { font-family: ui-monospace, monospace; font-size: 0.68rem; color: var(--muted); }
+
+  .type-spec { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); margin-top: 14px; overflow-x: auto; }
+  .type-row { display: grid; grid-template-columns: 190px minmax(280px,1fr) 210px; gap: 18px; align-items: baseline;
+    padding: 13px 18px; border-bottom: 1px solid var(--line-soft); min-width: 700px; }
+  .type-row:last-child { border-bottom: none; }
+  .type-row .t-name { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  .type-row .t-use { font-size: 0.76rem; color: var(--faint); }
+
+  .space-demo { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+  .space-bar { display: grid; grid-template-columns: 90px auto 1fr; gap: 14px; align-items: center; font-size: 0.8rem; color: var(--muted); }
+  .space-bar .bar { height: 14px; background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 3px; }
+  .space-bar .lbl { font-family: ui-monospace, monospace; font-size: 0.75rem; color: var(--ink); font-weight: 600; }
+
+  .radius-row { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 12px; }
+  .radius-demo { width: 120px; height: 72px; background: var(--panel); border: 1.5px solid var(--accent);
+    display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 2px; }
+  .radius-demo .r-name { font-size: 0.7rem; font-weight: 700; }
+  .radius-demo .r-val { font-family: ui-monospace, monospace; font-size: 0.68rem; color: var(--muted); }
+
+  .btn-demo { display: inline-flex; align-items: center; gap: 6px; font-size: 0.82rem; font-weight: 600;
+    padding: 7px 16px; border-radius: 7px; border: 1px solid transparent; cursor: default; }
+  .btn-demo.primary { background: var(--accent); color: #fff; }
+  .btn-demo.secondary { background: var(--panel); color: var(--ink); border-color: var(--line); }
+  .btn-demo.ghost { background: transparent; color: var(--accent); }
+  .btn-demo.danger { background: var(--bad); color: #fff; }
+  .btn-demo.danger-o { background: transparent; color: var(--bad); border-color: var(--bad); }
+  .btn-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 12px; }
+
+  footer { padding: 32px clamp(20px,5vw,64px) 56px; color: var(--faint); font-size: 0.82rem; }
+</style>
+
+<div class="shell">
+  <nav class="toc" aria-label="Specification sections">
+    <div class="brand">Miza · Phase 8</div>
+    <div class="brand-sub">Dashboard Design System v1.0</div>
+    <ol>
+      <li><a href="#s1">Design philosophy</a></li>
+      <li><a href="#s2">Layout foundations</a></li>
+      <li><a href="#s3">Design tokens</a></li>
+      <li><a href="#s4">Color system</a></li>
+      <li><a href="#s5">Typography</a></li>
+      <li><a href="#s6">Spacing system</a></li>
+      <li><a href="#s7">Border radius</a></li>
+      <li><a href="#s8">Shadows &amp; elevation</a></li>
+      <li><a href="#s9">Iconography</a></li>
+      <li><a href="#s10">Interaction states</a></li>
+      <li><a href="#s11">Buttons</a></li>
+      <li><a href="#s12">Form controls</a></li>
+      <li><a href="#s13">Form standards</a></li>
+      <li><a href="#s14">Data tables</a></li>
+      <li><a href="#s15">Filters</a></li>
+      <li><a href="#s16">Cards</a></li>
+      <li><a href="#s17">Status badges</a></li>
+      <li><a href="#s18">Drawers</a></li>
+      <li><a href="#s19">Modals</a></li>
+      <li><a href="#s20">Notifications</a></li>
+      <li><a href="#s21">Loading states</a></li>
+      <li><a href="#s22">Empty states</a></li>
+      <li><a href="#s23">Error states</a></li>
+      <li><a href="#s24">Responsive behavior</a></li>
+      <li><a href="#s25">Future scalability</a></li>
+    </ol>
+    <ol class="toc-add" start="26">
+      <li><a href="#s26">Motion (added)</a></li>
+      <li><a href="#s27">Content &amp; language (added)</a></li>
+      <li><a href="#s28">Theming policy (added)</a></li>
+      <li><a href="#s29">Entity presentation (added)</a></li>
+    </ol>
+  </nav>
+
+  <main>
+    <header class="hero">
+      <div class="eyebrow">Engineering specification — stage 3 of 5 · no implementation</div>
+      <h1>Miza Dashboard Design System</h1>
+      <p class="lede">
+        The single visual and UX foundation for every dashboard module defined in the approved
+        architecture: Network, Money, Stock, Grattage, Reference, and everything added after them.
+        Technology-agnostic by design — it constrains what the interface looks like and how it behaves,
+        never how it is built. The Frontend Technical Architecture document (stage 4) will bind these
+        rules to an implementation.
+      </p>
+      <div class="meta-row">
+        <span><b>Version</b> 1.0 — proposed</span>
+        <span><b>Inputs</b> Discovery report (approved) · Architecture proposal (approved) · backend domain audit</span>
+        <span><b>Status</b> Awaiting review before stage 4</span>
+      </div>
+
+      <div class="callout" style="margin-top:26px;">
+        <h4>How to read this document</h4>
+        <p><b>MUST</b> marks a rule with no exceptions — violations are design-system bugs.
+        <b>SHOULD</b> marks the default; deviating requires a stated reason in review.
+        <b>MAY</b> marks an explicit freedom. Reference values (hex, px) are design values, not
+        implementation units — stage 4 decides how they are expressed in code.
+        Callouts marked <b>⚖ Decision</b> record places where a conventional choice was challenged
+        and the verdict, so future contributors inherit the reasoning, not just the rule.</p>
+      </div>
+    </header>
+
+    <!-- ============ 1 ============ -->
+    <section id="s1">
+      <div class="sec-head"><span class="eyebrow">01</span><h2>Design philosophy</h2></div>
+      <p class="lead-p sec-intro">Miza's dashboard is an operational tool: the same operators use it
+      every working day to move real money and real stock through irreversible steps. Every principle
+      below exists to serve that reality — none is aesthetic preference.</p>
+
+      <div class="grid cols-2">
+        <div class="card"><h4>Calm by default, loud by exception</h4>
+          <p>The interface stays visually quiet — neutral surfaces, restrained color — so that the few
+          things that genuinely demand attention (an overdue obligation, a pending approval, a
+          destructive action) are the only loud elements on screen.</p>
+          <p><b>Why:</b> operators scan these screens dozens of times a day. If everything is
+          emphasized, nothing is; alert fatigue on a tool that gates irreversible financial actions is
+          a business risk, not a style problem.</p></div>
+        <div class="card"><h4>Data first, chrome last</h4>
+          <p>Numbers, statuses, and names are the content; containers, dividers, and decoration exist
+          only to organize them. When a visual element doesn't help someone read, compare, or decide,
+          it is removed.</p>
+          <p><b>Why:</b> the dominant screen type in every module is a dense table of records.
+          Decoration competes with data for the same pixels.</p></div>
+        <div class="card"><h4>Progressive disclosure</h4>
+          <p>A screen shows what the common case needs; complexity is available, not present. Advanced
+          filters stay behind an expand affordance, bulk actions appear only once a selection exists,
+          audit and metadata (created by, modified at, history) live one level deeper, and secondary
+          actions collapse into an overflow rather than crowding the primary path. Depth is never
+          hidden — it is deferred, and its entry point is always visible.</p>
+          <p><b>Why:</b> cognitive load is the scarce resource on a screen operators read hundreds of
+          times a day. Every control shown to the 5% case is a control the 95% case must first read and
+          dismiss. Deferring rarely-used complexity keeps the frequent path fast without amputating the
+          rare one — and it is what lets a dense operational tool stay calm (see above) while remaining
+          complete.</p></div>
+        <div class="card"><h4>Consistency as a contract</h4>
+          <p>The same concept always looks the same: one status vocabulary, one money format, one
+          filter pattern, one confirmation flow. A component learned in Clients is already learned in
+          Cheques.</p>
+          <p><b>Why:</b> five domains share this shell and more will follow. Per-module visual dialects
+          multiply training cost, review cost, and bug surface. Consistency is what makes the
+          architecture's "one shape per repeating problem" principle visible to users.</p></div>
+        <div class="card"><h4>Simplicity as scope discipline</h4>
+          <p>Prefer the boring, proven pattern. New visual inventions require a documented reason an
+          existing pattern cannot serve (§25).</p>
+          <p><b>Why:</b> every novel pattern is a permanent maintenance liability across every future
+          module. The system optimizes for the tenth module, not the first.</p></div>
+        <div class="card"><h4>Accessible by standard, not by audit</h4>
+          <p>WCAG 2.1 AA is the floor: text contrast ≥ 4.5:1 (≥ 3:1 for large text and UI parts),
+          visible keyboard focus on every interactive element, complete keyboard paths through every
+          flow, meaning never carried by color alone, touch targets ≥ 44px in compact layouts,
+          reduced-motion preferences respected.</p>
+          <p><b>Why:</b> office conditions are uncontrolled — sunlight glare, low-quality monitors,
+          keyboard-heavy data entry. Accessibility rules double as usability rules for exactly this
+          environment, and retrofitting them costs multiples of building with them.</p></div>
+        <div class="card"><h4>Scalable by roles, not by values</h4>
+          <p>Every rule in this document is expressed as a role ("surface", "primary text", "danger")
+          rather than a raw value. Modules consume roles; only this document assigns values to them.</p>
+          <p><b>Why:</b> the architecture adds domains by configuration. The visual system must add
+          them the same way — a rebrand or dark theme (§28) must be a token re-assignment, never a
+          module-by-module repaint.</p></div>
+      </div>
+
+      <div class="callout" style="margin-top:18px;">
+        <h4>Responsiveness, honestly scoped</h4>
+        <p>Desktop is the primary optimization target, because the operational workflows this product
+        exists to serve are desktop-centric: full-day data entry, multi-column comparison, keyboard-driven
+        approval queues (§24).</p>
+        <p>Tablet and mobile are not second-class readers. Every workflow supported at a given width MUST
+        be fully usable at that width — not a degraded preview of the desktop one. What varies is
+        <em>which</em> workflows are supported: some advanced operational flows (the onboarding wizard,
+        multi-line lifecycle documents) remain desktop-optimized, and the interface says so plainly rather
+        than offering a cramped imitation. Scope is chosen deliberately; quality within that scope is not
+        negotiable.</p>
+      </div>
+    </section>
+
+    <!-- ============ 2 ============ -->
+    <section id="s2">
+      <div class="sec-head"><span class="eyebrow">02</span><h2>Layout foundations</h2></div>
+      <p class="lead-p sec-intro">One shell, five page skeletons (per the approved architecture:
+      ListPage, DetailPage, DraftLifecyclePage, WorkspacePage, plus the approval-queue variant). This
+      section defines the spatial rules they all share.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th style="min-width:170px;">Rule</th><th>Standard</th><th>Rationale</th></tr></thead>
+          <tbody>
+            <tr><td><b>Shell</b></td>
+              <td>Fixed sidebar (≈ 250px expanded, ≈ 64px icon-collapsed) + fixed header (≈ 56px) +
+              scrolling content region. Only the content region scrolls.</td>
+              <td>Navigation and identity stay reachable at any scroll depth; matches the shell already
+              validated in the legacy build.</td></tr>
+            <tr><td><b>Content width</b></td>
+              <td>Content region is fluid up to a maximum of ≈ 1440px, then centers. Inside it, prose
+              and forms cap at a comfortable reading measure (≈ 65–75 characters); tables and
+              workspaces MAY use the full region width.</td>
+              <td>Tables benefit from width; sentences and form fields do not. Capping the region
+              prevents 27-inch monitors from producing 400px-wide table cells with mile-long gaps.</td></tr>
+            <tr><td><b>Page padding</b></td>
+              <td>Horizontal: 24px (compact) / 32px (medium) / 48px (expanded). Vertical: 24px top to
+              the page header, 32px between header and first content block, 64px bottom.</td>
+              <td>Predictable margins make every page feel like the same product; generous bottom
+              padding keeps the last row of a table out of the viewport edge.</td></tr>
+            <tr><td><b>Grid</b></td>
+              <td>Layout is composed of flexible columns with a fixed gutter (24px expanded, 16px
+              compact) — conceptually a 12-column grid, but components claim regions ("half width",
+              "third width"), never raw column counts.</td>
+              <td>Region-based thinking survives breakpoint changes; column-count thinking breaks at
+              every one of them.</td></tr>
+            <tr><td><b>Section spacing</b></td>
+              <td>32px between sibling sections of a page; 48px before a section that starts a new
+              concern (e.g. the audit trail after the data body).</td>
+              <td>Spacing is the primary grouping device (see hierarchy rule below); two distinct
+              values are enough to encode "related" vs "new topic".</td></tr>
+            <tr><td><b>Card spacing</b></td>
+              <td>16px gap between cards in a grid; 16–20px internal card padding; cards never touch
+              edge-to-edge and never nest (§16).</td>
+              <td>Uniform card rhythm is what makes composed pages (Overview, workspaces) read as
+              designed rather than assembled.</td></tr>
+            <tr><td><b>Visual hierarchy</b></td>
+              <td>Exactly four nesting levels: page → section → card/panel → field/row. Hierarchy is
+              expressed by spacing and typography first, borders second, background shifts third —
+              shadows are reserved for elevation (§8), never hierarchy.</td>
+              <td>Four levels cover every screen in the architecture. A fifth level is a signal the
+              page is doing too much and should split (usually into a tab or a drawer).</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="sub">Page header standards</h3>
+      <p style="font-size:0.9rem; color:var(--muted); max-width:76ch;">Every page opens with the same
+      header block, so an operator entering any screen in any module already knows where they are, what
+      they can do, and what state the record is in. The elements below are the complete vocabulary; a
+      page uses the ones it needs and never invents a seventh.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th style="min-width:150px;">Element</th><th>Rule &amp; visual weight</th></tr></thead>
+          <tbody>
+            <tr><td><b>Breadcrumb</b></td>
+              <td>Above the title, caption role, tertiary color — the quietest element in the block. Shows
+              the path back through the hierarchy (module → list → record), not the full site tree. Present
+              on detail and workspace pages; omitted on top-level lists, where it would only ever say the
+              page's own name.</td></tr>
+            <tr><td><b>Title</b></td>
+              <td>The page-title role (§5), exactly one per page, and it names the <em>record or the job</em>
+              — "Aït Benhaddou, Yassine" or "Validation des dépôts", never a generic "Détail". It is the
+              single loudest element in the header and the anchor everything else aligns to.</td></tr>
+            <tr><td><b>Status</b></td>
+              <td>A badge (§17), sitting on the title's baseline immediately to its right. Directly adjacent
+              because on a record page the status <em>qualifies the title</em>: which agent is not a separate
+              question from whether that agent is blocked. Never relegated below the description, where it
+              reads as metadata rather than as a fact about the thing named.</td></tr>
+            <tr><td><b>Description</b></td>
+              <td>One line under the title, body role, secondary color. Carries the record's identifying
+              context (key metadata, parent entity) or the page's purpose — whatever the operator would
+              otherwise have to scroll to confirm they opened the right thing. Optional, and genuinely
+              omitted when the title says everything; a description that restates the title is noise.</td></tr>
+            <tr><td><b>Primary action</b></td>
+              <td>Right-aligned on the title's line, primary variant, at most one (§11). It is the page's
+              reason for existing — create the record, validate the document, approve the queue item.
+              Hidden entirely when permission or lifecycle state forbids it; never shown disabled without a
+              stated reason (§10).</td></tr>
+            <tr><td><b>Secondary actions</b></td>
+              <td>Left of the primary, secondary or ghost variants. Beyond two, they collapse into a single
+              overflow menu rather than growing a button row — per §1's progressive-disclosure principle,
+              a header that offers eight equal actions has communicated no priority at all. Destructive
+              actions live only in that overflow (§11).</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout rule">
+        <h4>Header hierarchy in one sentence</h4>
+        <p>Reading order is <b>where I am</b> (breadcrumb) → <b>what this is</b> (title + status) →
+        <b>what I need to know</b> (description) → <b>what I can do</b> (actions, weighted by priority).
+        Visual weight MUST follow that order, and the block MUST NOT scroll away into a sticky bar that
+        keeps the actions while dropping the identity — an approve button detached from the name of what
+        it approves is a defect, not a space saving.</p>
+      </div>
+    </section>
+
+    <!-- ============ 3 ============ -->
+    <section id="s3">
+      <div class="sec-head"><span class="eyebrow">03</span><h2>Design tokens</h2></div>
+      <p class="lead-p sec-intro">Tokens are the contract between this document and any implementation.
+      They are organized in three layers; modules may only consume the top one.</p>
+
+      <div class="grid cols-3">
+        <div class="card"><h4>Layer 1 — Primitives</h4>
+          <p>Raw values with no meaning: the full color ramps, the numeric spacing steps, the font
+          sizes. Never referenced directly by any screen or component.</p></div>
+        <div class="card"><h4>Layer 2 — Semantic roles</h4>
+          <p>Meaningful assignments of primitives: "surface", "text-secondary", "border-strong",
+          "danger", "space-section". This is the layer themes re-map (§28) and the layer this document
+          mostly defines.</p></div>
+        <div class="card"><h4>Layer 3 — Component tokens</h4>
+          <p>Per-component bindings ("button-primary-background", "table-header-text") defined only
+          where a component must deviate from the plain semantic role. Kept deliberately rare.</p></div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Token family</th><th>Contents (conceptual)</th></tr></thead>
+          <tbody>
+            <tr><td><b>Color</b></td><td>Brand ramp, neutral ramp, surface roles, text roles, border roles, five semantic tones (§4, §17).</td></tr>
+            <tr><td><b>Typography</b></td><td>One family stack, nine named text roles with size/weight/line-height, plus a numeric variant flag (§5).</td></tr>
+            <tr><td><b>Spacing</b></td><td>Eight steps on a base-4 scale with named usage tiers (§6).</td></tr>
+            <tr><td><b>Radius</b></td><td>Five steps from control to overlay plus "full" (§7).</td></tr>
+            <tr><td><b>Shadow / elevation</b></td><td>Four elevation levels, each pairing a shadow value with a stacking meaning (§8).</td></tr>
+            <tr><td><b>Z-index layers</b></td><td>Named stacking strata, not numbers: <span class="mono">content &lt; sticky &lt; navigation &lt; dropdown &lt; drawer &lt; modal &lt; toast &lt; tooltip</span>. Components claim a stratum; only the token file knows the integers. <b>MUST:</b> no component ever declares an ad-hoc z-index.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout rule">
+        <h4>The one rule that keeps tokens honest</h4>
+        <p>If a screen needs a value that no semantic token provides, the token system is extended
+        through review — the screen never hardcodes the value. One-off values are how design systems
+        die; this rule is the immune response.</p>
+      </div>
+    </section>
+
+    <!-- ============ 4 ============ -->
+    <section id="s4">
+      <div class="sec-head"><span class="eyebrow">04</span><h2>Color system</h2></div>
+      <p class="lead-p sec-intro">A single brand accent, a cool-biased neutral ramp, and five semantic
+      tones. Values below are the light-theme reference palette (see §28 for theming policy).</p>
+
+      <h3 class="sub">Brand</h3>
+      <div class="swatch-row">
+        <div class="swatch"><div class="sw" style="background:#1F6F6B;"></div><div class="sw-meta"><div class="sw-name">Primary — Miza Teal</div><div class="sw-val">#1F6F6B</div></div></div>
+        <div class="swatch"><div class="sw" style="background:#185955;"></div><div class="sw-meta"><div class="sw-name">Primary · hover</div><div class="sw-val">#185955</div></div></div>
+        <div class="swatch"><div class="sw" style="background:#12443F;"></div><div class="sw-meta"><div class="sw-name">Primary · active</div><div class="sw-val">#12443F</div></div></div>
+        <div class="swatch"><div class="sw" style="background:#DDEDEC;"></div><div class="sw-meta"><div class="sw-name">Primary · subtle</div><div class="sw-val">#DDEDEC</div></div></div>
+        <div class="swatch"><div class="sw" style="background:#7A4F9E;"></div><div class="sw-meta"><div class="sw-name">Secondary — Plum</div><div class="sw-val">#7A4F9E</div></div></div>
+      </div>
+      <p style="margin-top:14px; font-size:0.9rem; color:var(--muted);">The primary marks interactivity
+      and selection: primary buttons, active nav items, focus rings, links, selected rows. The
+      secondary exists only for data-visualization series and the rare need to distinguish a second
+      categorical hue — it is <b>never</b> used for interactive elements, so "clickable" keeps a single
+      color meaning. Teal is deliberately distant from all five semantic hues so the accent can never
+      be mistaken for a status.</p>
+
+      <h3 class="sub">Neutrals, surfaces, borders, text</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Role</th><th>Reference</th><th>Usage — where and why</th></tr></thead>
+          <tbody>
+            <tr class="group-row"><td colspan="3">Background hierarchy (three steps, no more)</td></tr>
+            <tr><td>Canvas</td><td class="mono">#F3F4F4</td><td>The application background. Slightly cool so white surfaces read as raised content.</td></tr>
+            <tr><td>Surface</td><td class="mono">#FFFFFF</td><td>Cards, tables, drawers, modals, form fields — everywhere content lives.</td></tr>
+            <tr><td>Surface-inset</td><td class="mono">#F7F8F8</td><td>Recessed regions <em>within</em> a surface: table headers, readonly fields, code/reference blocks, hover rows.</td></tr>
+            <tr class="group-row"><td colspan="3">Borders (two steps)</td></tr>
+            <tr><td>Border-strong</td><td class="mono">#D8DDE0</td><td>Container outlines: cards, inputs, table frames. The default border.</td></tr>
+            <tr><td>Border-soft</td><td class="mono">#E4E8EA</td><td>Internal separators: table row lines, list dividers, section rules. Never for interactive element outlines.</td></tr>
+            <tr class="group-row"><td colspan="3">Text hierarchy (four steps)</td></tr>
+            <tr><td>Text-primary</td><td class="mono">#171B1E</td><td>Data, headings, values — the content itself.</td></tr>
+            <tr><td>Text-secondary</td><td class="mono">#5B6570</td><td>Supporting copy: descriptions, helper text, table metadata.</td></tr>
+            <tr><td>Text-tertiary</td><td class="mono">#8A939B</td><td>De-emphasized: placeholders, captions, timestamps, empty-value dashes.</td></tr>
+            <tr><td>Text-disabled</td><td class="mono">#B3BAC0</td><td>Disabled control labels only. MUST still pass 3:1 against its surface where the disabled reason matters (§10).</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="sub">Semantic tones</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Tone</th><th>Strong / Subtle</th><th>Reserved for — exhaustively</th></tr></thead>
+          <tbody>
+            <tr><td><span class="chip ok"><span class="dot"></span>Success</span></td><td class="mono">#2E7D4F / #E1F1E6</td>
+              <td>Confirmed positive outcomes: validated, settled, approved, active statuses; success toasts. Never a button color (§11), never decoration.</td></tr>
+            <tr><td><span class="chip warn"><span class="dot"></span>Warning</span></td><td class="mono">#9C6B14 / #FBF0DA</td>
+              <td>Attention without failure: pending states awaiting a decision, approaching deadlines, capacity near its ceiling, restock-gate advisories.</td></tr>
+            <tr><td><span class="chip bad"><span class="dot"></span>Danger</span></td><td class="mono">#B23B3B / #FBE6E6</td>
+              <td>Failure and destruction: overdue, rejected, blocked statuses; destructive buttons; validation errors; negative monetary deltas.</td></tr>
+            <tr><td><span class="chip info"><span class="dot"></span>Info</span></td><td class="mono">#2D6CA2 / #E2EDF6</td>
+              <td>Neutral system communication: informational banners and inline notices, in-transition states. Deliberately underused — most "info" is just text.</td></tr>
+            <tr><td><span class="chip neutral"><span class="dot"></span>Neutral / Muted</span></td><td class="mono">#6B7078 / #E9EAEC</td>
+              <td>Not-yet and no-longer: draft status (filled), cancelled/terminal status (outlined). See §17.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout rule">
+        <h4>Semantic color is a promise</h4>
+        <p>A semantic hue MUST always mean its semantic. Green never decorates a chart that isn't
+        about success; red never highlights a marketing number. The moment a semantic color appears
+        decoratively anywhere, operators stop trusting it everywhere — and this dashboard's entire
+        alert model depends on that trust. Data-visualization palettes are a separate, non-semantic
+        set (defined when the Reporting specification needs them).</p>
+      </div>
+    </section>
+
+    <!-- ============ 5 ============ -->
+    <section id="s5">
+      <div class="sec-head"><span class="eyebrow">05</span><h2>Typography</h2></div>
+      <p class="lead-p sec-intro">One family, nine roles, and strict numeric rules — because this
+      product is mostly numbers.</p>
+
+      <div class="callout decision">
+        <h4>Decision: system font stack, not a webfont</h4>
+        <p>Challenged: "professional dashboards need a branded webfont." Verdict: rejected for v1. The
+        native UI stack (Segoe UI on the Windows fleet this back office actually runs, with platform
+        equivalents elsewhere) renders French diacritics and Arabic-script fallbacks flawlessly, costs
+        zero load time, and can't fail into a fallback mismatch. A brand face can be introduced later
+        as a token re-assignment (§3) — display roles only, without reflowing data screens.</p>
+      </div>
+
+      <div class="type-spec">
+        <div class="type-row"><span class="t-name">Page title</span><span style="font-size:24px; font-weight:700; line-height:1.3;">Validation des dépôts</span><span class="t-use">24 / 32 · bold · one per page</span></div>
+        <div class="type-row"><span class="t-name">Section title</span><span style="font-size:18px; font-weight:700;">Historique des chèques</span><span class="t-use">18 / 26 · bold</span></div>
+        <div class="type-row"><span class="t-name">Card title</span><span style="font-size:15px; font-weight:600;">Capacité grattage</span><span class="t-use">15 / 22 · semibold</span></div>
+        <div class="type-row"><span class="t-name">Body</span><span style="font-size:14px;">Le commercial dépose le montant avant midi.</span><span class="t-use">14 / 22 · regular · UI default</span></div>
+        <div class="type-row"><span class="t-name">Body-strong</span><span style="font-size:14px; font-weight:600;">Montant total dû</span><span class="t-use">14 / 22 · semibold · emphasis, key facts</span></div>
+        <div class="type-row"><span class="t-name">Label</span><span style="font-size:13px; font-weight:500;">Numéro de compte</span><span class="t-use">13 / 16 · medium · form labels, table headers</span></div>
+        <div class="type-row"><span class="t-name">Table cell</span><span style="font-size:13px;">Aït Benhaddou, Yassine</span><span class="t-use">13 / 20 · regular · dense data</span></div>
+        <div class="type-row"><span class="t-name">Caption</span><span style="font-size:12px; color:var(--faint);">Mis à jour il y a 2 min</span><span class="t-use">12 / 16 · tertiary color · timestamps, footnotes</span></div>
+        <div class="type-row"><span class="t-name">KPI numeral</span><span class="mono" style="font-size:28px; font-weight:700;">128 450,00</span><span class="t-use">28 / 34 · bold · tabular · stat tiles only</span></div>
+      </div>
+
+      <div class="grid cols-2" style="margin-top:16px;">
+        <div class="card"><h4>Numeric values</h4>
+          <p><b>MUST:</b> tabular (fixed-width) numerals everywhere digits align vertically — tables,
+          stat tiles, line-item totals, countdowns. Proportional numerals are acceptable only inside
+          running sentences. Quantities are integers; identifiers (CIN, cheque number, account number)
+          are text, never formatted as numbers.</p></div>
+        <div class="card"><h4>Monetary values</h4>
+          <p><b>MUST:</b> Moroccan French format — space as thousands separator, comma as decimal,
+          always two decimals, currency after the amount: <span class="mono">12 500,00 DH</span>.
+          Right-aligned in tables. Negative amounts use the danger text color and a true minus sign.
+          Absent is not zero: missing values render as <span class="mono">—</span> (tertiary color),
+          never <span class="mono">0,00 DH</span> — on screens that settle real debts, that distinction
+          is financial, not cosmetic.</p></div>
+      </div>
+
+      <h3 class="sub">Data formatting — the value vocabulary</h3>
+      <p style="font-size:0.9rem; color:var(--muted); max-width:76ch;">Money earns the strictest rules
+      above, but every value type an operator reads repeatedly needs one canonical shape. A value that
+      renders three ways across three screens forces re-reading each time, and re-reading is where
+      transcription errors are born. These rules are conceptual — §27 owns the locale and the copy.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th style="min-width:150px;">Value type</th><th>Rule</th></tr></thead>
+          <tbody>
+            <tr><td><b>Phone numbers</b></td>
+              <td>Displayed grouped for reading, never as an unbroken digit run — grouping is what makes a
+              number checkable against a paper form or a screen. One grouping convention product-wide, applied
+              at render; the stored and copied value stays canonical, so copying a phone number yields
+              something dialable, not something formatted. Tabular numerals in tables so columns align.
+              Never truncated: a partial phone number is useless, and it is a primary search key (§15).</td></tr>
+            <tr><td><b>Dates</b></td>
+              <td>One absolute format everywhere (§27), never locale-inferred from the browser. Day-precision
+              for business dates, minute-precision timestamps only where the time genuinely matters (audit
+              trails, deadlines). Tabular numerals; dates in a column are compared vertically, and that only
+              works when digits align.</td></tr>
+            <tr><td><b>Relative dates</b></td>
+              <td>Permitted only where <em>recency itself</em> is the information — activity feeds, "last
+              updated" captions — and always with the absolute value one hover away (§27). <b>MUST NOT</b>
+              be used for deadlines, financial dates, or any value an operator might act on or repeat aloud:
+              "il y a 2 jours" is not a date you can put on a cheque. Relative time is a convenience for
+              scanning, never a system of record.</td></tr>
+            <tr><td><b>Identifiers</b></td>
+              <td>CIN, cheque numbers, receipt numbers, account numbers, reference codes: text, not numbers.
+              No thousands separators, no rounding, no locale formatting, no arithmetic — an identifier that
+              picks up a space separator has been silently corrupted on screen. Monospace/tabular treatment so
+              character positions are comparable, selectable and copyable in full, middle-truncated with the
+              complete value on hover when space forces it (§27).</td></tr>
+            <tr><td><b>Percentages</b></td>
+              <td>One consistent precision (whole numbers unless the fraction is decision-relevant; never
+              more than one decimal). The <span class="mono">%</span> stays attached to its number. Where the
+              percentage summarizes an underlying pair that is what the operator actually acts on — capacity
+              used, gate thresholds — the pair travels with it ("72 % · 36 000 / 50 000 DH"): a percentage
+              alone tells you the shape of a problem but never its size.</td></tr>
+            <tr><td><b>Large numbers</b></td>
+              <td>Thousands separators always (§27); abbreviation (<span class="mono">12,5k</span>) is
+              <b>prohibited on any monetary or quantity value an operator may act on, reconcile, or transcribe</b>
+              — abbreviation destroys precision to save four pixels on the screens where precision is the
+              product. It is permitted only in KPI stat tiles where the exact value is available on hover and
+              the number is a trend signal, not a figure. Counts follow the same separator rules as amounts,
+              so a column of quantities and a column of money scan identically.</td></tr>
+            <tr><td><b>Absent values</b></td>
+              <td>The em-dash rule from money generalizes to every type: absent renders as
+              <span class="mono">—</span> in tertiary color, never as <span class="mono">0</span>, an empty
+              cell, "N/A", or "null". Empty and zero are different facts, and only one of them means someone
+              still has work to do.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ 6 ============ -->
+    <section id="s6">
+      <div class="sec-head"><span class="eyebrow">06</span><h2>Spacing system</h2></div>
+      <p class="lead-p sec-intro">Base-4 scale, eight steps. The scale is small on purpose: with few
+      choices, spacing decisions become automatic and pages built by different people align.</p>
+
+      <div class="space-demo">
+        <div class="space-bar"><span class="lbl">4px</span><div class="bar" style="width:4px;"></div><span>Micro: icon-to-label gap, badge internal padding.</span></div>
+        <div class="space-bar"><span class="lbl">8px</span><div class="bar" style="width:8px;"></div><span>Tight siblings: chips in a row, label-to-input, cell padding (vertical).</span></div>
+        <div class="space-bar"><span class="lbl">12px</span><div class="bar" style="width:12px;"></div><span>Related items: fields inside a group, buttons in an action row.</span></div>
+        <div class="space-bar"><span class="lbl">16px</span><div class="bar" style="width:16px;"></div><span>Default: card grid gap, card padding, form field vertical rhythm.</span></div>
+        <div class="space-bar"><span class="lbl">24px</span><div class="bar" style="width:24px;"></div><span>Group separation: between form sections, filter bar to table, gutters.</span></div>
+        <div class="space-bar"><span class="lbl">32px</span><div class="bar" style="width:32px;"></div><span>Page sections: between sibling sections, page header to content.</span></div>
+        <div class="space-bar"><span class="lbl">48px</span><div class="bar" style="width:48px;"></div><span>Topic breaks: before a genuinely new concern on the same page.</span></div>
+        <div class="space-bar"><span class="lbl">64px</span><div class="bar" style="width:64px;"></div><span>Page bottom padding; hero-scale breathing room where it exists.</span></div>
+      </div>
+
+      <div class="callout rule">
+        <h4>Nesting rule</h4>
+        <p>Space between containers MUST be greater than or equal to space inside them. A 16px-padded
+        card separated by 8px gaps reads as one blob; proximity is the grouping signal and this rule
+        keeps it truthful.</p>
+      </div>
+
+      <h3 class="sub">Interface density</h3>
+      <p style="font-size:0.9rem; color:var(--muted); max-width:76ch;">Density is how much information a
+      region presents per unit of space — the same tokens, drawn from different tiers of the scale above.
+      It is chosen per surface by the <em>task</em> that surface serves, never per taste, and it is
+      consistent across every module: a table is never cosy in one domain and cramped in another.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th style="min-width:150px;">Density</th><th>Character</th><th>Where it applies — and why</th></tr></thead>
+          <tbody>
+            <tr><td><b>Comfortable</b></td>
+              <td>Generous padding, larger vertical rhythm, roomy control spacing. The most air of the three.</td>
+              <td><b>Forms, drawers, modals, detail pages, onboarding.</b> These are <em>deliberate</em>
+              surfaces: one thing is being entered or decided, accuracy beats throughput, and the cost of a
+              mis-click is a wrong amount on a real cheque. Space here is error prevention, not decoration —
+              it separates targets and lets a label bind unambiguously to its field.</td></tr>
+            <tr><td><b>Compact</b></td>
+              <td>The default. Moderate padding, ~44px rows, controls at their standard size.</td>
+              <td><b>Data tables, list pages, filter bars, the application shell.</b> The workhorse density and
+              the one this system is tuned around (§14). It fits a useful number of records in a viewport
+              without forcing the eye to work — the balance point between "how many rows can I see" and "can I
+              still scan a row without losing my place".</td></tr>
+            <tr><td><b>High</b></td>
+              <td>Tight padding, reduced row height, compact controls. The floor, not a target.</td>
+              <td><b>Dashboard and workspace panels, summary cards, reference tables, dense read-only rollups
+              (Agent 360, Overview).</b> Surfaces whose job is <em>comparison at a glance</em> across many
+              small facts, where scrolling to see the shape of things defeats the purpose. Permitted only where
+              the content is predominantly read, not edited or clicked through.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout rule">
+        <h4>Density constraints</h4>
+        <p>(1) Density is a property of a <em>surface</em>, not of a component — one page does not mix three
+        densities; a table is compact everywhere it appears. (2) Density MUST NOT compromise the accessibility
+        floor (§1): touch targets, hit areas, and focus rings hold their minimums at every density, so High
+        density reduces padding, never reachability. (3) High density is never applied to a destructive or
+        irreversible control — crowding the buttons that reject a cheque is how a wrong row gets rejected.
+        (4) Density is not user-configurable in v1: a density toggle multiplies the QA surface of every screen
+        to solve a problem the defaults above should solve properly the first time.</p>
+        <p><b>Naming note:</b> "compact" appears with three distinct meanings in this document and they are not
+        interchangeable — the <em>density</em> here (information per unit space), the <em>button size</em>
+        (§11, 30px in tables and toolbars), and the <em>width class</em> (§24, &lt; 768px). Context disambiguates;
+        a component spec MUST say which it means.</p>
+      </div>
+    </section>
+
+    <!-- ============ 7 ============ -->
+    <section id="s7">
+      <div class="sec-head"><span class="eyebrow">07</span><h2>Border radius</h2></div>
+      <p class="lead-p sec-intro">Radius encodes the class of an element: the bigger the container,
+      the softer the corner. Five steps plus full.</p>
+
+      <div class="radius-row">
+        <div class="radius-demo" style="border-radius:4px;"><span class="r-name">Control</span><span class="r-val">4px — checkbox, tag</span></div>
+        <div class="radius-demo" style="border-radius:7px;"><span class="r-name">Input</span><span class="r-val">7px — fields, buttons</span></div>
+        <div class="radius-demo" style="border-radius:10px;"><span class="r-name">Container</span><span class="r-val">10px — cards, tables</span></div>
+        <div class="radius-demo" style="border-radius:14px;"><span class="r-name">Overlay</span><span class="r-val">14px — drawers, modals</span></div>
+        <div class="radius-demo" style="border-radius:99px;"><span class="r-name">Full</span><span class="r-val">pill — badges, avatars</span></div>
+      </div>
+
+      <p style="margin-top:16px; font-size:0.9rem; color:var(--muted);"><b>MUST:</b> nested elements
+      use a smaller radius than their container (an input inside a card: 7 inside 10). Equal or larger
+      inner radii create visibly misaligned corner curves — the most common "something feels off"
+      defect in composed UIs.</p>
+    </section>
+
+    <!-- ============ 8 ============ -->
+    <section id="s8">
+      <div class="sec-head"><span class="eyebrow">08</span><h2>Shadows &amp; elevation</h2></div>
+      <p class="lead-p sec-intro">Elevation answers one question only: <em>is this element floating
+      above the page?</em> Four levels.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Level</th><th>Shadow</th><th>Used by</th></tr></thead>
+          <tbody>
+            <tr><td><b>0 — Flat</b></td><td>None; borders do the work.</td><td>Everything by default: page regions, form fields, table internals.</td></tr>
+            <tr><td><b>1 — Resting</b></td><td>Barely-there soft shadow.</td><td>Cards and table containers — enough lift to separate from canvas, no more.</td></tr>
+            <tr><td><b>2 — Raised</b></td><td>Clear directional shadow.</td><td>Transient anchored elements: dropdowns, popovers, date pickers, the sticky table header once scrolled, the bulk-action bar.</td></tr>
+            <tr><td><b>3 — Overlay</b></td><td>Strong shadow + dimmed scrim.</td><td>Drawers and modals — the only level that blocks interaction behind it.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout rule">
+        <h4>When elevation must NOT be used</h4>
+        <p>Never for emphasis ("make this card pop"), never for hierarchy inside a surface, never on
+        hover of non-floating elements (rows highlight with surface-inset, they do not levitate), and
+        never stacked — two Level-3 overlays simultaneously is a design error; close the first or use
+        a full page (§18). If a level jump is used for importance anywhere, elevation stops meaning
+        "floating" everywhere.</p>
+      </div>
+    </section>
+
+    <!-- ============ 9 ============ -->
+    <section id="s9">
+      <div class="sec-head"><span class="eyebrow">09</span><h2>Iconography</h2></div>
+      <div class="grid cols-2 sec-intro" style="margin-top:16px;">
+        <div class="card"><h4>Philosophy &amp; style</h4>
+          <p>One icon library for the entire product, outline style, uniform ~1.5px stroke. Icons are
+          labels' assistants, not their replacements. <b>MUST:</b> no emoji in product UI — emoji
+          render differently per platform and carry uncontrolled tone on financial screens (these
+          documents use them; the product does not).</p></div>
+        <div class="card"><h4>Sizes</h4>
+          <p>Three functional sizes: <b>16px</b> inline with text and inside table cells; <b>20px</b>
+          in buttons, nav items, and form controls (the default); <b>24px</b> in page headers and
+          modal titles. One illustrative size, <b>40–48px</b>, exclusively for empty and error states.
+          No other sizes exist.</p></div>
+        <div class="card"><h4>Functional icons</h4>
+          <p>An icon that triggers or indicates something MUST have an accessible name, and — if it is
+          the only visual (icon-only button) — a tooltip. Domain concepts keep one fixed icon forever:
+          the same glyph always means cheque, deposit, stock movement, client. This vocabulary is
+          documented once and extended, never re-assigned.</p></div>
+        <div class="card"><h4>Decorative icons</h4>
+          <p>Purely decorative icons are marked hidden to assistive technology and are rare by policy
+          — in a data-first product, most decoration is noise (§1). Empty states are the one sanctioned
+          place for illustrative iconography.</p></div>
+      </div>
+    </section>
+
+    <!-- ============ 10 ============ -->
+    <section id="s10">
+      <div class="sec-head"><span class="eyebrow">10</span><h2>Interaction states</h2></div>
+      <p class="lead-p sec-intro">Every interactive component implements this exact state set with the
+      same visual grammar, so state recognition transfers between components.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>State</th><th>Visual grammar</th><th>UX reasoning</th></tr></thead>
+          <tbody>
+            <tr><td><b>Default</b></td><td>Resting appearance per component spec.</td>
+              <td>Must already look interactive (affordance) — hover may confirm, it never reveals.</td></tr>
+            <tr><td><b>Hover</b></td><td>One-step background shift (surface → inset, or color → hover step). No motion, no elevation change.</td>
+              <td>Confirms the pointer target before commitment. Touch devices never see it, so nothing may <em>depend</em> on it.</td></tr>
+            <tr><td><b>Focus</b></td><td>2px primary-color ring, 2px offset — identical on every focusable element, always visible, never removed.</td>
+              <td>Keyboard operators are the power users of this product (data entry, approvals). One universal ring means the eye finds "where am I" instantly on any screen.</td></tr>
+            <tr><td><b>Active</b></td><td>Pressed step of the color ramp; ≤ 1px translation at most.</td>
+              <td>Sub-100ms confirmation that the press registered — the cheapest trust signal there is.</td></tr>
+            <tr><td><b>Selected</b></td><td>Primary-subtle background + primary border or edge indicator. Persistent, unlike active.</td>
+              <td>Selection is state, pressing is an event; they must not share a look — rows, nav items, and chips all follow this.</td></tr>
+            <tr><td><b>Disabled</b></td><td>Reduced contrast, muted colors, interaction blocked. Where the reason isn't obvious, a tooltip explains it.</td>
+              <td>"This action exists but is unavailable <em>now</em>." The explanation rule matters here: a disabled Validate button with no stated reason generates support requests, not compliance.</td></tr>
+            <tr><td><b>Readonly</b></td><td>Surface-inset background, full-contrast text, no input affordance. Selectable and copyable.</td>
+              <td>Distinct from disabled by design: readonly says "this value matters, you just can't edit it here" — a validated bon's line items are readonly, not disabled. Users must be able to read and copy them at full contrast.</td></tr>
+            <tr><td><b>Loading</b></td><td>Component keeps its exact footprint; content swaps to spinner/skeleton; interaction suspended.</td>
+              <td>Layout shift during load is disorienting and causes misclicks on the thing that moved. Loading is a state of the same element, not a different element.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="sub">Keyboard navigation</h3>
+      <p style="font-size:0.9rem; color:var(--muted); max-width:76ch;">The focus state above says
+      <em>where you are</em>. These principles govern <em>how you move</em> — and they are not an
+      accessibility afterthought here: the people who use this product all day are data-entry and approval
+      operators, and for them the keyboard is the fast path, not the fallback. A flow that can only be
+      completed with a mouse is an unfinished flow.</p>
+
+      <div class="grid cols-3">
+        <div class="card"><h4>Logical tab order</h4>
+          <p>Focus moves in the order the content is <em>read</em> — the visual order of the page, top to
+          bottom, primary path before secondary. Tab order MUST follow the page's structure rather than
+          being patched with explicit overrides; when the two disagree, the layout is wrong, not the tab
+          order. Every interactive element is reachable, and nothing that isn't interactive is.</p>
+          <p>Skipping is as much a defect as detouring: a Tab that jumps over the field an operator was
+          about to fill teaches them to reach for the mouse permanently.</p></div>
+        <div class="card"><h4>Keyboard-first workflows</h4>
+          <p>The high-frequency operational paths — filling a form, moving through a filter bar, working an
+          approval queue, entering document line items — MUST be completable end to end without a pointer,
+          including submission and confirmation. Confirmation dialogs are part of the path: a modal that can
+          only be dismissed by clicking breaks the flow it was meant to protect (§19).</p>
+          <p>Repetitive entry is where this pays: an operator processing forty cheques should never leave the
+          home row to do it.</p></div>
+        <div class="card"><h4>Predictable focus movement</h4>
+          <p>Focus never moves without cause, and always moves where the operator is looking. Opening an
+          overlay moves focus into it and traps it there; closing returns focus to the element that opened it
+          (§18, §19). A validation failure moves focus to the first invalid field (§13). Async results never
+          steal focus mid-typing — content arriving is not a reason to move someone's cursor.</p>
+          <p>The rule underneath all of these: after any action, an operator MUST be able to predict where
+          the caret went without looking for it.</p></div>
+      </div>
+
+      <div class="callout rule">
+        <h4>The non-negotiables</h4>
+        <p>Focus is never removed or made invisible (§10) — "it looked cleaner without the ring" is the single
+        most common way a product becomes unusable for its heaviest users. Escape closes the topmost dismissible
+        layer and nothing else. Standard keys keep their standard meanings everywhere: Enter submits, Space
+        toggles, arrows move within a composite control (a select, a radio group, a menu), Tab moves between
+        controls — never within one. Custom shortcuts MAY be added later, but they are an accelerator layer on
+        top of a system that already works with the standard keys alone; they are never the only way to reach
+        an action.</p>
+      </div>
+    </section>
+
+    <!-- ============ 11 ============ -->
+    <section id="s11">
+      <div class="sec-head"><span class="eyebrow">11</span><h2>Buttons</h2></div>
+      <p class="lead-p sec-intro">Button variant = action priority. One glance at a screen's buttons
+      should reveal its action hierarchy.</p>
+
+      <div class="btn-row">
+        <span class="btn-demo primary">Valider le dépôt</span>
+        <span class="btn-demo secondary">Exporter</span>
+        <span class="btn-demo ghost">Voir l'historique</span>
+        <span class="btn-demo danger">Rejeter</span>
+        <span class="btn-demo danger-o">Annuler le chèque</span>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Variant</th><th>Purpose &amp; priority</th><th>Usage rules</th></tr></thead>
+          <tbody>
+            <tr><td><b>Primary</b></td>
+              <td>The single main action of the current context — submit, save, validate, approve.</td>
+              <td><b>MUST:</b> at most one per view (page, drawer, or modal). If two actions feel
+              primary, the screen has two jobs — split it. Positive irreversible actions (validate a
+              bon, approve a cheque) are primary <em>plus</em> a confirmation modal (§19) — irreversible
+              ≠ destructive.</td></tr>
+            <tr><td><b>Secondary</b></td>
+              <td>Legitimate alternatives beside the primary: cancel, export, save draft.</td>
+              <td>Outlined on surface. The default variant when in doubt. Sits left of the primary in
+              action rows (primary is always outermost-right).</td></tr>
+            <tr><td><b>Ghost</b></td>
+              <td>Low-priority and repeated actions: table row actions, "view all" links, toolbar
+              utilities.</td>
+              <td>No border, no fill until hover. The only variant allowed to repeat many times on one
+              screen — which is exactly why it must stay visually quiet.</td></tr>
+            <tr><td><b>Danger</b></td>
+              <td>Destructive or negative-outcome actions: reject, annuler, block, delete.</td>
+              <td>Filled danger for the confirming step (inside the confirmation modal); outlined
+              danger for the initiating step (on the page). <b>MUST</b> never be the only visual cue —
+              the label carries the verb ("Rejeter le chèque", not "Confirmer").</td></tr>
+            <tr><td><b>Icon button</b></td>
+              <td>Space-constrained repeated actions: row actions, drawer close, header utilities.</td>
+              <td><b>MUST</b> have an accessible name and a tooltip. Minimum 32×32px hit area inline
+              in tables, 40×40px elsewhere, 44×44px on compact/touch layouts.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout decision">
+        <h4>Decision: no Success button variant</h4>
+        <p>The requested set included a Success (green) button. Rejected. Approval actions
+        (validate, approve, settle) are the <em>primary action of their context</em> — that is what
+        the primary variant is for. Shipping a green action button creates two competing "positive"
+        affordances per screen, and it spends the success hue on affordance when §4 reserves semantic
+        color for state. Green tells you what <em>happened</em>; teal tells you what you <em>can
+        do</em>. Keeping those channels separate is worth more than a prettier approve button.</p>
+      </div>
+
+      <div class="grid cols-2" style="margin-top:16px;">
+        <div class="card"><h4>Sizes &amp; placement</h4>
+          <p>Two sizes: default (36px height) and compact (30px, tables and toolbars only). Action rows:
+          primary at the right edge, secondary to its left, tertiary/ghost leftmost or separated. Modals
+          and drawers follow the same order in their footer.</p></div>
+        <div class="card"><h4>Submission behavior</h4>
+          <p>On submit, the triggering button enters its loading state (spinner replaces label, width
+          preserved) and the whole form suspends — double-submission of a deposit validation must be
+          structurally impossible, not merely unlikely.</p></div>
+      </div>
+    </section>
+
+    <!-- ============ 12 ============ -->
+    <section id="s12">
+      <div class="sec-head"><span class="eyebrow">12</span><h2>Form controls</h2></div>
+      <p class="lead-p sec-intro">Shared anatomy for all controls: label above, control, then one
+      reserved line for helper or error text (§13). Uniform 36px control height, input radius,
+      border-strong outline, focus ring per §10.</p>
+
+      <div class="grid cols-2">
+        <div class="card"><h4>Text input</h4><p>Single-line, placeholder is an example — never the
+          label. Identifier fields (CIN, cheque number, account number) render in the numeric/mono
+          treatment and never autocapitalize or autocorrect.</p></div>
+        <div class="card"><h4>Number input</h4><p>Integers only (quantities). Right-aligned, tabular
+          numerals, browser spinner arrows suppressed — they cause off-by-one errors on precise entry.
+          Min/max mirror the backend rule and are stated in helper text, not discovered on error.</p></div>
+        <div class="card"><h4>Money input</h4><p>A distinct control, not a reused number input: fixed
+          "DH" suffix inside the field, two-decimal comma format enforced on blur, right-aligned
+          tabular numerals, paste-tolerant (accepts "12 500,00" and "12500.00", normalizes to §5
+          format). Amounts are the highest-stakes values in the product; their control earns its own
+          spec.</p></div>
+        <div class="card"><h4>Search</h4><p>Leading search icon, one-tap clear affordance when
+          non-empty, debounced as it types. Placeholder states the scope: "Rechercher par téléphone…" —
+          matching the backend's actual search fields per resource, so it never overpromises.</p></div>
+        <div class="card"><h4>Select</h4><p>For closed lists the user recognizes (status, method,
+          operator, ville). Single-select, typed lookahead. <b>Rule:</b> under 5 mutually exclusive
+          options in a form, prefer radio (§ below) — a select hides options a glance could show.</p></div>
+        <div class="card"><h4>Autocomplete (entity picker)</h4><p>For records searched, not scrolled:
+          agents, clients, products. Async search against the API, results show the entity chip
+          (name + key metadata), selected value renders as that chip with a clear affordance.
+          <b>MUST</b> be used wherever a foreign key is chosen — raw ID entry is prohibited in forms.</p></div>
+        <div class="card"><h4>Date picker</h4><p>Calendar popover + direct keyboard entry
+          (DD/MM/YYYY) — data-entry users type dates faster than they click them. Range variant for
+          filters with presets (§15). Weeks start Monday; locale per §27.</p></div>
+        <div class="card"><h4>Textarea</h4><p>Multi-line notes and reasons (rejection reason,
+          cancellation note). Auto-grows to a max (~6 lines) then scrolls; character limit surfaces at
+          80% consumed, not at failure.</p></div>
+        <div class="card"><h4>File upload</h4><p>Drop zone + browse button; accepted types and size
+          cap stated up front (mirroring backend rules: images/PDF, 2MB documents, 5MB proofs).
+          Image files preview as thumbnails; every file row gets replace and remove actions; upload
+          progress is determinate (§21). Multi-file flows (agent onboarding) list each requirement as
+          its own named slot — "Photo CIN recto", "Photo CIN verso" — never one anonymous bucket.</p></div>
+        <div class="card"><h4>Checkbox</h4><p>Independent yes/no facts and multi-select lists. In
+          forms, checkboxes are the boolean control (see toggle decision below). Indeterminate state
+          exists solely for select-all headers (§14).</p></div>
+        <div class="card"><h4>Radio group</h4><p>2–4 mutually exclusive, always-visible choices:
+          agent role (manager/commercial), deposit method (bank/cash), allocation type
+          (rapped/grattage). Options carry sublabels when the choice has consequences.</p></div>
+        <div class="card"><h4>Toggle switch</h4><p>Reserved for immediate-effect state changes outside
+          forms — a table view option, a live setting. <b>⚖ Decision:</b> toggles inside submitted forms
+          are prohibited: a switch communicates "this took effect now", which is a lie inside a form
+          that hasn't been saved. Forms use checkboxes; switches act instantly or not at all.</p></div>
+      </div>
+    </section>
+
+    <!-- ============ 13 ============ -->
+    <section id="s13">
+      <div class="sec-head"><span class="eyebrow">13</span><h2>Form standards</h2></div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th style="min-width:160px;">Standard</th><th>Rule</th></tr></thead>
+          <tbody>
+            <tr><td><b>Labels</b></td><td>Always present, always above the control, label type role (§5).
+              Placeholders never substitute for labels — a filled field with a placeholder-label has no label.</td></tr>
+            <tr><td><b>Required vs optional</b></td><td>Mark the minority. Miza's forms are
+              predominantly required (agent onboarding: ~20 required fields), so required marks
+              (asterisks) everywhere would be pure noise — instead, optional fields carry an explicit
+              "(optionnel)" suffix. <b>⚖ Decision:</b> this inverts the common asterisk convention,
+              deliberately: mark the exception, not the rule. A form where the convention flips per
+              screen is worse than either convention, so this is global.</td></tr>
+            <tr><td><b>Validation timing</b></td><td>Per field: validate on blur first; after a field
+              has erred once, re-validate on change so the error clears the instant it's fixed. Never
+              on first keystroke. On submit: full-form validation; focus moves to the first invalid field.</td></tr>
+            <tr><td><b>Error messages</b></td><td>Danger text in the reserved line under the field +
+              danger border on the control. Message says what is wrong and what fixes it
+              ("Le numéro de chèque existe déjà" not "Champ invalide"). Server-side 422 errors map to
+              their fields exactly like local errors — one visual system, two sources (§23).</td></tr>
+            <tr><td><b>Helper text</b></td><td>Secondary text in the same reserved line (error replaces
+              helper while present). States constraints before failure: formats, caps, business rules
+              ("Le montant ne peut pas dépasser la dette actuelle").</td></tr>
+            <tr><td><b>Layout-shift rule</b></td><td>The helper/error line is reserved space.
+              <b>MUST NOT</b> appear and push the form down on first error — shifting a form while
+              someone types in it is the fastest way to lose their place and their trust.</td></tr>
+            <tr><td><b>Section grouping</b></td><td>Forms over ~8 fields group into titled sections
+              (section-title role + 24px spacing): Identity, Documents, Financial, Motorcycle. One
+              column by default; two columns only for short sibling pairs (nom/prénom) — column
+              scanning beats row scanning in every form-comprehension study worth citing.</td></tr>
+            <tr><td><b>Long forms</b></td><td>Stay on one scrolling page with grouped sections while
+              linear; adopt the wizard pattern when steps are conditional or heavy.</td></tr>
+            <tr><td><b>Drawer forms</b></td><td>Quick create/edit of simple records (≤ ~8 fields,
+              single section): clients, villes, products, reject-with-reason. Footer pins submit +
+              cancel; dirty-state close asks confirmation (§18).</td></tr>
+            <tr><td><b>Wizard forms</b></td><td>Reserved for genuinely staged flows — agent onboarding
+              (identity → documents → financial → moto → review). Numbered steps, back-navigation
+              preserves entered data, and a mandatory review step summarizes everything before the
+              single final submission. One wizard exists in the current scope; the pattern is defined
+              once for it and future flows that earn it.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ 14 ============ -->
+    <section id="s14">
+      <div class="sec-head"><span class="eyebrow">14</span><h2>Data tables</h2></div>
+      <p class="lead-p sec-intro">The workhorse. Most screens in every module are this component;
+      these rules are the ones implementation will live inside daily.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th style="min-width:160px;">Concern</th><th>Standard</th></tr></thead>
+          <tbody>
+            <tr><td><b>Layout</b></td><td>One table per Level-1 container: header row (surface-inset),
+              body rows separated by border-soft lines, no zebra striping (row lines + hover are
+              sufficient; stripes add noise at 13px density). Row height ~44px default. Full region
+              width; when columns exceed it, the table scrolls horizontally inside its container —
+              columns are never crushed to fit and the page body never scrolls sideways.</td></tr>
+            <tr><td><b>Columns</b></td><td>Text left-aligned; numbers and money right-aligned with
+              tabular numerals; dates in one format (§27); status as badge (§17); entity references as
+              entity chips (name + click-through), never raw IDs. First column is the row's identity
+              (name or document number) and is the row's primary link. Column count earns its place:
+              7 ± 2 visible columns; more belongs in the detail view.</td></tr>
+            <tr><td><b>Column priority</b></td><td>Every column declares a priority when the table is
+              declared — it is part of the column set, not a responsive afterthought. Three tiers, and the
+              order they survive in as width shrinks:
+              <b>P1 — identity and decision.</b> Never dropped, at any width: the identity column (name or
+              document number), the status badge, and the primary amount or quantity. These three answer
+              "which record, what state, how much" — the questions that make a row actionable. A row stripped
+              to P1 is still a usable row; strip further and the operator must open every record to know
+              anything, which is slower than scrolling.
+              <b>P2 — operational context.</b> Dropped only under real pressure: the dates, the counterparty
+              or assigned agent, the method, the secondary amounts. These distinguish rows from one another
+              and are what filtering and scanning actually use.
+              <b>P3 — metadata and audit.</b> First to go: created-by, modified-at, internal references,
+              derived counts. Per §1's progressive-disclosure principle, this tier is arguably deferred even
+              on wide screens — its natural home is the detail view.
+              <b>MUST:</b> a column's priority is fixed per resource and identical for every operator; a table
+              whose columns disappear in a different order on two machines is a table nobody trusts.</td></tr>
+            <tr><td><b>Sorting</b></td><td>Single-column, server-executed. Sortable headers show an
+              affordance on hover and a direction indicator when active; the default sort is stated
+              per resource (usually newest first) and visibly indicated — invisible default sort is
+              how "the list is broken" tickets are born.</td></tr>
+            <tr><td><b>Filtering</b></td><td>Lives in the FilterBar above the table (§15), not in
+              column headers. <b>⚖ Decision:</b> per-column header filters rejected for v1 — they
+              duplicate the FilterBar, fight with sorting affordances in the same 32px header, and the
+              backend exposes curated filter params per resource, not arbitrary column predicates.
+              Revisit only if a real usage pattern demands it.</td></tr>
+            <tr><td><b>Pagination</b></td><td>Server-side always. Page size selector 20 / 50 / 100 —
+              ceiling matches the API clamp (<span class="mono">per_page ≤ 100</span>). Shows total
+              count and current range ("21–40 sur 187"). Page state is part of the shareable filter
+              state (§15). Infinite scroll is prohibited: operators need stable positions ("the cheque
+              was on page 3") and reachable footers.</td></tr>
+            <tr><td><b>Row selection</b></td><td>Leading checkbox column, appears only on tables that
+              offer bulk actions. Header checkbox selects the current page (indeterminate for partial);
+              selecting <em>all pages</em> is a deliberate second step with an explicit count — silent
+              all-page selection on an action like bulk-assign is how accidents at scale happen.</td></tr>
+            <tr><td><b>Bulk actions</b></td><td>A contextual action bar (Level-2 elevation) replaces the
+              FilterBar while a selection exists: count, available actions, clear-selection. Caps mirror
+              the backend (bulk-assign: 100) and are surfaced in the count ("100 max"), not on failure.</td></tr>
+            <tr><td><b>Row actions</b></td><td>Trailing column: at most two ghost icon buttons for the
+              frequent actions + an overflow menu for the rest. Destructive row actions live only in
+              the overflow, separated, in danger color — never as a bare one-click icon.</td></tr>
+            <tr><td><b>Sticky behavior</b></td><td>Header row sticks while the table scrolls (gaining
+              Level-2 shadow when detached). On wide scrolling tables the identity column MAY stick
+              left and the actions column right.</td></tr>
+            <tr><td><b>Empty / loading</b></td><td>Empty per §22 (first-use vs filtered-empty are
+              different states). Loading: skeleton rows preserving exact column geometry on first
+              load; subsequent filter/page changes keep the current rows dimmed under a subtle
+              indicator rather than flashing to skeleton — layout stability beats spinner honesty.</td></tr>
+            <tr><td><b>Responsive</b></td><td>Columns carry a priority; medium widths drop
+              low-priority columns before scrolling. Compact widths: the table scrolls horizontally
+              with the identity column stuck, or — where a row is mostly status + amount (approval
+              queues) — the ListPage MAY define a stacked row presentation. Tables never reflow into
+              free-form card soup by default; a financial table's comparability <em>is</em> its
+              columns.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ 15 ============ -->
+    <section id="s15">
+      <div class="sec-head"><span class="eyebrow">15</span><h2>Filters</h2></div>
+      <div class="grid cols-2 sec-intro" style="margin-top:16px;">
+        <div class="card"><h4>Model: one FilterBar, declared per resource</h4>
+          <p>Every list screen owns a FilterBar above its table: search field first, then typed filter
+          controls declared per resource (status, agent, ville, date range, method…), mirroring exactly
+          the filter params the backend accepts — the UI never offers a filter the API can't honor.</p></div>
+        <div class="card"><h4>Global vs local</h4>
+          <p><b>Local filters</b> (the FilterBar) scope one list and reset when leaving the module.
+          <b>Global context</b> is navigation, not filtering: "this agent's cheques" is the Agent 360
+          workspace scoping its panels, never a hidden global filter silently narrowing every screen —
+          invisible scope is a correctness hazard on financial data.</p></div>
+        <div class="card"><h4>Search</h4>
+          <p>Scoped per resource to what the backend actually searches (client phone, receipt-number
+          prefix…), stated in the placeholder. Debounced; contributes to the same filter state as
+          everything else.</p></div>
+        <div class="card"><h4>Date ranges</h4>
+          <p>Range picker with presets: Aujourd'hui, 7 derniers jours, 30 derniers jours, Ce mois,
+          personnalisé. Presets cover the operational questions ("what came in this week?") that are
+          90% of real usage; custom covers audits.</p></div>
+        <div class="card"><h4>Status filters</h4>
+          <p>The primary status dimension of a resource renders as segmented tabs above the table
+          (Tous · En attente · Validé · Rejeté) — it's the filter used constantly and deserves
+          one-click access. Secondary statuses stay in the FilterBar as selects.</p></div>
+        <div class="card"><h4>Multi-select filters</h4>
+          <p>Checkbox-list dropdown with count summary on the trigger ("Ville · 3"). Applied filters
+          render as removable chips in a row under the bar, with one "Tout effacer" — active filters
+          must be visible without opening anything, or filtered views get mistaken for small datasets.</p></div>
+      </div>
+
+      <h3 class="sub">Search behavior</h3>
+      <p style="font-size:0.9rem; color:var(--muted); max-width:76ch;">Search is the most-used control in the
+      product — an operator with a client on the phone reaches for it before anything else. Its behavior is
+      specified here rather than left to each list, because inconsistent search is worse than no search: it
+      teaches operators to distrust a negative result, and a distrusted "no results" gets re-run as a manual
+      scroll through 200 rows.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th style="min-width:150px;">Rule</th><th>Behavior</th></tr></thead>
+          <tbody>
+            <tr><td><b>Scope is stated, never guessed</b></td>
+              <td>The placeholder names exactly what is searched, per resource, mirroring the backend's real
+              search fields ("Rechercher par nom ou téléphone…"). <b>MUST NOT</b> be a generic "Rechercher…" —
+              an unscoped box implies it searches everything, so a miss reads as "the record doesn't exist"
+              rather than "you searched the wrong field". Search never silently searches less than it appears
+              to. Where a resource's search covers several fields, the placeholder names them or says so.</td></tr>
+            <tr><td><b>Search feedback</b></td>
+              <td>The control always shows which of three states it is in: idle, searching (an in-field
+              indicator, never a page-level spinner — the page is not reloading, one region is), or settled on
+              a result set. Once settled, the result count is visible ("12 résultats") and the active query
+              stays in the field. A result set that doesn't say how many it found forces the operator to count
+              rows to know whether to refine.</td></tr>
+            <tr><td><b>Debounce philosophy</b></td>
+              <td>Search fires when the operator has plausibly stopped typing, not on every keystroke — but the
+              pause is short enough to feel live and MUST NOT make a fast typist wait after they have finished.
+              A submit key searches immediately, bypassing the wait, because a user who pressed Enter has told
+              you they are done. The debounce exists to spare the backend, never to pace the operator; if it is
+              ever perceptible as lag, it is mistuned.</td></tr>
+            <tr><td><b>No results</b></td>
+              <td>Renders the filtered-empty state (§22), never a blank region and never the first-use state —
+              conflating "nothing matches" with "nothing exists" is the single most damaging empty-state error
+              in this product. It echoes the query back ("Aucun résultat pour « bennani »"), keeps the query in
+              the field so it can be corrected rather than retyped, and offers one-click clearing. Where search
+              is combined with active filters, it says so and lets the filters be cleared independently — an
+              operator who cannot see that a status filter is suppressing their match will conclude the record
+              was deleted.</td></tr>
+            <tr><td><b>Search is a filter</b></td>
+              <td>The query is one component of the same filter state as everything else (§15): it appears in
+              the shareable URL, it survives pagination, it clears with "Tout effacer", and it composes with
+              filters by intersection — search narrows the filtered set, it does not escape it. There is no
+              second, hidden search path.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout">
+        <h4>Deferred: recent searches and saved queries</h4>
+        <p>Recent-search history (and its sibling, saved queries) is a <b>future consideration only</b> —
+        explicitly not in v1. It is recorded here because it is worth <em>not</em> foreclosing: since the query
+        is already part of the serializable filter state below, recent searches would later be a list of stored
+        values and a dropdown on an existing control, with no change to any component in this system. No design
+        work is owed now; no design decision made now should make it expensive.</p>
+      </div>
+
+      <div class="callout">
+        <h4>Future-proofing: filter state is a serializable value</h4>
+        <p>The design constraint that makes future "saved filters" cheap without designing them now:
+        the complete filter state (search, filters, sort, page size) is one serializable, URL-encodable
+        value — every filtered view is shareable and bookmarkable from day one. A saved filter is then
+        just a named copy of that value; no component in this system would change. This constraint is
+        binding now; the feature is not.</p>
+      </div>
+    </section>
+
+    <!-- ============ 16 ============ -->
+    <section id="s16">
+      <div class="sec-head"><span class="eyebrow">16</span><h2>Cards</h2></div>
+      <p class="lead-p sec-intro">One physical card (surface, container radius, Level-1 elevation,
+      16–20px padding) with five content archetypes. Cards never nest — a card needing a card inside
+      it is a section needing a page.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Archetype</th><th>Anatomy</th><th>Rules</th></tr></thead>
+          <tbody>
+            <tr><td><b>Information card</b></td><td>Optional title · label/value fact pairs.</td>
+              <td>The default detail-page building block. Facts use label role over body-strong values;
+              money and dates per §5/§27.</td></tr>
+            <tr><td><b>Summary card</b></td><td>Title · condensed rollup · "view all" ghost action.</td>
+              <td>Workspace panels (Agent 360's cheque history) are summary cards: max ~5 rows, always
+              linking to the full filtered list — a summary that tries to be the full list is a worse
+              version of both.</td></tr>
+            <tr><td><b>Entity card</b></td><td>Avatar/initials · name · key metadata · status badge.</td>
+              <td>The card form of the entity chip. Same identity rules everywhere: primary name,
+              secondary identifier, one badge.</td></tr>
+            <tr><td><b>Warning card</b></td><td>Semantic-subtle background · semantic border edge ·
+              icon · message · optional action.</td>
+              <td>Persistent contextual alerts: outstanding grattage obligation on an agent, restock
+              gate active. Tone follows §4 exactly; content follows §20's inline-alert rules — this is
+              the inline alert in card position.</td></tr>
+            <tr><td><b>Statistics card</b></td><td>Label · KPI numeral · optional delta/context line.</td>
+              <td>KPI numeral role (§5), tabular. Delta line uses semantic color only when the
+              direction genuinely is good/bad ("+3 overdue" is danger; "+3 deposits" is plain text) —
+              semantic color on neutral metrics erodes §4's promise.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ 17 ============ -->
+    <section id="s17">
+      <div class="sec-head"><span class="eyebrow">17</span><h2>Status badges — the unified semantic system</h2></div>
+      <p class="lead-p sec-intro">One badge component, six tones, and a canonical mapping that every
+      current and future module MUST use. The audit found the backend mixes English status strings
+      (<code class="inline">draft</code>, <code class="inline">settled</code>) with French ones
+      (<code class="inline">en_attente</code>, <code class="inline">accepter</code>) — the badge system
+      therefore maps by <em>meaning</em>, never by string, and owns the display label (§27).</p>
+
+      <div class="btn-row" style="margin-bottom:6px;">
+        <span class="chip neutral"><span class="dot"></span>Brouillon</span>
+        <span class="chip warn"><span class="dot"></span>En attente</span>
+        <span class="chip info"><span class="dot"></span>En cours</span>
+        <span class="chip ok"><span class="dot"></span>Validé</span>
+        <span class="chip bad"><span class="dot"></span>En retard</span>
+        <span class="chip muted-o"><span class="dot"></span>Annulé</span>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Tone</th><th>Meaning</th><th>Backend statuses mapped (by domain)</th></tr></thead>
+          <tbody>
+            <tr><td><span class="chip neutral"><span class="dot"></span>Neutral</span></td>
+              <td>Not yet real — editable, no side effects occurred.</td>
+              <td>Stock docs: <span class="mono">draft</span></td></tr>
+            <tr><td><span class="chip warn"><span class="dot"></span>Warning</span></td>
+              <td>Awaiting a decision or deadline — someone's queue.</td>
+              <td>Cheques: <span class="mono">en_attente</span> · Deposits: <span class="mono">pending</span> ·
+              Grattage invoices: <span class="mono">pending</span> · Clients: <span class="mono">pending</span> (OTP registration)</td></tr>
+            <tr><td><span class="chip info"><span class="dot"></span>Info</span></td>
+              <td>In transition, no action needed from the viewer.</td>
+              <td>Reserved — no current backend status maps here; exists so future in-flight states
+              (e.g. a processing reconciliation) don't force a new tone.</td></tr>
+            <tr><td><span class="chip ok"><span class="dot"></span>Success</span></td>
+              <td>Confirmed good terminal or healthy-active state.</td>
+              <td>Stock docs: <span class="mono">validated</span> · Cheques: <span class="mono">accepter</span> ·
+              Deposits: <span class="mono">validated</span> · Grattage: <span class="mono">settled</span> ·
+              Agents/Clients: <span class="mono">active</span> · Restock gate: clear</td></tr>
+            <tr><td><span class="chip bad"><span class="dot"></span>Danger</span></td>
+              <td>Failed, refused, late, or barred — needs intervention or explains a refusal.</td>
+              <td>Cheques: <span class="mono">rejetee</span> · Deposits: <span class="mono">rejected</span> ·
+              Grattage: <span class="mono">overdue</span> · Agents/Clients: <span class="mono">blocked</span> ·
+              Restock gate: gated</td></tr>
+            <tr><td><span class="chip muted-o"><span class="dot"></span>Muted (outlined)</span></td>
+              <td>Terminated on purpose — historical, closed, no attention needed.</td>
+              <td>Stock docs: <span class="mono">cancelled</span> · Cheques: <span class="mono">annuler</span> ·
+              Grattage: <span class="mono">cancelled</span> · Agents: <span class="mono">inactive</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout rule">
+        <h4>Extension rules</h4>
+        <p>(1) A status MUST map to one of these six tones before it may appear in any UI; inventing a
+        seventh tone requires amending this document. (2) The same business meaning always gets the
+        same tone in every module — <span class="mono">rejected</span> is danger whether it's a cheque
+        or a deposit. (3) Badges always carry a text label; the dot-and-color alone is never the only
+        signal (§1 accessibility). (4) Muted is visually distinct from Neutral (outline vs fill) because
+        "not yet" and "no longer" are opposite ends of a lifecycle and operators filter on exactly that
+        difference.</p>
+      </div>
+    </section>
+
+    <!-- ============ 18 ============ -->
+    <section id="s18">
+      <div class="sec-head"><span class="eyebrow">18</span><h2>Drawers</h2></div>
+      <p class="lead-p sec-intro">The decision rule across the three containers:
+      <b>modal = a decision · drawer = a task · page = a workspace.</b></p>
+
+      <div class="grid cols-3">
+        <div class="card"><h4>Use a drawer when…</h4>
+          <p>The task is quick and the list context matters: create a client while looking at the client
+          list, edit a ville, reject-with-reason, preview a record before committing to its page.
+          Right-anchored, ~480px (forms) / ~640px (previews), Level-3 elevation.</p></div>
+        <div class="card"><h4>Use a full page when…</h4>
+          <p>The task is the destination: lifecycle documents (bon/allocation/transfer/return — draft,
+          lines, validate), the agent onboarding wizard, any 360 workspace, anything with tabs, and any
+          record someone will need to link to directly. If it deserves a shareable address, it's a page.</p></div>
+        <div class="card"><h4>Never a modal instead, because…</h4>
+          <p>Modals block the very context a task needs — you cannot check the list you're adding to,
+          scroll it, or copy from it. A form in a modal also invites the worst failure mode: dismissing
+          a half-filled form with one stray click on the scrim. Modals carry decisions (§19); the moment
+          one grows form fields beyond a single reason-textarea, it should have been a drawer.</p></div>
+      </div>
+
+      <div class="callout rule">
+        <h4>Drawer conduct</h4>
+        <p>One drawer at a time — a drawer never opens a second drawer (that's a page telling you it's
+        a page). Dirty forms require dismissal confirmation. Escape and scrim-click close a clean
+        drawer; focus is trapped inside while open and returns to the trigger on close. On compact
+        widths, drawers become full-screen sheets (§24).</p>
+      </div>
+    </section>
+
+    <!-- ============ 19 ============ -->
+    <section id="s19">
+      <div class="sec-head"><span class="eyebrow">19</span><h2>Modals</h2></div>
+      <p class="lead-p sec-intro">Modals interrupt — the most expensive move in the interface. They are
+      reserved for decisions that must not be made accidentally. Anatomy: title (the question), body
+      (the consequence), footer (secondary cancel + the committing action). Focus trapped; the cancel
+      action holds initial focus on destructive dialogs.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Type</th><th>Definition</th><th>Rules</th></tr></thead>
+          <tbody>
+            <tr><td><b>Confirmation</b></td>
+              <td>Positive but consequential — often irreversible: validate a bon, approve a cheque,
+              settle via deposit validation.</td>
+              <td>Primary confirm button. Body states the specific consequence in the domain's words:
+              "Valider débite le stock du manager et crédite le commercial. Cette action est
+              irréversible." Named entities and amounts appear in the body — confirming <em>which</em>
+              cheque for <em>how much</em> is the entire point.</td></tr>
+            <tr><td><b>Warning</b></td>
+              <td>Proceeding conflicts with an advisory state: allocating to a commercial whose restock
+              gate is active, reassigning near a constraint.</td>
+              <td>Warning icon + warning-subtle header treatment. Explains the conflict and both paths;
+              proceed is available but never the visually dominant default.</td></tr>
+            <tr><td><b>Destructive</b></td>
+              <td>Negative irreversible outcomes: reject, annuler, block, delete.</td>
+              <td>Filled danger confirm labeled with the specific verb ("Annuler le chèque", never
+              "OK"/"Oui"). Typed-confirmation (re-entering an identifier) is reserved for the highest
+              tier only — actions that reverse money or destroy non-drafts. <b>⚖ Decision:</b> typed
+              confirmation everywhere was rejected: friction on routine draft deletions trains people
+              to type ritually, which destroys the protection exactly where it matters.</td></tr>
+            <tr><td><b>Success</b></td>
+              <td>Post-action acknowledgment.</td>
+              <td><b>⚖ Decision: effectively abolished.</b> Success is a toast (§20), not an
+              interruption — a modal demanding a click to acknowledge that things went <em>well</em> is
+              hostile at operational frequency. The single exception: success that forks the workflow
+              ("Bon validé — créer l'allocation maintenant?") MAY use a dialog, because then it's really
+              a decision.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ 20 ============ -->
+    <section id="s20">
+      <div class="sec-head"><span class="eyebrow">20</span><h2>Notifications</h2></div>
+      <p class="lead-p sec-intro">Rule of thumb: <b>toast confirms · inline explains · banner warns
+      globally.</b> Choosing the wrong channel is the most common notification defect — each exists for
+      a different persistence and a different scope.</p>
+
+      <div class="grid cols-3">
+        <div class="card"><h4>Toasts</h4>
+          <p>Transient outcome confirmations of async actions: saved, validated, assigned. Top-right
+          stack, auto-dismiss 5s, success/info tones only by default. <b>MUST NOT</b> carry errors the
+          user has to act on — an error that vanishes on its own is an error the user missed. Failed
+          background actions MAY toast persistently (manual dismiss + retry affordance).</p></div>
+        <div class="card"><h4>Inline alerts</h4>
+          <p>Contextual, persistent, placed exactly where the problem lives: form-level error summaries,
+          the warning card on an agent with outstanding obligations, a gate advisory inside the
+          allocation form. Semantic-subtle background, icon, plain-language body, optional action.
+          They stay until the condition resolves — they are state, not events.</p></div>
+        <div class="card"><h4>Page banners</h4>
+          <p>Application-scope conditions spanning all modules: connectivity lost, read-only
+          maintenance mode, staging-environment marker. Full-width under the header, one at a time
+          (highest severity wins). Rare by definition — a product with permanent banners has moved its
+          problems into the chrome instead of fixing them.</p></div>
+      </div>
+    </section>
+
+    <!-- ============ 21 ============ -->
+    <section id="s21">
+      <div class="sec-head"><span class="eyebrow">21</span><h2>Loading states</h2></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Indicator</th><th>Use when</th><th>Rules</th></tr></thead>
+          <tbody>
+            <tr><td><b>Skeleton</b></td>
+              <td>First load of structural content whose shape is known: tables, cards, detail headers.</td>
+              <td>Mimics the real geometry (columns, row heights) so the page doesn't jump on arrival.
+              Used once per view load — refreshes and refetches keep existing content dimmed instead
+              (§14); flashing back to skeleton makes the interface feel broken, not busy.</td></tr>
+            <tr><td><b>Spinner</b></td>
+              <td>In-place waits with unknown shape or tiny scope: a submitting button, an autocomplete
+              searching, a panel refreshing.</td>
+              <td>Always inside the affected element, never full-screen — a full-page spinner is an
+              admission that loading scope wasn't designed. Global route transitions use a slim
+              top-edge progress bar instead.</td></tr>
+            <tr><td><b>Progress indicator</b></td>
+              <td>Determinate multi-second operations, primarily file uploads.</td>
+              <td>Real percentage, per file, with cancel while in flight. Never fake progress —
+              a bar that lies once is a bar nobody believes again.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout rule">
+        <h4>Timing rule</h4>
+        <p>Nothing appears before ~300ms — flashing indicators for fast responses creates perceived
+        slowness. Past 300ms an indicator MUST appear; past ~10s the wait converts to an inline state
+        with a retry (§23). And per §10: loading never changes an element's footprint.</p>
+      </div>
+    </section>
+
+    <!-- ============ 22 ============ -->
+    <section id="s22">
+      <div class="sec-head"><span class="eyebrow">22</span><h2>Empty states</h2></div>
+      <p class="lead-p sec-intro">An empty region answers three questions: why is this empty, is that
+      normal, what can I do. Anatomy: illustrative icon (§9) · one-line title · one-line explanation ·
+      at most one action. Five distinct cases — collapsing them into one generic "No data" is the
+      failure mode this section exists to prevent.</p>
+      <div class="grid cols-2">
+        <div class="card"><h4>First use — nothing exists yet</h4>
+          <p>Names the domain and offers the creating action: "Aucun bon fournisseur. Créez le premier
+          bon pour recevoir du stock." The action mirrors the page's primary action and appears only
+          with the permission to use it.</p></div>
+        <div class="card"><h4>Filtered empty — data exists, nothing matches</h4>
+          <p>MUST be visually distinct from first-use, or filters get mistaken for missing data:
+          "Aucun résultat pour ces filtres" + a one-click "Effacer les filtres". Never shows a create
+          action — creating from a filtered-empty view is almost always a duplicate about to happen.</p></div>
+        <div class="card"><h4>Permission empty</h4>
+          <p>The region exists but the viewer can't see its content: states that access is restricted
+          and who grants it, without dangling an action that will 403 (§23).</p></div>
+        <div class="card"><h4>Healthy empty — empty is the goal</h4>
+          <p>Queues (pending cheques, overdue invoices) where zero is success. Tone flips: a quiet
+          positive confirmation ("Aucun chèque en attente") — not the sad-face treatment. An
+          approvals queue that celebrates being empty is telling the operational truth.</p></div>
+        <div class="card"><h4>Scoped empty — no data <em>for this record</em></h4>
+          <p>The generic "no data available" case, and distinct from first-use: the domain has plenty of
+          data, this parent just has none of it — an agent with no cheques yet, a client with no invoices,
+          a workspace panel on a record that hasn't transacted. States the scope plainly ("Aucun chèque
+          pour cet agent"), never implies the domain is empty, and offers the creating action only when
+          creating <em>against this parent</em> is a real, permitted operation from here.</p>
+          <p>Why it earns its own case: showing first-use copy ("Créez le premier chèque") on an agent's
+          panel tells an operator the product has no cheques at all, which is false and alarming on a
+          financial screen.</p></div>
+      </div>
+
+      <h3 class="sub">Which empty state appears, and when</h3>
+      <p style="font-size:0.9rem; color:var(--muted); max-width:76ch;">These are evaluated in order — the
+      first condition that holds wins. The order matters: a permission-restricted region that also happens
+      to have no rows MUST say "restricted", not "empty", or the operator will report a data bug that
+      isn't one.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th style="min-width:60px;">Order</th><th style="min-width:150px;">Condition</th><th>State shown</th></tr></thead>
+          <tbody>
+            <tr><td><b>1</b></td><td>Viewer lacks permission to see this content</td>
+              <td><b>Permission empty.</b> Beats every other case: emptiness caused by access is not a fact
+              about the data, and reporting it as one is a lie that generates support tickets. Never dangles
+              an action that would 403 (§23).</td></tr>
+            <tr><td><b>2</b></td><td>A search query or filter is active</td>
+              <td><b>Filtered empty / no results.</b> Beats first-use and scoped-empty, because the operator
+              narrowed the view themselves and the fix is one click (clear). §15 governs the copy: echo the
+              query, keep it editable, offer clearing.</td></tr>
+            <tr><td><b>3</b></td><td>Region is scoped to a parent record that has none of this data</td>
+              <td><b>Scoped empty.</b> The domain isn't empty; this record's slice of it is.</td></tr>
+            <tr><td><b>4</b></td><td>Zero is the desired outcome (queues, overdue lists)</td>
+              <td><b>Healthy empty.</b> Positive tone — the work is done, not missing.</td></tr>
+            <tr><td><b>5</b></td><td>Nothing exists in this domain yet, unfiltered</td>
+              <td><b>First use.</b> The only case that leads with a create action, and only for a viewer
+              permitted to create.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout rule">
+        <h4>Empty is not the same as broken</h4>
+        <p>None of these five is an error state. A region that failed to <em>load</em> shows the network-error
+        state with a retry (§23), never an empty state — rendering "Aucun résultat" for a request that
+        actually failed silently converts an outage into a business fact, and an operator who believes a
+        client has no outstanding cheques because the endpoint timed out will act on that belief.</p>
+      </div>
+    </section>
+
+    <!-- ============ 23 ============ -->
+    <section id="s23">
+      <div class="sec-head"><span class="eyebrow">23</span><h2>Error states</h2></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Class</th><th>UX rules</th></tr></thead>
+          <tbody>
+            <tr><td><b>Validation (422)</b></td>
+              <td>Field-mapped per §13 — server errors render identically to client-side ones. Forms
+              over one section add a summary alert at top listing offending fields as jump links.
+              Submitted input is never cleared by a validation failure.</td></tr>
+            <tr><td><b>Domain errors (409 + code)</b></td>
+              <td>The backend ships documented error-code families
+              (<span class="mono">TRANSFER_STOCK_INSUFFICIENT</span>,
+              <span class="mono">RETURN_NOT_DRAFT</span>,
+              <span class="mono">COMMERCIAL_HAS_STOCK_CANNOT_REASSIGN</span>…). <b>MUST:</b> every code
+              has a registered human message, tone, and — where one exists — recovery path ("Le
+              commercial détient encore du stock. Créez un retour de stock avant la réaffectation,"
+              linking to the return flow). Unregistered codes fall back to a generic message that still
+              displays the raw code for support. This registry is a design-system asset: it is how
+              backend invariants become explainable UI instead of alert boxes.</td></tr>
+            <tr><td><b>Network errors</b></td>
+              <td>Reads: inline error state in the affected region with retry — never a blank region,
+              never a toast-only. Writes: the form/drawer stays open with all input intact, error
+              surfaced inline, explicit retry. A lost connection MUST NOT cost a filled onboarding
+              wizard its data.</td></tr>
+            <tr><td><b>Permission (403)</b></td>
+              <td>Honest and oriented: what was refused and where to go, styled calmly (no danger
+              screaming — the user did nothing wrong). Note: the backend intentionally 403s two
+              retired grattage routes; per the approved architecture no UI invokes them, so a user-facing
+              403 is always an access matter, never a dead feature leaking through.</td></tr>
+            <tr><td><b>Not found (404)</b></td>
+              <td>Two cases, two treatments. Unknown route: the authenticated 404 page with a path back
+              to the module list. Known route, missing/foreign record (scoped bindings return 404 for
+              cross-parent access): an in-shell "record unavailable" state — it may have been deleted or
+              access-scoped — with a link to its list. Never a raw error dump.</td></tr>
+            <tr><td><b>Unexpected (5xx)</b></td>
+              <td>Generic apology-free state: what failed, that it's been noted, retry, and a
+              reference identifier for support. Raw stack traces and backend messages never render —
+              both a UX and a security rule.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ 24 ============ -->
+    <section id="s24">
+      <div class="sec-head"><span class="eyebrow">24</span><h2>Responsive behavior</h2></div>
+      <p class="lead-p sec-intro">Three width classes, defined by what changes — not device names.
+      Desktop is the primary optimization target because the operational workflows are desktop-centric;
+      every other width is designed, not left to degrade by accident. Supported workflows are fully usable
+      at every width — the width classes change how they are presented, not whether they work (§1).</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Class</th><th>Range</th><th>Behavior</th></tr></thead>
+          <tbody>
+            <tr><td><b>Expanded</b></td><td class="mono">≥ 1200px</td>
+              <td>The reference design. Sidebar expanded, multi-column grids, full tables, drawers as
+              side panels.</td></tr>
+            <tr><td><b>Medium</b></td><td class="mono">768–1199px</td>
+              <td>Sidebar collapses to icon rail (labels on hover/expand). Card grids reduce to two
+              then one column; tables drop low-priority columns per §14; page padding steps down.
+              Everything remains fully operable — managers reviewing on tablets is a real case.</td></tr>
+            <tr><td><b>Compact</b></td><td class="mono">&lt; 768px</td>
+              <td>Sidebar becomes an overlay sheet behind a menu button; drawers and modals go
+              full-screen; touch targets enforce 44px; sticky action footers on forms; tables fall back
+              to P1 columns with horizontal scroll for the rest (§14). Scope is stated honestly rather
+              than implied: the workflows supported here — consulting records, searching, approving,
+              quick edits — are <em>fully</em> supported, held to the same accessibility and quality floor
+              as anywhere else, not offered as a cramped preview of a desktop screen. Advanced operational
+              flows (the onboarding wizard, multi-line lifecycle documents) remain desktop-optimized and
+              stay reachable, and where one is genuinely impractical at this width the interface says so
+              and offers the path back — it never silently presents a worse version of it.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout">
+        <h4>Principles over breakpoints</h4>
+        <p>Content reflows at the width where <em>it</em> breaks, not only at the three class
+        boundaries — the classes coordinate the big structural shifts (sidebar, drawers, columns) so
+        the whole product transforms coherently instead of component-by-component. Nothing in this
+        section prescribes implementation; it prescribes what a user at each width must experience.</p>
+      </div>
+    </section>
+
+    <!-- ============ 25 ============ -->
+    <section id="s25">
+      <div class="sec-head"><span class="eyebrow">25</span><h2>Future scalability</h2></div>
+      <p class="lead-p sec-intro">The test of this document is the sixth domain — the one that doesn't
+      exist yet. Here is why it won't require a redesign.</p>
+      <div class="grid cols-2">
+        <div class="card"><h4>Everything is a role</h4>
+          <p>Colors, type, spacing, elevation are semantic roles (§3). A new module consumes roles and
+          automatically matches; a rebrand or theme re-maps roles and every module follows (§28).</p></div>
+        <div class="card"><h4>New statuses map, they don't invent</h4>
+          <p>§17's six tones absorbed four domains' worth of statuses including a reserved tone for
+          futures. A new domain's lifecycle maps its states to existing tones — the one governed
+          extension point is amending the mapping table.</p></div>
+        <div class="card"><h4>New screens are pattern instances</h4>
+          <p>The architecture's five page skeletons + this document's component standards mean a new
+          resource ships as configuration: FilterBar declaration, column set, badge mappings, form
+          spec. The design questions are already answered; only the domain content is new.</p></div>
+        <div class="card"><h4>Additions are governed, not improvised</h4>
+          <p>A new component or token must state which existing one was tried and why it failed —
+          in this document, via amendment. The version log below makes drift visible; "we added it in
+          a sprint and forgot" is the decay mode this prevents. This document is versioned with the
+          product and changes through the same review gate as every other stage.</p></div>
+      </div>
+    </section>
+
+    <!-- ============ 26 ============ -->
+    <section id="s26">
+      <div class="sec-head"><span class="eyebrow">26 · added</span><h2>Motion &amp; animation</h2></div>
+      <div class="callout" style="margin:0 0 18px;">
+        <h4>Why this section was added</h4>
+        <p>The requested structure omitted motion, but motion timing is as much a part of a coherent
+        visual language as radius or shadow — inconsistent durations across drawers, dropdowns, and
+        hovers is instantly perceptible as "cheap". Left unspecified, every implementer picks their
+        own; specified once here, it costs nothing.</p>
+      </div>
+      <div class="grid cols-3">
+        <div class="card"><h4>Durations</h4><p>Two, only: <b>fast (~120ms)</b> for micro-feedback —
+          hover shifts, checkbox marks, chip toggles; <b>standard (~220ms)</b> for structural movement —
+          drawers, modals, dropdowns, accordions, sidebar collapse. Nothing animates longer; this is a
+          tool, not a film.</p></div>
+        <div class="card"><h4>Easing &amp; direction</h4><p>Decelerating ease for entrances, accelerating
+          for exits; overlays move from their anchor edge (drawer from right, toast from top). Motion
+          exists to explain <em>where things came from</em> — never to decorate. No bounces, no springs,
+          no attention-seeking loops on a screen where a pulsing element implies an alert.</p></div>
+        <div class="card"><h4>Reduced motion</h4><p>When the user's system requests reduced motion,
+          structural animations collapse to instant transitions with a fade at most. Binding, not
+          best-effort (§1 accessibility).</p></div>
+      </div>
+    </section>
+
+    <!-- ============ 27 ============ -->
+    <section id="s27">
+      <div class="sec-head"><span class="eyebrow">27 · added</span><h2>Content &amp; language standards</h2></div>
+      <div class="callout" style="margin:0 0 18px;">
+        <h4>Why this section was added</h4>
+        <p>Words are the design material every component spec above depends on — labels, statuses,
+        errors, empty states all render <em>copy</em>. The audit found the product currently has no
+        language decision at all: the legacy UI is English, backend messages and cheque statuses are
+        French, domain vocabulary is French. Leaving that unresolved would ship a bilingual accident.</p>
+      </div>
+
+      <div class="callout decision">
+        <h4>Decision: French-first interface (fr-MA) — needs product confirmation</h4>
+        <p>Recommended and assumed throughout this document's examples. The operators are Moroccan
+        back-office staff; the business vocabulary is already French (bon, dépôt, annuler, ville,
+        secteur); the backend already emits French messages and even French status values. An English
+        UI would translate the business away from its own users. All copy is centralized from day one
+        (no hardcoded strings), so a second language later is an addition, not a rewrite — but v1
+        ships one language, well. <b>Flagged as open decision O-1 for sign-off.</b></p>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Standard</th><th>Rule</th></tr></thead>
+          <tbody>
+            <tr><td><b>Voice</b></td><td>Professional, direct, apology-free. Buttons say the verb and
+              the object ("Valider le dépôt"); confirmations state consequences; errors state the fix.
+              No exclamation marks, no cleverness — this interface moves money.</td></tr>
+            <tr><td><b>Dates</b></td><td><span class="mono">DD/MM/YYYY</span>; timestamps
+              <span class="mono">DD/MM/YYYY HH:mm</span> (24h). Relative time ("il y a 2 h") only in
+              activity feeds, with the absolute value on hover. Deadlines — like the grattage
+              next-day-12:00 <span class="mono">due_at</span> — are always absolute; a relative
+              deadline is ambiguity where ambiguity costs money.</td></tr>
+            <tr><td><b>Numbers &amp; money</b></td><td>Per §5: space thousands separator, comma decimal,
+              <span class="mono">DH</span> suffix, two decimals always, — for absent.</td></tr>
+            <tr><td><b>Vocabulary registry</b></td><td>One canonical French term per business concept,
+              matching the backend's domain language (bon, allocation, transfert, retour, grattage,
+              rapped). The badge system (§17) owns status display labels so that
+              <span class="mono">en_attente</span> and <span class="mono">pending</span> both render
+              "En attente" — the string chaos stays in the API layer, never on screen.</td></tr>
+            <tr><td><b>Truncation</b></td><td>Middle-truncate identifiers (beginnings and ends
+              discriminate), end-truncate names, full value in tooltip, never truncate amounts.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ 28 ============ -->
+    <section id="s28">
+      <div class="sec-head"><span class="eyebrow">28 · added</span><h2>Theming policy</h2></div>
+      <div class="callout" style="margin:0 0 18px;">
+        <h4>Why this section was added</h4>
+        <p>Whether dark mode exists is a decision that silently shapes every color rule in §4. Deciding
+        it explicitly — even deciding "not now" — is cheaper than discovering mid-build that half the
+        components assumed one answer.</p>
+      </div>
+      <div class="callout decision">
+        <h4>Decision: light theme is canonical for v1; the token structure is theme-ready; dark mode is deferred</h4>
+        <p>An internal operations tool used in daylight offices gets marginal value from dark mode,
+        and shipping it doubles the QA surface of every semantic color decision (§4's contrast
+        guarantees must hold twice). But because every color in this system is a semantic role (§3),
+        dark mode later means authoring one alternate role-mapping and re-validating contrast — no
+        component changes. The rule that makes this true is binding <em>now</em>: no screen ever
+        references a raw color, only roles. Deferred is not precluded; unprepared is.</p>
+      </div>
+    </section>
+
+    <!-- ============ 29 ============ -->
+    <section id="s29">
+      <div class="sec-head"><span class="eyebrow">29 · added</span><h2>Entity presentation</h2></div>
+      <div class="callout" style="margin:0 0 18px;">
+        <h4>Why this section was added</h4>
+        <p>Entity references were specified in three places independently — the entity chip (§12, §14), the
+        entity card (§16), and the page header (§2) — without one rule saying they are the <em>same identity,
+        shown at three depths</em>. Left that way, an agent would predictably acquire a different name format
+        in tables than in autocomplete results, and "Bennani M." in one module would be "M. Bennani (Casa)" in
+        another. Entities are the nouns of this product; a noun that changes shape per screen costs recognition
+        on every screen.</p>
+      </div>
+
+      <h3 class="sub">One identity, three depths</h3>
+      <p style="font-size:0.9rem; color:var(--muted); max-width:76ch;">Every entity has exactly one identity
+      model, and every presentation is a <em>subset</em> of it — never a variation on it. The depth changes;
+      the content, order, and formatting never do. This is §1's progressive-disclosure principle applied to
+      identity.</p>
+
+      <div class="grid cols-3">
+        <div class="card"><h4>Chip — the inline reference</h4>
+          <p>How an entity appears <em>inside</em> something else: a table cell, an autocomplete result, a
+          selected form value, a line item. Carries the primary identifier, the secondary discriminator, and
+          the status only when the status affects the reading context. Always a link to the record.</p></div>
+        <div class="card"><h4>Card — the summary</h4>
+          <p>The entity as a first-class object in a grid or panel (§16): mark or initials, primary identifier,
+          key metadata, one status badge. Same fields as the chip, more of them, same order.</p></div>
+        <div class="card"><h4>Header — the subject</h4>
+          <p>The entity as the page's subject (§2): the identifier <em>is</em> the page title, the status sits
+          on its baseline, the discriminators become the description line. Nothing new appears here that the
+          chip contradicted.</p></div>
+      </div>
+
+      <h3 class="sub">Identity fields per entity</h3>
+      <p style="font-size:0.9rem; color:var(--muted); max-width:76ch;">Each entity fixes its primary
+      identifier, its secondary discriminator, and its status dimension <em>once</em>, product-wide. The
+      discriminator is chosen to answer the question an operator actually asks when two records look alike —
+      which is why it differs per entity, and why it is never decorative.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Entity</th><th>Primary identifier</th><th>Secondary discriminator</th><th>Status dimension</th></tr></thead>
+          <tbody>
+            <tr><td><b>Agent</b></td><td>Full name</td>
+              <td>Role (manager / commercial) + territory. Role is load-bearing: what an agent may do
+              depends on it, so it travels with the name everywhere.</td>
+              <td>Active · inactive · blocked (§17)</td></tr>
+            <tr><td><b>Client</b></td><td>Full name</td>
+              <td>Phone number — the business's real key, the search key (§15), and the field that
+              disambiguates two clients with the same name.</td>
+              <td>Active · pending · blocked (§17)</td></tr>
+            <tr><td><b>Company</b></td><td>Company name</td>
+              <td>Its role in the relationship (the allocating party), not an internal code.</td>
+              <td>Only where a lifecycle exists</td></tr>
+            <tr><td><b>Supplier</b></td><td>Supplier name</td>
+              <td>Contact or reference — enough to tell two suppliers apart on a bon.</td>
+              <td>Only where a lifecycle exists</td></tr>
+            <tr><td><b>Product</b></td><td>Designation</td>
+              <td>Reference/SKU + unit. On stock screens the unit is part of the identity: a quantity
+              without its unit is not a quantity.</td>
+              <td>Only where a lifecycle exists</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout rule">
+        <h4>Consistency rules — binding across every module</h4>
+        <p><b>(1) One shape per entity, forever.</b> The same entity renders with the same fields, in the same
+        order, with the same formatting, in every module. Recognition is the whole return on this rule.</p>
+        <p><b>(2) Never a raw ID.</b> An entity reference always renders as its identity, never as a database
+        key — extending the rule already binding on forms (§12) and tables (§14) to every surface. Operators
+        do not think in foreign keys and MUST never be asked to.</p>
+        <p><b>(3) Always navigable.</b> An entity reference is always a link to that entity's record, from
+        wherever it appears. A named entity that isn't clickable is a dead end an operator will try to click
+        anyway.</p>
+        <p><b>(4) People and organizations get a mark; things do not.</b> Agents, clients, companies, and
+        suppliers may carry initials or an avatar. Products and documents carry their fixed domain icon (§9)
+        instead — initials on a product are noise dressed as identity.</p>
+        <p><b>(5) Status qualifies the name, and never replaces it.</b> A blocked client still renders their
+        name at full contrast with a badge beside it. Muting the identity of a blocked or inactive entity is
+        how a record becomes unreadable exactly when someone is investigating why it was blocked.</p>
+        <p><b>(6) Historical references survive their subject.</b> An entity that has been deactivated,
+        blocked, or removed still renders in full in the records that reference it — a settled cheque names
+        the agent who deposited it forever. Such references show the entity's terminal state; they never
+        render blank, "—", or an ID. Financial history that loses its nouns is not an audit trail.</p>
+      </div>
+    </section>
+
+    <footer>
+      Design System v1.0 — proposed · Stage 3 of 5 (Discovery ✅ → Architecture ✅ → <b>Design System</b> →
+      Frontend Technical Architecture → Implementation) · No code was written. Open decision O-1
+      (interface language, §27) requires product sign-off alongside document approval.
+    </footer>
+  </main>
+</div>

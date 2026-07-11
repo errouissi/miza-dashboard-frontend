@@ -1,0 +1,2164 @@
+<title>Phase 8 — Miza Frontend Technical Architecture</title>
+<style>
+  :root {
+    --paper: #EEF0F0; --panel: #FFFFFF; --panel-2: #F5F6F6;
+    --ink: #171B1E; --muted: #5B6570; --faint: #8A939B;
+    --line: #D8DDE0; --line-soft: #E4E8EA;
+    --accent: #1F6F6B; --accent-ink: #0E4643; --accent-soft: #DDEDEC;
+    --accent-2: #7A4F9E; --accent-2-soft: #EFE6F5;
+    --ok: #2E7D4F; --ok-soft: #E1F1E6;
+    --warn: #9C6B14; --warn-soft: #FBF0DA;
+    --bad: #B23B3B; --bad-soft: #FBE6E6;
+    --info: #2D6CA2; --info-soft: #E2EDF6;
+    --retire: #6B7078; --retire-soft: #E9EAEC;
+    --shadow: 0 1px 2px rgba(20,24,27,0.04), 0 6px 20px -8px rgba(20,24,27,0.12);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #12161A; --panel: #1A2025; --panel-2: #1F262B; --ink: #E7EBEC;
+      --muted: #9AA6AC; --faint: #707A80; --line: #2A3238; --line-soft: #232A2F;
+      --accent: #4FBDB6; --accent-ink: #A9E7E2; --accent-soft: #17302E;
+      --accent-2: #B79BD6; --accent-2-soft: #2A2035;
+      --ok: #6FCB92; --ok-soft: #16281D; --warn: #E0B15C; --warn-soft: #2E260F;
+      --bad: #E58888; --bad-soft: #301A1A; --info: #7FB3DC; --info-soft: #16232E;
+      --retire: #8A939B; --retire-soft: #23262A;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 10px 30px -10px rgba(0,0,0,0.5);
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #12161A; --panel: #1A2025; --panel-2: #1F262B; --ink: #E7EBEC;
+    --muted: #9AA6AC; --faint: #707A80; --line: #2A3238; --line-soft: #232A2F;
+    --accent: #4FBDB6; --accent-ink: #A9E7E2; --accent-soft: #17302E;
+    --accent-2: #B79BD6; --accent-2-soft: #2A2035;
+    --ok: #6FCB92; --ok-soft: #16281D; --warn: #E0B15C; --warn-soft: #2E260F;
+    --bad: #E58888; --bad-soft: #301A1A; --info: #7FB3DC; --info-soft: #16232E;
+    --retire: #8A939B; --retire-soft: #23262A;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 10px 30px -10px rgba(0,0,0,0.5);
+  }
+  :root[data-theme="light"] {
+    --paper: #EEF0F0; --panel: #FFFFFF; --panel-2: #F5F6F6; --ink: #171B1E;
+    --muted: #5B6570; --faint: #8A939B; --line: #D8DDE0; --line-soft: #E4E8EA;
+    --accent: #1F6F6B; --accent-ink: #0E4643; --accent-soft: #DDEDEC;
+    --accent-2: #7A4F9E; --accent-2-soft: #EFE6F5;
+    --ok: #2E7D4F; --ok-soft: #E1F1E6; --warn: #9C6B14; --warn-soft: #FBF0DA;
+    --bad: #B23B3B; --bad-soft: #FBE6E6; --info: #2D6CA2; --info-soft: #E2EDF6;
+    --retire: #6B7078; --retire-soft: #E9EAEC;
+    --shadow: 0 1px 2px rgba(20,24,27,0.04), 0 6px 20px -8px rgba(20,24,27,0.12);
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); color: var(--ink);
+    font-family: -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    font-size: 16px; line-height: 1.55; overflow-x: hidden; }
+  ::selection { background: var(--accent-soft); color: var(--accent-ink); }
+  a { color: var(--accent); }
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .mono { font-family: ui-monospace, "Cascadia Code", "SF Mono", Consolas, monospace; font-variant-numeric: tabular-nums; }
+  .eyebrow { font-weight: 700; font-size: 0.72rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); }
+  h1, h2, h3, h4 { text-wrap: balance; font-weight: 800; letter-spacing: -0.01em; color: var(--ink); }
+  p { max-width: 76ch; }
+  .lead-p { color: var(--muted); max-width: 72ch; }
+
+  .shell { display: grid; grid-template-columns: 250px minmax(0,1fr); min-height: 100vh; }
+  @media (max-width: 900px) { .shell { grid-template-columns: 1fr; } }
+  nav.toc { position: sticky; top: 0; align-self: start; height: 100vh;
+    border-right: 1px solid var(--line); background: var(--panel-2); padding: 26px 16px; overflow-y: auto; }
+  @media (max-width: 900px) { nav.toc { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--line); } }
+  nav.toc .brand { font-weight: 800; font-size: 0.98rem; margin-bottom: 3px; }
+  nav.toc .brand-sub { font-size: 0.76rem; color: var(--muted); margin-bottom: 18px; }
+  nav.toc ol { list-style: none; margin: 0; padding: 0; counter-reset: sec; display: flex; flex-direction: column; gap: 0; }
+  nav.toc li { counter-increment: sec; }
+  nav.toc a { display: flex; gap: 9px; align-items: baseline; text-decoration: none; color: var(--muted);
+    font-size: 0.78rem; padding: 4px 8px; border-radius: 6px; }
+  nav.toc a:hover { background: var(--panel); color: var(--ink); }
+  nav.toc a::before { content: counter(sec, decimal-leading-zero); font-family: ui-monospace, monospace;
+    font-size: 0.66rem; color: var(--faint); flex: none; }
+
+  main { min-width: 0; }
+  header.hero { padding: 54px clamp(20px, 5vw, 64px) 38px; border-bottom: 1px solid var(--line); }
+  header.hero h1 { font-size: clamp(1.5rem, 3vw, 2.1rem); margin: 12px 0 10px; max-width: 26ch; }
+  header.hero p.lede { color: var(--muted); max-width: 68ch; font-size: 1rem; margin: 0 0 20px; }
+  .meta-row { display: flex; flex-wrap: wrap; gap: 10px 22px; font-size: 0.82rem; color: var(--muted); }
+  .meta-row b { color: var(--ink); font-weight: 700; }
+
+  section { padding: 42px clamp(20px, 5vw, 64px); border-bottom: 1px solid var(--line-soft); }
+  section:last-of-type { border-bottom: none; }
+  .sec-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 8px; }
+  .sec-head h2 { font-size: 1.3rem; margin: 0; }
+  .sec-intro { margin-bottom: 20px; }
+  h3.sub { font-size: 1rem; margin: 26px 0 10px; }
+
+  .callout { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--accent);
+    border-radius: 8px; padding: 16px 20px; box-shadow: var(--shadow); max-width: 80ch; margin: 18px 0 0; }
+  .callout h4 { font-size: 0.92rem; margin: 0 0 6px; }
+  .callout p { margin: 0; color: var(--muted); font-size: 0.92rem; }
+  .callout p + p { margin-top: 8px; }
+  .callout.decision { border-left-color: var(--accent-2); }
+  .callout.decision h4::before { content: "⚖ "; }
+  .callout.rule { border-left-color: var(--warn); }
+  .callout.bad { border-left-color: var(--bad); }
+
+  .grid { display: grid; gap: 14px; }
+  .grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+  .grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
+  .grid.cols-4 { grid-template-columns: repeat(4, 1fr); }
+  @media (max-width: 860px) { .grid.cols-3, .grid.cols-2, .grid.cols-4 { grid-template-columns: 1fr; } }
+
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 15px 17px; box-shadow: var(--shadow); }
+  .card h4 { font-size: 0.88rem; margin: 0 0 6px; }
+  .card p { color: var(--muted); font-size: 0.85rem; margin: 0; }
+  .card p + p { margin-top: 6px; }
+
+  .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); margin-top: 14px; }
+  table { border-collapse: collapse; width: 100%; min-width: 560px; background: var(--panel); }
+  thead th { text-align: left; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted);
+    padding: 9px 14px; border-bottom: 1px solid var(--line); background: var(--panel-2); white-space: nowrap; }
+  tbody td { padding: 9px 14px; border-bottom: 1px solid var(--line-soft); font-size: 0.85rem; vertical-align: top; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover td { background: var(--panel-2); }
+  .group-row td { background: var(--panel-2); font-weight: 700; font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+
+  .chip { display: inline-flex; align-items: center; gap: 5px; font-size: 0.73rem; font-weight: 700;
+    padding: 3px 9px; border-radius: 99px; white-space: nowrap; line-height: 1.6; }
+  .chip.ok { background: var(--ok-soft); color: var(--ok); }
+  .chip.warn { background: var(--warn-soft); color: var(--warn); }
+  .chip.bad { background: var(--bad-soft); color: var(--bad); }
+  .chip.info { background: var(--info-soft); color: var(--info); }
+  .chip.neutral { background: var(--retire-soft); color: var(--retire); }
+  .chip.accent { background: var(--accent-soft); color: var(--accent-ink); }
+  .chip.accent2 { background: var(--accent-2-soft); color: var(--accent-2); }
+
+  code.inline { font-family: ui-monospace, monospace; background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: 4px; padding: 1px 5px; font-size: 0.85em; }
+
+  pre.tree { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow);
+    padding: 18px 20px; overflow-x: auto; font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+    font-size: 0.78rem; line-height: 1.75; margin: 14px 0 0; color: var(--ink); }
+  pre.tree .c { color: var(--faint); }
+  pre.tree .d { color: var(--accent); font-weight: 700; }
+
+  .layers { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
+  .layer { border: 1px solid var(--line); border-radius: 10px; background: var(--panel); box-shadow: var(--shadow);
+    padding: 16px 20px; border-left: 4px solid var(--accent); }
+  .layer.app { border-left-color: var(--accent-2); }
+  .layer.dom { border-left-color: var(--ok); }
+  .layer.shared { border-left-color: var(--warn); }
+  .layer.infra { border-left-color: var(--info); }
+  .layer h4 { margin: 0 0 4px; font-size: 0.98rem; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .layer h4 .tag { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--faint); font-weight: 700; }
+  .layer p { margin: 0; color: var(--muted); font-size: 0.88rem; }
+  .layer p + p { margin-top: 7px; }
+  .arrow { text-align: center; font-family: ui-monospace, monospace; font-size: 0.74rem; color: var(--faint); }
+
+  footer { padding: 32px clamp(20px,5vw,64px) 56px; color: var(--faint); font-size: 0.82rem; }
+</style>
+
+<div class="shell">
+  <nav class="toc" aria-label="Specification sections">
+    <div class="brand">Miza · Phase 8</div>
+    <div class="brand-sub">Frontend Technical Architecture v1.0</div>
+    <ol>
+      <li><a href="#s1">Architecture philosophy</a></li>
+      <li><a href="#s2">High-level architecture</a></li>
+      <li><a href="#s3">Folder structure</a></li>
+      <li><a href="#s4">Feature organization</a></li>
+      <li><a href="#s5">Routing architecture</a></li>
+      <li><a href="#s6">Permission architecture</a></li>
+      <li><a href="#s7">API layer</a></li>
+      <li><a href="#s8">TanStack Query strategy</a></li>
+      <li><a href="#s9">State management</a></li>
+      <li><a href="#s10">Form architecture</a></li>
+      <li><a href="#s11">Error handling</a></li>
+      <li><a href="#s12">Shared components</a></li>
+      <li><a href="#s13">Shared hooks</a></li>
+      <li><a href="#s14">Utilities &amp; services</a></li>
+      <li><a href="#s15">Performance strategy</a></li>
+      <li><a href="#s16">Testing strategy</a></li>
+      <li><a href="#s17">Security considerations</a></li>
+      <li><a href="#s18">Observability</a></li>
+      <li><a href="#s19">Decision records (ADR)</a></li>
+      <li><a href="#s20">Future scalability</a></li>
+    </ol>
+  </nav>
+
+  <main>
+    <header class="hero">
+      <div class="eyebrow">Engineering specification — stage 4 of 5 · no implementation</div>
+      <h1>Miza Frontend Technical Architecture</h1>
+      <p class="lede">
+        The engineering blueprint for building the dashboard the approved Architecture proposed, styled the
+        way the approved Design System requires. This document decides <em>how the frontend is organized</em>
+        — its layers, boundaries, data flow, and rules — so that a senior React developer can start work
+        without making a single major architectural decision alone. It is technology-aware (it names the
+        stack it binds to) and implementation-independent (it contains no code).
+      </p>
+      <div class="meta-row">
+        <span><b>Version</b> 1.0 — proposed</span>
+        <span><b>Inputs</b> Discovery ✅ · Domain Architecture ✅ · Design System v1.0 ✅ · backend through Phase 5.10</span>
+        <span><b>Status</b> Awaiting review before stage 5 (implementation)</span>
+      </div>
+
+      <div class="callout" style="margin-top:26px;">
+        <h4>How to read this document</h4>
+        <p><b>MUST</b> marks a rule with no exceptions — violating it is an architecture bug and a valid
+        reason to reject a pull request. <b>SHOULD</b> marks the default; deviating requires a stated reason
+        in review. <b>MAY</b> marks an explicit freedom. Callouts marked <b>⚖ Decision</b> record a place
+        where a conventional or tempting choice was rejected, and why — future contributors inherit the
+        reasoning, not just the rule. Decisions are numbered <span class="mono">D-n</span> and become the
+        seed of the ADR log (§19).</p>
+        <p>Where this document references the upstream specifications it implements, it cites them as
+        <b>Discovery</b>, <b>Architecture §n</b>, and <b>Design System §n</b>. Those documents are approved
+        and binding; where this one appears to contradict them, they win and this one is wrong.</p>
+      </div>
+
+      <div class="callout rule" style="margin-top:14px;">
+        <h4>The stack this binds to — inherited, not chosen here</h4>
+        <p>React 19 · TypeScript · Vite 7 · Tailwind v4 · shadcn/ui (new-york, neutral) · react-router ·
+        React Hook Form + zod · axios. Authentication is Laravel Sanctum bearer tokens; authorization is
+        Spatie permission strings returned in the login payload. All of this already exists (Discovery §1)
+        and is <b>kept</b> — the Discovery report's verdict was "the frontend was scaffolded correctly and
+        never filled in," and this architecture is additive to that scaffold, not a replacement for it.</p>
+        <p>Two libraries are <em>added</em> by this document, both anticipated by Discovery §7: <b>TanStack
+        Query</b> as the server-state layer (§8) and <b>TanStack Table</b> (headless) beneath the DataTable
+        (§12). They are the only dependencies introduced <em>by this architecture stage</em> — which is a
+        statement about what this document decides, not a permanent freeze on the dependency list.</p>
+        <p><b>The dependency policy, stated once and applying to everything after this document:</b> a new
+        dependency is admissible when a concrete product requirement cannot be served safely or reasonably by
+        the existing stack — and not otherwise. Convenience, familiarity, and "it's only a few kilobytes" are
+        not requirements. Every meaningful dependency MUST be justified through architectural review and
+        recorded as an ADR (§19), stating what it does that the current stack cannot. Prefer small, focused,
+        actively maintained libraries with a narrow surface. Reject dependencies that duplicate a capability
+        already present, or that impose a second architectural model competing with the one specified here —
+        a second data-fetching layer, a second form system, or a second styling paradigm are all rejections by
+        default, because the cost is not the bundle, it is the fork in how the codebase thinks.</p>
+      </div>
+    </header>
+
+    <!-- ============ 1 ============ -->
+    <section id="s1">
+      <div class="sec-head"><span class="eyebrow">01</span><h2>Frontend architecture philosophy</h2></div>
+      <p class="lead-p sec-intro">The dashboard moves real money and real stock through irreversible steps.
+      That single fact — not fashion, not framework convention — is what every principle below is derived
+      from. An architecture for a content site optimizes for time-to-first-render; this one optimizes for
+      <em>never showing an operator a number that is wrong</em>, and for still being modifiable in three
+      years by someone who wasn't here.</p>
+
+      <div class="grid cols-2">
+        <div class="card"><h4>The backend's domain model is the frontend's domain model</h4>
+          <p>The five domains (Network, Money, Stock, Grattage, Reference) are not a UI grouping — they are
+          boundaries the backend genuinely enforces, with Grattage as the one deliberate seam between the
+          Stock and Money ledgers (Architecture §2). The frontend mirrors them exactly: folders, routes,
+          query keys, and permissions all use the same names.</p>
+          <p><b>Why:</b> when the frontend invents its own decomposition, every backend change requires a
+          translation step that lives only in a developer's head. Shared vocabulary makes "where does this
+          go?" answerable without a meeting.</p></div>
+
+        <div class="card"><h4>Correctness over convenience, explicitly</h4>
+          <p>Where a convenient pattern trades a small amount of correctness for a large amount of developer
+          comfort, this architecture takes the correctness. That is why there are no optimistic updates on
+          money (§8), why mutations never auto-retry (§11), and why data that gates an irreversible action
+          MUST be refetched before that action is offered (§8).</p>
+          <p><b>Why:</b> the cost of a wrong render here is not a bad review — it is a cheque approved twice
+          or a deposit settled against the wrong invoice. Optimism is a UX technique that assumes failure is
+          cheap; in this product it isn't.</p></div>
+
+        <div class="card"><h4>One shape per repeating problem</h4>
+          <p>Inherited directly from Architecture §1. The backend repeats two shapes relentlessly — "paginated
+          list with filters" and "draft → add lines → irreversible validate." The frontend builds each shape
+          <em>once</em> and configures it per domain (§12). Fifteen near-identical CRUD trios hand-built is
+          the single biggest waste available to this project, and the Discovery report named it as such.</p>
+          <p><b>Why:</b> a bug fixed in a shared pattern is fixed everywhere; a bug fixed in one of fifteen
+          copies is fixed once and survives fourteen times.</p></div>
+
+        <div class="card"><h4>Separation of concerns, enforced not encouraged</h4>
+          <p>Four layers (§2) with a strict, one-directional dependency rule (§4). "Enforced" means a linter
+          fails the build on a forbidden import — not a convention in a README that erodes in the third
+          sprint under deadline.</p>
+          <p><b>Why:</b> every architecture document ever written has been ignored under pressure. The only
+          boundaries that survive are the ones a machine checks. If a rule in this document cannot be
+          mechanically enforced, it is written as a review checklist item and we accept that it is weaker.</p></div>
+
+        <div class="card"><h4>Scalability means the sixth domain is boring</h4>
+          <p>The measure of this architecture is not how well it renders today's five domains — it is how
+          much work a domain that does not exist yet will cost. The target: a new resource ships as a folder
+          plus registry entries (a definition, a query-key factory, a route contribution, permission strings),
+          with no change to any shared file.</p>
+          <p><b>Why:</b> the business is adding domains (Phase 5.10 added reconciliation; more will come).
+          An architecture that requires touching shared code for every addition creates a merge-conflict
+          bottleneck exactly when the team grows.</p></div>
+
+        <div class="card"><h4>Maintainability means deletable</h4>
+          <p>Every feature MUST be removable by deleting its folder and its registry entries. If deleting a
+          domain leaves dangling imports across the app, the boundaries have already failed. Cross-domain
+          coupling is permitted only through a domain's declared public surface (§4), never into its internals.</p>
+          <p><b>Why:</b> the ability to delete is the only honest test of whether a boundary exists. It is
+          also what makes the retired-route problem (the hard-403'd grattage endpoints) survivable rather
+          than a slow leak of dead code.</p></div>
+      </div>
+
+      <div class="callout decision">
+        <h4>D-1 · The frontend is a client of a domain-rich backend, not a place to re-implement the domain</h4>
+        <p>Tempting alternative: build a rich client-side domain model that mirrors backend business rules —
+        capacity formulas, restock-gate logic, settlement arithmetic — so the UI can validate everything
+        instantly without a round trip. <b>Rejected.</b></p>
+        <p>Duplicated business logic is a guarantee of eventual divergence: the day the backend changes a
+        capacity formula and the frontend does not, the UI confidently shows an operator a number the server
+        will refuse to honor. The backend is the sole authority on domain truth (it owns the transactions and
+        the invariants), and the frontend's job is to <em>ask it</em>, present the answer faithfully, and
+        explain refusals well (§11's error-code registry). Client-side rules are permitted only as
+        <em>UX affordances that mirror a server rule</em> — required fields, formats, min/max — and the server
+        remains the enforcer of every one of them. Where the frontend needs a derived business value
+        (an agent's capacity, a restock-gate state), it fetches it; it does not compute it.</p>
+      </div>
+    </section>
+
+    <!-- ============ 2 ============ -->
+    <section id="s2">
+      <div class="sec-head"><span class="eyebrow">02</span><h2>High-level architecture</h2></div>
+      <p class="lead-p sec-intro">Four layers. Dependencies point downward only — every arrow in the diagram
+      below is one-way, and there are no exceptions granted anywhere in this document.</p>
+
+      <div class="layers">
+        <div class="layer app">
+          <h4>App layer <span class="tag">composition root · knows everything, is known by nothing</span></h4>
+          <p>The only place where the application is <em>wired</em>: the router and its route table, the
+          provider stack (query client, session, error boundary, toaster), the shell layouts (AppShell,
+          and the five page skeletons' outermost frames), and application bootstrap (config validation,
+          session hydration).</p>
+          <p><b>Owns:</b> what exists and how it is assembled. <b>Never contains:</b> business logic, API
+          calls, or domain types. If a file in <span class="mono">app/</span> knows what a cheque is, it is
+          in the wrong layer. The app layer is the one place allowed to import from every domain, because
+          composition is its entire job.</p>
+        </div>
+        <div class="arrow">↓ imports</div>
+        <div class="layer dom">
+          <h4>Domain layer <span class="tag">the product · where features actually live</span></h4>
+          <p>One folder per business domain (Network, Money, Stock, Grattage, Reference, Overview), each
+          containing its resources (cheques, deposits, bons, …). A resource owns its API module, its DTO
+          mappers, its domain types, its query keys and hooks, its pages, and its domain-specific components.</p>
+          <p><b>Owns:</b> everything specific to one business concept. <b>Rule:</b> a domain MUST NOT import
+          another domain's internals — only its declared public surface, and only where a real backend
+          coupling justifies it (§4). Most domains import no other domain at all.</p>
+        </div>
+        <div class="arrow">↓ imports</div>
+        <div class="layer shared">
+          <h4>Shared layer <span class="tag">the product's vocabulary · domain-agnostic, product-specific</span></h4>
+          <p>Things every domain uses but no domain owns: the page patterns (ListPage, DetailPage,
+          DraftLifecyclePage, WorkspacePage, ApprovalQueuePage, CreateWizard), the business components
+          (StatusBadge, MoneyAmount, EntityLink, DataTable, FilterBar, LineItemsEditor, PermissionGate…),
+          the shadcn primitives, the formatters that implement Design System §5/§27, and cross-cutting hooks.</p>
+          <p><b>Rule:</b> the shared layer MUST NOT import from any domain. A shared component that needs to
+          know what a cheque is has been mis-placed — it is a domain component, or it needs its cheque-ness
+          passed in as configuration. This is the boundary that decays first and matters most.</p>
+        </div>
+        <div class="arrow">↓ imports</div>
+        <div class="layer infra">
+          <h4>Infrastructure layer <span class="tag">the plumbing · knows nothing about Miza</span></h4>
+          <p>The HTTP client and its interceptors, error normalization, the query client and its defaults,
+          the session/token store (the <em>only</em> module that touches <span class="mono">localStorage</span>),
+          the permission registry and evaluator, configuration and feature flags, the logger and error reporter.</p>
+          <p><b>Rule:</b> infrastructure MUST NOT import from shared or domain layers. It is theoretically
+          liftable into another product with the domain names removed — and that is exactly the test to apply
+          when deciding whether something belongs here. The permission <em>registry's contents</em> are
+          Miza-specific data; the permission <em>evaluator</em> is not, and they are separated accordingly (§6).</p>
+        </div>
+      </div>
+
+      <div class="callout rule">
+        <h4>The dependency rule, stated once</h4>
+        <p><b>MUST:</b> <span class="mono">app → domains → shared → infrastructure</span>. Never sideways
+        (domain → domain, except through a public surface), never upward (shared → domain, infrastructure →
+        anything). Enforced by an import-boundary lint rule that fails CI, not by good intentions (§4).</p>
+        <p>The single most common violation to watch for: a shared component that imports a domain type "just
+        for the props." That is the crack through which the shared layer becomes a second, worse copy of the
+        domain layer. Pass the data in; do not reach for it.</p>
+      </div>
+    </section>
+
+    <!-- ============ 3 ============ -->
+    <section id="s3">
+      <div class="sec-head"><span class="eyebrow">03</span><h2>Folder structure</h2></div>
+      <p class="lead-p sec-intro">The layers of §2, made physical. Every folder below exists because a rule
+      needs a home; there is no folder here whose only justification is "that's how it's usually done."</p>
+
+      <pre class="tree"><span class="c">src/</span>
+├── <span class="d">app/</span>                        <span class="c"># composition root — wiring only, no business logic</span>
+│   ├── router/                 <span class="c"># route table, generated from domain route contributions (§5)</span>
+│   ├── providers/              <span class="c"># QueryClientProvider, SessionProvider, ErrorBoundary, Toaster</span>
+│   ├── layouts/                <span class="c"># AppShell (sidebar + header + outlet) — Architecture §4</span>
+│   └── bootstrap/              <span class="c"># config validation, session hydration, fail-fast startup (§14)</span>
+│
+├── <span class="d">domains/</span>                    <span class="c"># the product. One folder per business domain (Architecture §2)</span>
+│   ├── overview/               <span class="c"># composed read surface; owns no CRUD of its own</span>
+│   ├── network/
+│   │   ├── admins/
+│   │   ├── agents/             <span class="c"># includes the Agent 360 workspace (cross-domain, §4)</span>
+│   │   └── clients/
+│   ├── money/
+│   │   ├── cheques/
+│   │   ├── deposits/
+│   │   └── debt-payments/
+│   ├── stock/
+│   │   ├── bons/
+│   │   ├── allocations/
+│   │   ├── agent-transfers/
+│   │   └── agent-stock-returns/
+│   ├── grattage/
+│   │   ├── invoices/
+│   │   └── outstanding/        <span class="c"># restock gate — exported publicly, consumed by stock (§4)</span>
+│   └── reference/
+│       ├── villes/
+│       ├── secteurs/
+│       └── products/
+│
+├── <span class="d">shared/</span>                     <span class="c"># domain-agnostic, product-specific. Imports nothing from domains.</span>
+│   ├── components/
+│   │   ├── ui/                 <span class="c"># shadcn primitives — GENERATED, not authored. Do not hand-edit.</span>
+│   │   ├── patterns/           <span class="c"># ListPage, DetailPage, DraftLifecyclePage, WorkspacePage,</span>
+│   │   │                       <span class="c">#   ApprovalQueuePage, CreateWizard — the five skeletons (Architecture §4)</span>
+│   │   └── business/           <span class="c"># DataTable, FilterBar, LineItemsEditor, StatusBadge, MoneyAmount,</span>
+│   │                           <span class="c">#   EntityChip, PermissionGate, ConfirmActionDialog, Timeline, FormDrawer</span>
+│   ├── hooks/                  <span class="c"># useUrlFilterState, useDebouncedValue, useConfirm (§13)</span>
+│   ├── formatters/             <span class="c"># THE implementation of Design System §5 + §27. Single source. (§14)</span>
+│   └── types/                  <span class="c"># cross-domain primitives: Paginated&lt;T&gt;, SortDirection, Money…</span>
+│
+├── <span class="d">infrastructure/</span>             <span class="c"># plumbing. Knows nothing about Miza's business.</span>
+│   ├── http/                   <span class="c"># axios instance, interceptors, error normalization → AppError (§7, §11)</span>
+│   ├── query/                  <span class="c"># QueryClient defaults, staleTime tiers, invalidation map (§8)</span>
+│   ├── auth/                   <span class="c"># session store — the ONLY module that touches localStorage (§17)</span>
+│   ├── permissions/            <span class="c"># registry + evaluator + guards (§6)</span>
+│   ├── errors/                 <span class="c"># AppError shape + the error-code registry (Design System §23)</span>
+│   ├── config/                 <span class="c"># env parsing + validation, feature flags (§14)</span>
+│   └── observability/          <span class="c"># logger, error reporter, PII scrubbing (§18)</span>
+│
+└── <span class="d">test/</span>                       <span class="c"># MSW handlers, fixtures, render helpers (§16)</span></pre>
+
+      <h3 class="sub">Inside one resource — the shape every resource repeats</h3>
+      <p style="font-size:0.9rem; color:var(--muted); max-width:76ch;">This is the unit a developer actually
+      works in. It is deliberately identical for all ~15 resources, so that knowing one means knowing all of
+      them — the §1 consistency principle applied to the codebase rather than the screen.</p>
+
+      <pre class="tree"><span class="c">domains/money/cheques/</span>
+├── api/           <span class="c"># endpoint calls + DTO types + mappers. The ONLY place axios is touched (§7).</span>
+├── model/         <span class="c"># domain types (Cheque), status→tone mapping, resource definition (§12)</span>
+├── queries/       <span class="c"># query-key factory + query/mutation hooks. The domain's data contract. (§8)</span>
+├── components/    <span class="c"># cheque-specific components only. Promoted to shared on the 3rd reuse (§12).</span>
+├── pages/         <span class="c"># route-level components: ChequeListPage, ChequeDetailPage, PendingChequesQueue</span>
+├── routes.ts      <span class="c"># this resource's route contributions + their permission strings (§5)</span>
+└── index.ts       <span class="c"># THE public surface. Everything importable from outside is re-exported here.</span></pre>
+
+      <div class="callout decision">
+        <h4>D-2 · Feature-first, not layer-first — and explicitly not Atomic Design</h4>
+        <p>Two conventional alternatives were considered and rejected.</p>
+        <p><b>Layer-first</b> (<span class="mono">/components</span>, <span class="mono">/hooks</span>,
+        <span class="mono">/services</span>, <span class="mono">/types</span> at the root, all domains mixed
+        inside each) is what the legacy build started doing. It fails at exactly this scale: a change to
+        cheques touches four distant folders, nothing tells you which files belong together, and deleting a
+        feature becomes an archaeology exercise. It optimizes for "where do I put a hook?" — a question asked
+        once — over "what makes up this feature?" — asked every day.</p>
+        <p><b>Atomic Design</b> (atoms/molecules/organisms) is rejected outright. It sorts components by
+        <em>visual complexity</em>, a property with no relationship to ownership, change frequency, or
+        deletability. In practice every team argues about whether something is a molecule or an organism, and
+        the taxonomy answers no question anyone actually has. The shared layer's three folders
+        (<span class="mono">ui</span> / <span class="mono">patterns</span> / <span class="mono">business</span>)
+        sort by <em>ownership and origin</em> instead — generated, skeleton, or authored-business — which are
+        the distinctions that determine who may edit a file and when.</p>
+      </div>
+
+      <div class="callout rule">
+        <h4>Two folder rules that prevent the usual decay</h4>
+        <p><b>(1) No <span class="mono">utils/</span> folder.</b> "Utils" is where code goes to escape
+        classification, and it grows without bound because nothing is ever wrong to put there. Helpers live
+        with the thing they serve; genuinely universal ones are <em>named for what they do</em>
+        (<span class="mono">shared/formatters</span>), not for what they aren't.</p>
+        <p><b>(2) One barrel per resource, and no deeper.</b> Each resource exposes exactly one
+        <span class="mono">index.ts</span> — its public surface (§4). There are no barrel files inside a
+        resource, and none in shared subfolders: deep barrel chains create circular imports that are
+        excruciating to debug and defeat tree-shaking, and they hide exactly the dependency edges this
+        architecture is trying to make visible.</p>
+      </div>
+    </section>
+
+    <!-- ============ 4 ============ -->
+    <section id="s4">
+      <div class="sec-head"><span class="eyebrow">04</span><h2>Feature organization &amp; boundaries</h2></div>
+      <p class="lead-p sec-intro">Boundaries that are not enforced are not boundaries. This section defines
+      what may import what, and how the build fails when someone doesn't.</p>
+
+      <h3 class="sub">The public surface rule</h3>
+      <div class="grid cols-2">
+        <div class="card"><h4>Every resource has exactly one front door</h4>
+          <p>A resource's <span class="mono">index.ts</span> declares what the rest of the app may use:
+          typically its route contributions, its query-key factory, a small number of hooks, its domain types,
+          and any component genuinely meant for outside consumption. Everything else — the API module, the
+          mappers, the page components, the internal state — is private.</p></div>
+        <div class="card"><h4>Reaching past the front door is a build failure</h4>
+          <p>Importing <span class="mono">domains/money/cheques/api/…</span> from outside the cheques folder is
+          forbidden and lint-enforced. The distinction matters because the front door is a <em>contract</em>:
+          internals may be refactored freely, and the only way that stays true is if nobody depends on them.</p></div>
+      </div>
+
+      <h3 class="sub">Import matrix</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>From ↓ / May import →</th><th>app</th><th>same domain</th><th>other domain</th><th>shared</th><th>infrastructure</th></tr></thead>
+          <tbody>
+            <tr><td><b>app</b></td><td>✅</td><td>✅ public surface only</td><td>✅ public surface only</td><td>✅</td><td>✅</td></tr>
+            <tr><td><b>domain</b></td><td>❌ never</td><td>✅ freely, internals included</td><td>⚠️ public surface only, and only with a documented backend coupling</td><td>✅</td><td>✅</td></tr>
+            <tr><td><b>shared</b></td><td>❌ never</td><td colspan="2">❌ <b>never</b> — the load-bearing rule</td><td>✅</td><td>✅</td></tr>
+            <tr><td><b>infrastructure</b></td><td>❌ never</td><td colspan="2">❌ never</td><td>❌ never</td><td>✅</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="sub">Cross-domain logic — the three sanctioned crossings</h3>
+      <p style="font-size:0.9rem; color:var(--muted); max-width:76ch;">Architecture §6 documents six real
+      cross-module workflows. They resolve into exactly three <em>mechanisms</em>, and every crossing in the
+      app MUST use one of them. Anything else is a boundary violation wearing a business justification.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th style="min-width:150px;">Mechanism</th><th>How it works</th><th>Used by</th></tr></thead>
+          <tbody>
+            <tr><td><b>1 · Composition at the page</b></td>
+              <td>A page imports the <em>public surface</em> of several domains and arranges their panels.
+              The composing page owns the layout; each panel remains owned by its domain. No domain learns
+              about another.</td>
+              <td>Agent 360 and Client 360 (WorkspacePage) — the only layout that crosses domains by design
+              (Architecture §4).</td></tr>
+            <tr><td><b>2 · Public hook import</b></td>
+              <td>One domain imports a hook from another domain's public surface because the backend genuinely
+              couples them. The importing domain gets a value; it does not get the other domain's internals or
+              its business rules.</td>
+              <td><b>The restock gate.</b> A Grattage rule that Stock's Allocation and Agent-Transfer forms
+              must respect (Architecture §5). Grattage exports the gate hook; Stock consumes it. This is the
+              one intentional domain→domain import in the app, and it is documented here precisely so it stays
+              the only one.</td></tr>
+            <tr><td><b>3 · The invalidation map</b></td>
+              <td>A mutation in one domain must refresh data in another. The mutation does <em>not</em> import
+              the other domain's query keys; it emits a named domain event, and a single central map declares
+              which keys that event invalidates (§8).</td>
+              <td>Cheque approval → agent capacity (Money → Stock). Deposit validation → grattage invoice
+              settlement (Money → Grattage). Any mutation whose effects the backend propagates across domains.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout decision">
+        <h4>D-3 · Cross-domain cache invalidation goes through a central map, not through direct key imports</h4>
+        <p>The obvious approach: when the cheque-approval mutation succeeds, import Stock's query keys and
+        invalidate the agent-capacity query directly. It is three lines and it works. <b>Rejected.</b></p>
+        <p>It works <em>today</em>, and it quietly makes Money depend on Stock, then on Grattage, then on
+        Overview — because every mutation with cross-domain effects adds another import. Within a year the
+        domain graph is fully connected and the boundaries in §2 are decorative. Worse, the coupling is
+        invisible: nothing lists which mutations affect which caches, so a developer adding a sixth domain has
+        no way to discover that approving a cheque should now also refresh <em>their</em> widget.</p>
+        <p>The invalidation map inverts it. Money's mutation announces <span class="mono">cheque.approved</span>
+        and knows nothing else. One file in <span class="mono">infrastructure/query/</span> maps that event to
+        the affected key prefixes across every domain. The coupling still exists — it is a real business
+        coupling and cannot be wished away — but it is now <em>declared in one readable place</em> instead of
+        smeared across mutation callbacks. The cost is one indirection; the benefit is that "what happens when
+        a cheque is approved?" has a single, greppable answer.</p>
+      </div>
+
+      <div class="callout rule">
+        <h4>Enforcement — how these rules actually hold</h4>
+        <p>The import matrix MUST be encoded as an ESLint boundary rule (<span class="mono">import/no-restricted-paths</span>
+        or an equivalent boundaries plugin) and MUST fail CI, not merely warn. A warning is a rule with an
+        opt-out, and under deadline every opt-out is taken.</p>
+        <p>The escape hatch is deliberate and expensive: a violation may be merged only with an inline
+        suppression comment that names an ADR (§19). That makes exceptions possible — occasionally they are
+        genuinely right — while guaranteeing that each one is visible, argued, and countable. If the
+        suppression count grows, the architecture is wrong and should be amended rather than bypassed.</p>
+      </div>
+    </section>
+
+    <!-- ============ 5 ============ -->
+    <section id="s5">
+      <div class="sec-head"><span class="eyebrow">05</span><h2>Routing architecture</h2></div>
+      <p class="lead-p sec-intro">Routes are <em>contributed</em> by domains and <em>assembled</em> by the app
+      layer. No central file lists every screen by hand — that file is always out of date, and the Discovery
+      report already found five legacy routes with no permission guard at all because of exactly that pattern.</p>
+
+      <h3 class="sub">Route ownership</h3>
+      <div class="grid cols-3">
+        <div class="card"><h4>Domains own their routes</h4>
+          <p>Each resource declares its own route contributions in <span class="mono">routes.ts</span>: path
+          segment, the lazy-loaded page component, the permission string required, and the breadcrumb label.
+          Adding a screen means editing one file inside one domain.</p></div>
+        <div class="card"><h4>The app layer assembles them</h4>
+          <p><span class="mono">app/router/</span> collects every domain's contributions into the route tree
+          and wraps them uniformly — guard, layout, error boundary, suspense. Uniformly means <em>every</em>
+          route, with no per-route hand-wrapping to forget.</p></div>
+        <div class="card"><h4>Guards are generated, never hand-written</h4>
+          <p>Because the permission string travels <em>with</em> the route declaration, a route that exists is
+          a route that is guarded. Forgetting the guard is not possible — there is no unguarded code path to
+          forget it in (§6).</p></div>
+      </div>
+
+      <h3 class="sub">Route structure</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th style="min-width:200px;">Route shape</th><th>Layout &amp; behavior</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">/login</td>
+              <td>Public. The only route outside the authenticated shell. Redirects to the return-path if a
+              session already exists.</td></tr>
+            <tr><td class="mono">/ (AppShell)</td>
+              <td>The authenticated root layout: sidebar + header + outlet (Architecture §4, Design System §2).
+              Everything below is nested inside it and inherits its guard — an unauthenticated user never
+              reaches a child route's loader at all.</td></tr>
+            <tr><td class="mono">/overview</td>
+              <td>The landing page. Role-aware widget grid; owns no CRUD (Architecture §5).</td></tr>
+            <tr><td class="mono">/{domain}/{resource}</td>
+              <td>ListPage — e.g. <span class="mono">/money/cheques</span>, <span class="mono">/stock/bons</span>.
+              Filter, sort, and page state live in the query string (§9), so the URL <em>is</em> the view.</td></tr>
+            <tr><td class="mono">/{domain}/{resource}/{id}</td>
+              <td>DetailPage or DraftLifecyclePage, depending on whether the resource has a lifecycle.</td></tr>
+            <tr><td class="mono">/network/agents/{id}</td>
+              <td>WorkspacePage (Agent 360) — the sanctioned cross-domain composition (§4).</td></tr>
+            <tr><td class="mono">/{domain}/{resource}/pending</td>
+              <td>ApprovalQueuePage — a ListPage variant pre-scoped to an actionable subset. It is a distinct
+              route rather than a filter preset because operators bookmark it and the sidebar links to it
+              directly (Architecture §8).</td></tr>
+            <tr><td class="mono">*</td>
+              <td>The in-shell 404 (Design System §23) — never a bare error page, always with a path back to
+              the module list.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout decision">
+        <h4>D-4 · Lazy-load per domain, not per route — and no route-level data loaders</h4>
+        <p><b>Code splitting:</b> the natural instinct is to lazy-load every page component. Rejected in favor
+        of splitting at the <em>domain</em> boundary. An operator working in Money will visit the cheque list,
+        a cheque detail, and the pending queue within seconds of each other; splitting those three into three
+        chunks buys a few kilobytes on first paint and then charges a network round trip at every navigation —
+        on an office connection this reads as lag exactly where the product should feel instant. One chunk per
+        domain, plus a shared chunk for the pattern library, matches how people actually move through the app
+        (§15).</p>
+        <p><b>Data loading:</b> react-router's loader/action APIs are deliberately <em>not</em> used. Data
+        fetching belongs to TanStack Query (§8), and having two systems that both fetch — one keyed by route,
+        one keyed by query key, with two caches and two invalidation stories — is a well-documented way to
+        produce data that is fresh in one and stale in the other. The router routes; Query fetches. One
+        responsibility each.</p>
+      </div>
+
+      <div class="callout rule">
+        <h4>Navigation philosophy</h4>
+        <p><b>The URL is the state (§9).</b> Any view an operator can reach by clicking MUST be reachable by
+        pasting a link — filters, sort, page, and active tab included. Design System §15 makes this binding:
+        "every filtered view is shareable and bookmarkable from day one." A filtered table whose state lives in
+        React state instead of the query string breaks that contract silently, and the bug only surfaces when
+        someone pastes a link into a chat and their colleague sees different rows.</p>
+        <p><b>Navigation is never a substitute for a drawer.</b> Design System §18 already decided this:
+        modal = a decision, drawer = a task, page = a workspace. Routing follows that, not the other way round —
+        we do not invent a route because it is architecturally convenient to have one. A drawer's open state
+        MAY be reflected in the URL where the drawer is deep-linkable (a record preview); a drawer that is a
+        transient sub-task of the current page MAY keep its state local.</p>
+      </div>
+    </section>
+
+    <!-- ============ 6 ============ -->
+    <section id="s6">
+      <div class="sec-head"><span class="eyebrow">06</span><h2>Permission architecture</h2></div>
+      <p class="lead-p sec-intro">One registry, four consumers. The Discovery report found the legacy build's
+      sidebar and route guards drifting apart — items visible that led nowhere, routes reachable that should
+      not have been. That class of bug is not fixed by being careful; it is fixed by making the two read from
+      the same source.</p>
+
+      <div class="callout decision">
+        <h4>D-5 · Authorize on permission strings, never on roles</h4>
+        <p>The tempting shortcut is everywhere in dashboards: <span class="mono">if (user.role === 'admin')</span>.
+        It reads well, it requires no registry, and it is wrong. <b>Rejected without exception.</b></p>
+        <p>Roles are a <em>grouping</em> of permissions and they change: the backend has four
+        (<span class="mono">super-admin</span>, <span class="mono">admin</span>, <span class="mono">manager</span>,
+        <span class="mono">commercial</span>) and the Architecture explicitly anticipates managers and
+        commercials gaining dashboard access later. Every role check written today is a line that must be found
+        and re-reasoned on that day — and they cannot be found reliably, because they are scattered across
+        components as inline conditionals. Permission strings, by contrast, are what the backend's
+        <span class="mono">permission:*</span> middleware actually enforces; checking the same string the server
+        checks means the UI and the API can never disagree about what is allowed.</p>
+        <p>The one legitimate use of a role: <em>presentation</em> that genuinely varies by who someone is
+        (a manager's Overview showing different widgets than an admin's). Even there, prefer a permission if one
+        exists. Roles describe people; permissions describe actions — and the UI gates actions.</p>
+      </div>
+
+      <h3 class="sub">The registry and its consumers</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th style="min-width:150px;">Piece</th><th>Responsibility</th></tr></thead>
+          <tbody>
+            <tr><td><b>Registry</b> <span class="chip accent">data</span></td>
+              <td>A single map of domain → action → backend permission string, mirroring the backend's own
+              <span class="mono">App\Authorization\*Permissions</span> classes so both sides use one vocabulary
+              (Architecture §10). It is <em>data</em>, and it is the only place a permission string literal
+              appears in the codebase. A permission string typed inline in a component is a bug, because it
+              cannot be renamed, audited, or found.</td></tr>
+            <tr><td><b>Evaluator</b> <span class="chip neutral">logic</span></td>
+              <td>Answers "does the current session hold permission X?" against the permission list the backend
+              returned at login (Discovery §4). Pure, synchronous, trivially testable. Lives in infrastructure
+              and knows nothing about Miza's domains — it evaluates strings.</td></tr>
+            <tr><td><b>1 · Route guards</b></td>
+              <td>Generated from each route's declared permission (§5). Missing permission → the calm 403 state
+              of Design System §23, <em>not</em> a redirect to Overview: silently bouncing someone somewhere
+              else is how users conclude the app is broken.</td></tr>
+            <tr><td><b>2 · Sidebar</b></td>
+              <td>A nav group renders only if the user holds at least one permission in it; a sub-item renders
+              only with its own (Architecture §3). Same registry as the guards — one list, two consumers, no
+              drift. This is the specific fix for the Discovery finding.</td></tr>
+            <tr><td><b>3 · UI guards</b></td>
+              <td>The <span class="mono">PermissionGate</span> component wraps any action: absent permission
+              means the control is <em>not rendered</em>. Design System §10 is explicit that a disabled control
+              must explain itself; "you lack the permission" is not an explanation an operator can act on, so
+              unavailable-by-permission means absent, while unavailable-by-state (a validated bon cannot be
+              re-validated) means disabled-with-a-reason.</td></tr>
+            <tr><td><b>4 · Action guards</b></td>
+              <td>The last line: a mutation hook refuses to fire without its permission. This is belt-and-braces
+              against a button rendered by mistake, and it keeps the check next to the dangerous thing rather
+              than only next to the pretty thing.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout rule">
+        <h4>Client-side permissions are UX, never security</h4>
+        <p><b>MUST be understood by everyone who touches this code:</b> every gate in this section is a
+        convenience — it stops an operator from seeing a button that would fail. It stops <em>nobody</em> from
+        calling the API. The permission list lives in <span class="mono">localStorage</span> and can be edited
+        by anyone with a browser console.</p>
+        <p>The backend is the only authority (§17). It is why a hidden button is not a security control, why the
+        frontend never "trusts" a permission for anything but rendering, and why a 403 from the API must always
+        render gracefully rather than being treated as impossible — because the gate can be bypassed, and when
+        it is, the API is what holds.</p>
+      </div>
+
+      <div class="callout">
+        <h4>Future extensibility — what a new role costs</h4>
+        <p>Nothing structural. Because no component branches on a role, and because routes and nav items carry
+        permission strings declaratively, granting managers dashboard access is: (1) the backend adds permissions
+        to the role; (2) the login payload carries them; (3) the sidebar and routes light up. Zero frontend
+        changes to enable a role that uses <em>existing</em> permissions. A genuinely new capability adds one
+        registry entry and the route that declares it. That is the whole cost, and it is the design goal.</p>
+      </div>
+    </section>
+
+    <!-- ============ 7 ============ -->
+    <section id="s7">
+      <div class="sec-head"><span class="eyebrow">07</span><h2>API layer</h2></div>
+      <p class="lead-p sec-intro">Three concentric rings: one HTTP client (infrastructure), one API module per
+      resource (domain), and a mapping seam between the backend's wire format and the frontend's domain model.
+      The mapping seam is the part that will feel like overhead for the first week and save the project
+      thereafter — §7's central argument.</p>
+
+      <h3 class="sub">The HTTP client — one instance, four responsibilities</h3>
+      <div class="grid cols-2">
+        <div class="card"><h4>What it does</h4>
+          <p>(1) Attaches the bearer token from the session store. (2) Sets the base URL from validated config.
+          (3) Normalizes <em>every</em> failure into a single <span class="mono">AppError</span> shape (§11) —
+          network failures, 4xx, 5xx, and timeouts all arrive at calling code looking the same. (4) Handles 401
+          centrally by terminating the session (§17) — closing the gap Discovery flagged, where "a 401
+          mid-session has no defined UX."</p></div>
+        <div class="card"><h4>What it must not do</h4>
+          <p>It MUST NOT know about domains, retry mutations (§11), show UI, or be imported outside a resource's
+          <span class="mono">api/</span> folder. <b>MUST:</b> axios appears in exactly one infrastructure module
+          and is otherwise invisible — a component that imports axios is a bug. That single rule is what makes
+          swapping the transport (or adding request signing, or tracing) a one-file change.</p></div>
+      </div>
+
+      <h3 class="sub">Request lifecycle</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th style="min-width:60px;">Step</th><th>Stage</th><th>What happens</th></tr></thead>
+          <tbody>
+            <tr><td><b>1</b></td><td>Hook</td><td>A component calls a query or mutation hook from a resource's
+              <span class="mono">queries/</span>. Components never call APIs directly — they never see a promise.</td></tr>
+            <tr><td><b>2</b></td><td>Query layer</td><td>TanStack Query resolves the key, decides cache-hit vs
+              fetch (§8), and calls the API module's function.</td></tr>
+            <tr><td><b>3</b></td><td>API module</td><td>Builds the request from <em>domain</em> arguments,
+              serializing filters to the backend's actual param names. Owns the endpoint path — the only place a
+              URL string exists.</td></tr>
+            <tr><td><b>4</b></td><td>HTTP client</td><td>Auth header, base URL, timeout. Fires.</td></tr>
+            <tr><td><b>5</b></td><td>Response</td><td><b>Success:</b> the raw DTO is handed to the mapper.
+              <b>Failure:</b> normalized to <span class="mono">AppError</span> with its code, field errors, and
+              request id (§11), then thrown.</td></tr>
+            <tr><td><b>6</b></td><td>Mapper</td><td>DTO → domain model. Nothing above this line ever sees a raw
+              backend field name again.</td></tr>
+            <tr><td><b>7</b></td><td>Cache</td><td>Query stores the domain model — not the DTO. The cache speaks
+              the app's language.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout decision">
+        <h4>D-6 · A real mapping layer (anti-corruption layer), not "just use the API response"</h4>
+        <p>The pragmatic position — "the backend returns JSON, type it, render it, why add a translation step
+        nobody asked for?" — is the majority practice and it is <b>rejected here</b>, on evidence from this
+        specific backend rather than on principle.</p>
+        <p>The evidence: Design System §17 documents that the backend's status vocabulary is genuinely mixed —
+        English in some domains (<span class="mono">draft</span>, <span class="mono">settled</span>,
+        <span class="mono">validated</span>) and French in others (<span class="mono">en_attente</span>,
+        <span class="mono">accepter</span>, <span class="mono">rejetee</span>, <span class="mono">annuler</span>) —
+        and it rules that the badge system "maps by <em>meaning</em>, never by string." That mapping must happen
+        <em>somewhere</em>. Without a mapper it happens in components, and then
+        <span class="mono">status === 'accepter' || status === 'validated'</span> is copy-pasted into every
+        table, badge, and filter in the app — thirty places to fix when the backend normalizes its vocabulary,
+        which it eventually will.</p>
+        <p>With a mapper, the string chaos stops at the edge of the domain, exactly as the Design System
+        requires ("the string chaos stays in the API layer, never on screen"). The frontend's
+        <span class="mono">Cheque</span> has a semantic status; the DTO's raw string is an implementation detail
+        of the transport. The cost is one small file per resource. The benefit is that a backend rename becomes
+        a one-line change, and that the domain model is free to be shaped for the <em>UI's</em> needs (money as
+        a typed value, dates parsed once, entities normalized per Design System §29) rather than for the ORM's.</p>
+        <p><b>Scope discipline:</b> mappers translate <em>shape and vocabulary</em>. They do not compute
+        business values (D-1). A mapper that starts calculating capacity has become a domain model and must be
+        stopped in review.</p>
+      </div>
+
+      <div class="callout rule">
+        <h4>DTOs, domain models, and response normalization</h4>
+        <p><b>DTO types</b> mirror the wire format exactly, including its inconsistencies, and are <em>private
+        to the resource</em> — never exported past <span class="mono">index.ts</span>, never used as a component
+        prop. If a DTO type escapes into a component, the mapping layer has been bypassed and the boundary is
+        already leaking.</p>
+        <p><b>Pagination</b> is normalized once, in shared types: Laravel's envelope becomes one
+        <span class="mono">Paginated&lt;T&gt;</span> shape used by every list in the app, so the DataTable
+        consumes one contract rather than each domain's flavor of it. The per-page ceiling
+        (<span class="mono">per_page ≤ 100</span>, Design System §14) is a client-side constant that mirrors the
+        API clamp — surfaced to the user in the page-size selector, never discovered by getting clamped.</p>
+        <p><b>Absent vs zero</b> (Design System §5) is preserved through the mapper: a null amount stays null and
+        renders as <span class="mono">—</span>. A mapper that coalesces null to 0 for convenience destroys a
+        financial distinction and is a defect, not a tidy-up.</p>
+      </div>
+    </section>
+
+    <!-- ============ 8 ============ -->
+    <section id="s8">
+      <div class="sec-head"><span class="eyebrow">08</span><h2>TanStack Query strategy</h2></div>
+      <p class="lead-p sec-intro">Query is the server-state layer, and — stated once, because it is the rule
+      most often broken — <b>it is also the cache</b>. Server data is never copied into component state, never
+      mirrored into a store, never "kept in sync." There is one copy, and Query owns it.</p>
+
+      <h3 class="sub">Query keys</h3>
+      <div class="grid cols-2">
+        <div class="card"><h4>Structure</h4>
+          <p>Hierarchical, most-general to most-specific:
+          <span class="mono">[domain, resource, scope, params]</span> —
+          e.g. <span class="mono">['money','cheques','list',{status:'pending',page:1}]</span> or
+          <span class="mono">['money','cheques','detail',id]</span>.</p>
+          <p><b>Why hierarchical:</b> invalidation is prefix-based. Invalidating
+          <span class="mono">['money','cheques']</span> refreshes every cheque view at once; invalidating
+          <span class="mono">['money','cheques','list']</span> leaves open detail pages untouched. Flat or
+          string-concatenated keys make that impossible and force manual bookkeeping of what to refresh.</p></div>
+        <div class="card"><h4>Factories, not literals</h4>
+          <p><b>MUST:</b> every key comes from its resource's key factory. A key array typed inline in a
+          component is forbidden — it is unfindable, un-renameable, and one typo away from a cache that silently
+          never invalidates (the worst failure mode available here, because it looks like it works).</p>
+          <p>The factory is part of the resource's public surface (§4): it is what the invalidation map
+          references, and what other domains use when they legitimately need to read across a boundary.</p></div>
+      </div>
+
+      <h3 class="sub">Caching philosophy — staleness is a business decision, not a default</h3>
+      <p style="font-size:0.9rem; color:var(--muted); max-width:76ch;">A single global
+      <span class="mono">staleTime</span> is the standard advice and it is wrong for this product, because the
+      cost of stale data here ranges from <em>zero</em> (a ville's name) to <em>a wrongly-approved cheque</em>.
+      Tiers are assigned per data class, and each tier's number is derived from what that data <em>costs when
+      it is wrong</em>.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th style="min-width:130px;">Tier</th><th>Data</th><th>Staleness</th><th>Rationale</th></tr></thead>
+          <tbody>
+            <tr><td><b>Static</b> <span class="chip ok">long</span></td>
+              <td>Reference: villes, secteurs, products.</td>
+              <td>Hours. Refetch on window focus: off.</td>
+              <td>Changes are rare and administrative. These feed every form's pickers, so caching them hard
+                removes a request from nearly every screen. A ville renamed an hour late costs nothing.</td></tr>
+            <tr><td><b>Slow</b> <span class="chip info">minutes</span></td>
+              <td>Network identity: agent and client lists and details.</td>
+              <td>A few minutes.</td>
+              <td>Changes during a working day but not during a task. Stale identity data is a cosmetic
+                annoyance, not a financial error.</td></tr>
+            <tr><td><b>Live</b> <span class="chip warn">seconds</span></td>
+              <td>Financial queues and balances: pending cheques, pending deposits, agent capacity, outstanding
+                grattage, restock-gate state, Overview KPIs.</td>
+              <td>Seconds. Refetch on window focus: <b>on</b>.</td>
+              <td>Multiple admins work these queues simultaneously. Showing a cheque as pending after a
+                colleague approved it produces duplicate work and a confusing 409. Focus-refetch is the cheapest
+                possible fix for "I alt-tabbed back after lunch."</td></tr>
+            <tr><td><b>Critical</b> <span class="chip bad">zero</span></td>
+              <td>Anything read <em>in order to decide</em> an irreversible action: the record inside a
+                validate/approve confirmation, the capacity a submission will consume, the gate state a form
+                depends on.</td>
+              <td>Always fresh — see the rule below.</td>
+              <td>This is the tier that justifies the whole scheme.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout rule">
+        <h4>The freshness rule — the most important rule in this section</h4>
+        <p><b>MUST:</b> data that gates an irreversible action is refetched immediately before that action is
+        <em>confirmed</em>, and the confirmation dialog (Design System §19) renders from that fresh read — not
+        from whatever was in the cache when the operator opened the page ten minutes ago.</p>
+        <p>Design System §19 requires the confirmation body to state the specific consequence with named
+        entities and amounts, because "confirming <em>which</em> cheque for <em>how much</em> is the entire
+        point." A confirmation dialog rendered from stale cache <em>is a lie told at the exact moment the
+        operator is trusting us most</em>. If the refetch reveals the record changed underneath them (someone
+        else approved it; the amount was corrected), the dialog MUST say so and refuse the action rather than
+        submitting against a version the operator never saw.</p>
+      </div>
+
+      <h3 class="sub">Mutations, invalidation, and the optimism question</h3>
+      <div class="callout decision">
+        <h4>D-7 · No optimistic updates in v1 — none, not "sparingly"</h4>
+        <p>Optimistic updates are the reflexive best practice: apply the change locally, roll back on failure,
+        the UI feels instant. <b>Rejected wholesale for this product</b>, and it is worth being precise about
+        why, because "we'll just use them carefully" is how this decision usually dies.</p>
+        <p>Optimism trades correctness for perceived speed, and it is a good trade when failure is cheap and
+        rollback is invisible. Here, every mutation worth optimizing is a mutation whose failure is
+        <em>expensive and confusing</em>: approving a cheque, validating a deposit that settles a grattage
+        obligation, validating a stock movement that debits one agent and credits another. An optimistic
+        rollback on one of those shows an operator a cheque that was approved, then wasn't — and there is no
+        good copy for that. It is worse than a spinner, and the whole point of Design System §11's submission
+        rule is that the form suspends anyway, so the perceived-speed gain is small.</p>
+        <p>The honest counter-argument: what about trivially reversible UI state (a favourite toggle, a
+        collapse)? There isn't any in this product — the mutations are all financial. If a genuinely trivial
+        one appears, it earns an ADR, not a blanket exemption granted in advance.</p>
+        <p><b>Instead:</b> mutations show their pending state on the triggering control (Design System §10),
+        the form suspends, and on success the affected queries invalidate. Fast, honest, and there is no state
+        in which the screen shows something the server has not confirmed.</p>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th style="min-width:150px;">Concern</th><th>Rule</th></tr></thead>
+          <tbody>
+            <tr><td><b>Invalidation</b></td>
+              <td>On success, a mutation invalidates by <em>prefix</em> — typically its own resource's list and
+              the affected detail. Cross-domain effects go through the invalidation map (§4, D-3), never through
+              a direct import of another domain's keys. <b>Prefer invalidation over manual cache writes:</b>
+              hand-patching the cache re-implements the server's business logic on the client (D-1) and drifts
+              the moment the backend does something the patch didn't anticipate — such as the settlement cascade
+              a deposit validation triggers across grattage invoices.</td></tr>
+            <tr><td><b>Mutation retries</b></td>
+              <td><b>MUST NOT</b> auto-retry. Ever. A retried deposit validation is a plausible double-settlement,
+              and a retried approve is a plausible double-approve; whether the backend happens to be idempotent
+              on a given endpoint is not a property the frontend may assume. Failed mutations surface an error
+              with an explicit, human-initiated retry (Design System §23). Queries, which are safe by nature,
+              retry — see §11.</td></tr>
+            <tr><td><b>Background refetching</b></td>
+              <td>On window focus for the Live tier only (see table above). Not globally: refetching a static
+              product list every time an operator alt-tabs is pure waste, and refetching a list the operator is
+              mid-scroll through is a jarring content shift for no gain. Design System §21's rule holds —
+              refetches keep existing content visible and dim it, never flashing back to skeletons.</td></tr>
+            <tr><td><b>Dependent queries</b></td>
+              <td>Legitimate and common here: the Agent 360 workspace fetches the agent, then its capacity,
+              cheque history, stock balance, and grattage obligation. Dependent queries are <em>enabled</em> by
+              their prerequisite rather than nested in callbacks. <b>Rule:</b> the independent ones MUST fire in
+              parallel — a workspace that serially waterfalls five panels is four round trips slower than it
+              needs to be, and that is the single most common self-inflicted performance bug in dashboards.</td></tr>
+            <tr><td><b>Prefetching</b></td>
+              <td>Two sanctioned uses. (1) Reference data at app bootstrap — every form needs it, it is Static
+              tier, and fetching it once at login removes a spinner from every create flow. (2) A detail record
+              on row hover/focus in a list, where the operator has all but told us where they are going.
+              Prefetching is a courtesy, never a correctness mechanism: nothing may <em>depend</em> on a prefetch
+              having happened.</td></tr>
+            <tr><td><b>Infinite queries</b></td>
+              <td>Almost never. Design System §14 <em>prohibits</em> infinite scroll in tables — operators need
+              stable positions ("the cheque was on page 3") and reachable footers — so the app's tables are all
+              paginated queries. The one legitimate use is the entity-picker autocomplete (Design System §12),
+              where a search returns a long candidate list and a "load more" is genuinely right. Introducing an
+              infinite query anywhere else requires an ADR that explains why the Design System's prohibition
+              does not apply.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout">
+        <h4>When NOT to use Query</h4>
+        <p>Query is for <em>server state</em>: data the frontend does not own and cannot recompute. It is the
+        wrong tool for, and MUST NOT be used for: form state (that is RHF, §10); UI state (local
+        <span class="mono">useState</span>); filter/sort/page state (the URL, §9); derived values (compute at
+        render, §9); the auth token (the session store, §17); and one-shot imperative actions with no cacheable
+        result — triggering a file download, say — which are plain function calls, not mutations pretending to
+        be one.</p>
+        <p>The tell that Query is being misused: a <span class="mono">useEffect</span> that copies query data
+        into <span class="mono">useState</span>. That code has just created a second, staler copy of the truth,
+        and every bug it causes will look like a caching bug rather than the state-duplication bug it is.</p>
+      </div>
+    </section>
+
+    <!-- ============ 9 ============ -->
+    <section id="s9">
+      <div class="sec-head"><span class="eyebrow">09</span><h2>State management</h2></div>
+      <p class="lead-p sec-intro">Most "state management problems" are classification problems: state was put
+      somewhere that cannot own it, and the bugs that follow are blamed on the tool. This section classifies
+      every kind of state this app has and assigns each exactly one home. Getting this table right is worth
+      more than any library.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th style="min-width:130px;">Kind</th><th>Definition</th><th>Home</th><th>Why there</th></tr></thead>
+          <tbody>
+            <tr><td><b>Server state</b></td>
+              <td>Anything the backend owns: records, lists, capacities, statuses.</td>
+              <td><b>TanStack Query</b> (§8). One copy, never mirrored.</td>
+              <td>It is not ours. It goes stale on its own, it can change without us, and it needs caching,
+                deduplication, and refetching — which is precisely and only what Query does.</td></tr>
+            <tr><td><b>URL state</b></td>
+              <td>Filters, search query, sort column and direction, page, page size, active tab, deep-linked
+                drawer.</td>
+              <td><b>The query string.</b> Read and written through one typed hook (§13).</td>
+              <td>Design System §15 makes it binding: filter state is "one serializable, URL-encodable value" and
+                every filtered view is shareable and bookmarkable. It also gets back/forward navigation and
+                refresh-survival for free — three features that would otherwise be hand-built and buggy.</td></tr>
+            <tr><td><b>Form state</b></td>
+              <td>Field values, touched/dirty flags, validation errors, submission status.</td>
+              <td><b>React Hook Form</b>, local to the form (§10).</td>
+              <td>Form state is short-lived and belongs to one component tree. Lifting it to a global store is
+                the classic over-engineering move: it makes every keystroke a global event and buys nothing,
+                because nothing outside the form needs to know what someone half-typed.</td></tr>
+            <tr><td><b>Client/UI state</b></td>
+              <td>Is this drawer open, which row is expanded, which rows are selected for a bulk action.</td>
+              <td><b>Local <span class="mono">useState</span></b>, at the lowest component that needs it.</td>
+              <td>It is ephemeral and scoped. Row selection in particular MUST stay local: it is meaningless
+                outside the table, and it must be cleared when the filters change — a globally-stored selection
+                that survives a filter change is exactly how someone bulk-assigns 100 rows they can no longer
+                see (Design System §14).</td></tr>
+            <tr><td><b>Derived state</b></td>
+              <td>Anything computable from the above: totals, "is this form valid", "does this agent have
+                outstanding obligations".</td>
+              <td><b>Nowhere.</b> Computed at render.</td>
+              <td>Stored derived state is a cache with no invalidation strategy, and it will be wrong. If a
+                computation is expensive enough to hurt, memoize it (§15) — that is still not storing it.</td></tr>
+            <tr><td><b>Session state</b></td>
+              <td>The authenticated user, their permission strings, the token.</td>
+              <td><b>One React context</b>, hydrated at bootstrap from the session store (§17).</td>
+              <td>Genuinely global, genuinely cross-cutting, read by nearly every screen, and changes only at
+                login and logout. This is what context is actually for.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout decision">
+        <h4>D-8 · No global state library — not Redux, not Zustand, not yet</h4>
+        <p>The Discovery report found no store and called its absence "a deliberate, reasonable choice for an
+        app this size." This document <b>confirms</b> that and states the reasoning, because the pressure to add
+        one arrives the first week and is always framed as inevitable.</p>
+        <p>Look at the table above: once server state lives in Query, URL state lives in the URL, form state
+        lives in RHF, and session lives in one context, the residue that a global store would hold is
+        <em>nothing</em>. Adding Redux or Zustand to this app would create an empty container that developers
+        then feel obliged to fill — and what gets put in it, invariably, is a copy of server data, which
+        immediately becomes a second source of truth that goes stale and produces exactly the bugs the store was
+        supposed to prevent. The store does not solve a state problem; it creates one.</p>
+        <p><b>The trigger to revisit</b> — stated so this is a decision and not an ideology: a genuine piece of
+        cross-page, client-owned, non-URL state that outlives a route change. A multi-page bulk-operation
+        basket would qualify. If one appears, add the smallest thing that solves it (a context, or Zustand),
+        via ADR — not preemptively, and not "while we're in there."</p>
+      </div>
+
+      <div class="callout rule">
+        <h4>What MUST never be stored globally</h4>
+        <p><b>Server data</b> (it belongs to Query; a global copy is a stale copy). <b>Permissions</b>, beyond
+        the single session context — re-deriving or re-storing them per feature is how the drift the Discovery
+        report found gets reintroduced. <b>Filter state</b> (it belongs in the URL, or shareable links break).
+        <b>Form values</b> (they belong to the form). <b>Modal and drawer open-flags</b> (they belong to the
+        component that owns the modal; a global <span class="mono">isModalOpen</span> registry is a
+        well-travelled road to two modals open at once, which Design System §8 calls a design error).</p>
+        <p>The unifying principle: <b>state belongs at the narrowest scope that can own it.</b> Every widening
+        of scope is a new way for two parts of the app to disagree.</p>
+      </div>
+
+      <h3 class="sub">Context usage</h3>
+      <p style="font-size:0.9rem; color:var(--muted); max-width:76ch;">React context is for values that are
+      <em>genuinely global and rarely change</em>. It is not a state manager, and a context whose value changes
+      frequently re-renders every consumer — which is why the sanctioned list is short and closed:</p>
+      <div class="grid cols-3">
+        <div class="card"><h4>SessionContext</h4>
+          <p>User, permissions, auth actions. Changes at login/logout only.</p></div>
+        <div class="card"><h4>QueryClientProvider</h4>
+          <p>Infrastructure, provided once at the root. Not application state.</p></div>
+        <div class="card"><h4>Toast/confirm portals</h4>
+          <p>The imperative escape hatches for notifications (Design System §20) and confirmation dialogs
+          (§19) — one instance, app-wide, so a confirm can be requested from anywhere without prop-drilling a
+          dialog through six layers.</p></div>
+      </div>
+      <p style="font-size:0.9rem; color:var(--muted); max-width:76ch; margin-top:12px;">Adding a fourth context
+      requires justifying why the value is global, why it changes rarely, and why prop-passing or composition
+      does not serve. "It was getting annoying to pass down" is not that justification — it is usually a sign
+      the component tree is wrong.</p>
+    </section>
+
+    <!-- ============ 10 ============ -->
+    <section id="s10">
+      <div class="sec-head"><span class="eyebrow">10</span><h2>Form architecture</h2></div>
+      <p class="lead-p sec-intro">Forms are where this product accepts the values that become money. The
+      architecture here is deliberately conservative: one library, one schema per resource, one submission
+      path, and the server as the final authority on every rule.</p>
+
+      <h3 class="sub">Validation — the schema is the contract</h3>
+      <div class="grid cols-2">
+        <div class="card"><h4>One zod schema per resource operation</h4>
+          <p>The schema is the single source of truth for a form's shape and rules, and it is the resource's
+          property (it lives in <span class="mono">model/</span>). Create and edit variants are <em>derived</em>
+          from one base schema rather than written twice — two hand-maintained schemas for one resource is two
+          places for a rule to be right in one and wrong in the other.</p>
+          <p>Types flow from the schema, not alongside it. A schema and a manually-written type that can
+          disagree will eventually disagree.</p></div>
+        <div class="card"><h4>Client rules mirror server rules — and never replace them</h4>
+          <p>Every client-side rule exists to give fast feedback on a rule the <em>backend already enforces</em>
+          (required, format, min/max, ≤ current debt). Design System §13 requires constraints be stated before
+          failure, in helper text — so the schema and the helper text are written together, from the same
+          backend rule.</p>
+          <p><b>MUST NOT</b> encode a business rule the backend does not enforce. That is D-1's prohibition in
+          its most tempting form: a frontend-only rule is an invariant with no enforcement, and it will be
+          bypassed by the first API client that isn't this app.</p></div>
+      </div>
+
+      <h3 class="sub">Form composition &amp; reusable patterns</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th style="min-width:150px;">Pattern</th><th>When</th><th>Rules</th></tr></thead>
+          <tbody>
+            <tr><td><b>Field primitives</b></td>
+              <td>Every input, always.</td>
+              <td>A field owns its label, control, and the reserved helper/error line — as one unit, because
+                Design System §13's layout-shift rule requires that line to be reserved space. If the reserved
+                line is a per-form responsibility, it will be forgotten in one form and the form will jump on
+                first error. Building it into the field primitive makes the rule structural rather than
+                remembered.</td></tr>
+            <tr><td><b>Drawer forms</b></td>
+              <td>Quick create/edit, ≤ ~8 fields, single section: clients, villes, secteurs, products,
+                reject-with-reason (Design System §13, §18).</td>
+              <td>Footer pins submit + cancel. Dirty-close asks confirmation. The drawer never opens another
+                drawer.</td></tr>
+            <tr><td><b>Page forms</b></td>
+              <td>Longer linear forms with grouped sections.</td>
+              <td>One column by default; sections at ~8+ fields. Scrolling page, not a wizard — a wizard for a
+                linear form adds ceremony without reducing anything.</td></tr>
+            <tr><td><b>Wizard</b></td>
+              <td><b>Exactly one in current scope:</b> agent onboarding (identity → documents → financial →
+                moto → review).</td>
+              <td>See D-9. Per-step schema, back-navigation preserves data, mandatory review step, and a
+                <em>single</em> final submission.</td></tr>
+            <tr><td><b>Line-item editor</b></td>
+              <td>The four stock movements (bons, allocations, transfers, returns).</td>
+              <td>Not a form field but a form <em>region</em>: a nested array of rows with a running total,
+                validated as part of the parent schema. One component, four domains (Architecture §7) — the
+                clearest instance of "one shape per repeating problem" in the app.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout decision">
+        <h4>D-9 · The wizard is multi-step React Hook Form, not a state machine library</h4>
+        <p>A wizard with conditional steps is the textbook argument for XState, and the textbook argument is
+        <b>rejected</b> here. There is exactly one wizard in the entire application, its steps are
+        near-linear, and its only real complexity is a role-conditional branch (manager vs commercial fields)
+        and a set of file uploads.</p>
+        <p>Introducing a state-machine library for one flow means every developer must learn it to touch that
+        flow, forever, and it invites the next person to model things as machines that are better as functions.
+        A single RHF form with per-step validation, a step index, and a review step handles this completely —
+        and keeps the entire onboarding flow readable by anyone who knows the stack they were hired for.</p>
+        <p><b>The revisit trigger:</b> a second or third wizard with genuinely non-linear, condition-heavy step
+        graphs. At that point the abstraction earns its keep and gets an ADR. One wizard does not.</p>
+      </div>
+
+      <div class="callout rule">
+        <h4>The submission flow — one path, no variations</h4>
+        <p><b>(1) Validate</b> the full form on submit; focus moves to the first invalid field (Design System
+        §13). <b>(2) Suspend:</b> the triggering button enters its loading state and the form is disabled —
+        Design System §11 requires double-submission of a deposit validation to be "structurally impossible, not
+        merely unlikely," and this is where that is delivered. <b>(3) For irreversible actions,</b> confirm
+        against <em>freshly-fetched</em> data (§8's freshness rule) with the consequence stated in the domain's
+        own words. <b>(4) Mutate</b> — never optimistically (D-7), never auto-retried (§8). <b>(5) On success:</b>
+        invalidate, toast, and navigate or close per the flow. <b>(6) On failure:</b> the form stays open with
+        every value intact, errors mapped to fields, and an explicit retry available (§11).</p>
+        <p>Step 6 is not a nicety. Design System §23: "A lost connection MUST NOT cost a filled onboarding
+        wizard its data." A form that clears itself on a network error has converted a transient blip into
+        twenty minutes of re-typing, and it will happen on the longest form in the app.</p>
+      </div>
+
+      <div class="callout">
+        <h4>Server validation errors are the same errors</h4>
+        <p>A 422 from Laravel maps field-by-field onto the form using the identical rendering path as a local
+        zod failure (Design System §13: "one visual system, two sources"). This works only if field names
+        survive the mapping layer — which is one more reason the mapper (§7, D-6) is a resource's property
+        rather than a generic transform: it knows that the API's field name and the form's field name are the
+        same thing, and it is the only place that has to.</p>
+      </div>
+    </section>
+
+    <!-- ============ 11 ============ -->
+    <section id="s11">
+      <div class="sec-head"><span class="eyebrow">11</span><h2>Error handling</h2></div>
+      <p class="lead-p sec-intro">Design System §23 already decided what the user sees for each class of
+      failure. This section decides how the code gets there: one normalized error shape, one registry that
+      turns backend error codes into explanations, and a retry policy that distinguishes safe reads from
+      dangerous writes.</p>
+
+      <h3 class="sub">One error shape</h3>
+      <p style="font-size:0.9rem; color:var(--muted); max-width:76ch;">Every failure — a dropped connection, a
+      422, a domain 409, a 500 — is normalized by the HTTP client (§7) into a single
+      <span class="mono">AppError</span> carrying: its <b>kind</b> (network / validation / domain / permission /
+      notfound / server), the <b>HTTP status</b>, the backend <b>error code</b> where one exists, <b>field
+      errors</b> where they exist, and a <b>request identifier</b> for support. Calling code never inspects an
+      axios error, never checks <span class="mono">error.response?.status</span>, and never string-matches a
+      message. It switches on <span class="mono">kind</span>.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th style="min-width:120px;">Class</th><th>Handled where</th><th>Behavior</th></tr></thead>
+          <tbody>
+            <tr><td><b>Validation</b><br><span class="mono">422</span></td>
+              <td>The form (§10).</td>
+              <td>Mapped to fields, rendered identically to client-side errors. Never a toast — Design System
+                §20 forbids errors the user must act on from auto-dismissing.</td></tr>
+            <tr><td><b>Domain</b><br><span class="mono">409 + code</span></td>
+              <td>The error-code registry (below) + the calling surface.</td>
+              <td>The backend ships documented code families
+                (<span class="mono">TRANSFER_STOCK_INSUFFICIENT</span>, <span class="mono">RETURN_NOT_DRAFT</span>,
+                <span class="mono">COMMERCIAL_HAS_STOCK_CANNOT_REASSIGN</span>…). Each renders its registered
+                human message, tone, and recovery path.</td></tr>
+            <tr><td><b>Permission</b><br><span class="mono">403</span></td>
+              <td>Route guard, or the calling surface.</td>
+              <td>The calm 403 state — the user did nothing wrong (Design System §23). Never a red alarm.
+                A 403 always means access, never a dead feature: the two hard-403'd grattage routes are never
+                called by any UI, by architectural decision (Architecture §5).</td></tr>
+            <tr><td><b>Auth</b><br><span class="mono">401</span></td>
+              <td><b>The HTTP client, centrally.</b></td>
+              <td>Terminate the session, clear the store, redirect to login <em>preserving the return path</em>.
+                This closes the gap Discovery flagged: "a 401 mid-session has no defined UX." It MUST be handled
+                in exactly one place — a 401 handled per-call is a 401 forgotten in most calls.</td></tr>
+            <tr><td><b>Not found</b><br><span class="mono">404</span></td>
+              <td>The route or the panel.</td>
+              <td>Two cases, two treatments (Design System §23): unknown route → in-shell 404; known route,
+                missing or access-scoped record → "record unavailable" with a link to its list.</td></tr>
+            <tr><td><b>Network</b></td>
+              <td>The affected region.</td>
+              <td>Reads: inline error <em>in that region</em> with retry — never a blank region, never
+                toast-only. Writes: the form stays open, values intact, explicit retry.</td></tr>
+            <tr><td><b>Unexpected</b><br><span class="mono">5xx</span></td>
+              <td>Region, or the route error boundary.</td>
+              <td>What failed, that it was recorded, a retry, and a reference id. Raw backend messages and stack
+                traces MUST NOT render — a UX rule and a security rule at once (§17).</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout decision">
+        <h4>D-10 · The error-code registry is a first-class frontend asset, owned in one file</h4>
+        <p>The alternative is to render whatever message the backend sent, or to handle codes ad hoc at each
+        call site with an inline conditional. Both are <b>rejected</b>, and the Design System already anticipated
+        this: it calls the registry "a design-system asset: it is how backend invariants become explainable UI
+        instead of alert boxes."</p>
+        <p>Handling codes at call sites means <span class="mono">COMMERCIAL_HAS_STOCK_CANNOT_REASSIGN</span> is
+        explained well on the agent edit form and shows a raw code on the agent list — same failure, two
+        qualities of explanation, and the second one generates a support ticket. Rendering the backend's own
+        message means the UI's voice, language, and recovery guidance are set by whoever wrote the exception
+        (and Design System §27's French-first decision, O-1, would be silently violated by any English server
+        message that leaked through).</p>
+        <p>One registry: code → message, tone, and — where one exists — a <em>recovery path</em> ("Le commercial
+        détient encore du stock. Créez un retour de stock avant la réaffectation," linking to the return flow).
+        Unregistered codes fall back to a generic message that still displays the raw code for support, so an
+        unknown failure degrades to merely-unhelpful rather than to a blank screen. <b>MUST:</b> every documented
+        backend code has an entry, and adding a backend code without adding its entry is an incomplete feature.</p>
+      </div>
+
+      <div class="callout rule">
+        <h4>Retry policy — asymmetric, on purpose</h4>
+        <p><b>Queries retry.</b> Two attempts with exponential backoff, on network failures and 5xx only. A GET
+        is safe to repeat by definition, and the most common failure in an office is a momentary blip that a
+        single retry hides completely.</p>
+        <p><b>Queries never retry 4xx.</b> A 403 or a 404 is a fact, not a blip; retrying it three times just
+        delays the truth by two seconds and triples the load.</p>
+        <p><b>Mutations never auto-retry — MUST NOT, no exceptions.</b> Repeated in §8 and again here because it
+        is the rule most likely to be "helpfully" broken by someone configuring a global default. A retried
+        deposit validation may settle twice. The frontend does not get to assume the backend is idempotent on
+        an endpoint that moves money; it surfaces the failure and lets a human decide (Design System §23's
+        explicit retry).</p>
+      </div>
+
+      <div class="callout">
+        <h4>Error boundaries &amp; logging philosophy</h4>
+        <p><b>Boundaries</b> exist at the route level (a crashed page must not take down the shell — the sidebar
+        and header stay usable so the operator can navigate away) and around independently-failing panels of a
+        WorkspacePage (Agent 360's five panels fail independently; one dead panel must not blank the other
+        four). Boundaries catch <em>render</em> crashes — they are the last resort, not the error-handling
+        strategy, and a boundary firing in normal operation is a bug to fix, not a state to design for.</p>
+        <p><b>Logging</b> is discussed fully in §18, with one rule stated here because it belongs to error
+        handling: an error that is <em>expected</em> (a 422, a 403, a domain 409) is <b>not</b> reported as an
+        application error. Those are the system working. Reporting them buries the genuine 500s in noise, and a
+        monitoring channel nobody trusts is a monitoring channel nobody reads.</p>
+      </div>
+
+      <h3 class="sub">The 401 session policy, stated explicitly</h3>
+      <p style="font-size:0.9rem; color:var(--muted); max-width:76ch;">The error table above assigns 401 to the
+      HTTP client. Because Discovery found this behavior entirely undefined in the legacy build — "a 401
+      mid-session has no defined UX" — the policy is spelled out here rather than left to be inferred from a
+      table row.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th style="min-width:150px;">Rule</th><th>Behavior &amp; rationale</th></tr></thead>
+          <tbody>
+            <tr><td><b>No invented refresh flow</b></td>
+              <td>The backend's authentication model <b>does not expose a frontend refresh-token flow</b>
+                (Discovery §4). The frontend therefore <b>MUST NOT</b> invent one — no silent re-authentication,
+                no token renewal on 401, no background refresh timer. A refresh mechanism the server does not
+                support cannot work, and an attempt to build one produces retry storms against an endpoint that
+                will never succeed. The absence of refresh is a <em>backend contract</em>, and the frontend
+                honors it rather than papering over it.</td></tr>
+            <tr><td><b>A confirmed 401 ends the session</b></td>
+              <td>On an authentication 401, the centralized HTTP/session layer clears the local session (the
+                single session module, §14) and redirects to login. Centrally — a 401 handled per call site is a
+                401 forgotten at most call sites, and the result is a half-logged-out app still rendering a
+                stale user in the header.</td></tr>
+            <tr><td><b>Preserve the return path, when safe</b></td>
+              <td>The route the operator was on is preserved so that logging back in returns them to their work
+                rather than to Overview. "When safe" is a real qualifier: only in-app paths are preserved, never
+                a caller-supplied redirect target — an unvalidated return path is an open-redirect waiting to be
+                used, and it is not worth the convenience.</td></tr>
+            <tr><td><b>403 is <em>not</em> session expiry</b></td>
+              <td><b>MUST NOT</b> be conflated. A 401 means "we do not know who you are"; a 403 means "we know
+                exactly who you are, and you may not do this" (§6). Treating a 403 as expiry logs an operator out
+                of a working session for clicking one thing they lacked a permission for — infuriating, and it
+                teaches people that the app randomly signs them out. A 403 renders the calm permission state
+                (Design System §23) and the session continues untouched.</td></tr>
+            <tr><td><b>One redirect, one clear</b></td>
+              <td>A dashboard page fires several requests at once — a workspace fires five. When a session
+                expires, they all fail with 401 <em>simultaneously</em>. The session teardown MUST therefore be
+                idempotent and collapse concurrent 401s into a <b>single</b> clear-and-redirect: the first one
+                wins, the rest are absorbed. Without this, five parallel failures produce five redirects and five
+                session clears, which manifests as a flickering navigation loop — a bug that is very hard to
+                diagnose and trivial to prevent by deciding it once, here.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout rule">
+        <h4>Introducing session refresh later is a coordinated change, not a frontend one</h4>
+        <p>If token refresh or rotation is wanted, it is <b>a backend and frontend architectural change made
+        together</b> — the server must issue and honor refresh credentials before any client code can use them.
+        It MUST be documented by an ADR (§19) covering both sides, and it is coupled to the token-storage
+        decision (D-16 / ADR-0001): a move to cookie-based auth changes the refresh story and the CSRF posture
+        (§17) at the same time. These are one decision wearing three names, and taking them separately is how a
+        codebase ends up with half a refresh flow.</p>
+      </div>
+
+      <h3 class="sub">Request correlation</h3>
+      <div class="callout rule">
+        <h4>One reference, carried end to end</h4>
+        <p><b>Capture:</b> the HTTP layer (§7) captures the request/correlation identifier the backend returns
+        when one is available, on both success and failure paths. <b>Preserve:</b>
+        <span class="mono">AppError</span> carries it as a first-class field — it is not dug out of a header at
+        the point of display, because by then the response object is long gone.</p>
+        <p><b>Surface:</b> user-facing error states MAY expose it as a <em>support reference</em> — the
+        "reference identifier for support" Design System §23 already requires on unexpected failures. It is
+        shown as an opaque reference and nothing more. <b>MUST NOT</b> leak infrastructure detail to the user:
+        no hostnames, no stack traces, no internal service names, no raw backend messages (§17). The operator
+        gets a string they can quote; they do not get a window into the server.</p>
+        <p><b>Correlate:</b> the same identifier appears in structured frontend logs and in error reports (§18),
+        which is the entire point — it is what allows "it broke at 14:32" to be joined to a specific backend
+        request without guessing. Correlation exists to make debugging possible, and it earns its keep only if
+        the reference is genuinely the same on both sides.</p>
+        <p><b>Never correlate by attaching the payload.</b> The identifier travels; the data does not.
+        Authentication tokens, request bodies from financial mutations, identity documents, CIN and phone numbers
+        MUST NOT be logged or reported (§17, §18). A correlation ID exists precisely so that sensitive context
+        does <em>not</em> have to be shipped off the machine in order to debug it.</p>
+      </div>
+    </section>
+
+    <!-- ============ 12 ============ -->
+    <section id="s12">
+      <div class="sec-head"><span class="eyebrow">12</span><h2>Shared components strategy</h2></div>
+      <p class="lead-p sec-intro">Three tiers, distinguished by <em>who owns them and who may edit them</em> —
+      not by size or visual complexity (§3, D-2). The tier decides the rules.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th style="min-width:130px;">Tier</th><th>Contents</th><th>Ownership rules</th></tr></thead>
+          <tbody>
+            <tr><td><b>UI primitives</b><br><span class="mono">shared/components/ui</span></td>
+              <td>shadcn/ui components: button, input, dialog, sheet, table, tooltip…</td>
+              <td><b>Generated, not authored.</b> Treated as vendored (the existing frontend CLAUDE.md already
+                says so): compose them from feature code rather than editing internals. Editing a primitive by
+                hand makes it un-regenerable and silently forks it from upstream. If one needs to change, it
+                changes as a <em>design-system decision</em> (a token, a variant), not as a local patch.</td></tr>
+            <tr><td><b>Business components</b><br><span class="mono">shared/components/business</span></td>
+              <td>DataTable, FilterBar, LineItemsEditor, StatusBadge, MoneyAmount, EntityChip, PermissionGate,
+                ConfirmActionDialog, Timeline, FormDrawer, StatCard (Architecture §7).</td>
+              <td>Authored and owned by the shared layer. They encode <em>product</em> rules — a StatusBadge
+                knows the six-tone vocabulary (Design System §17), a MoneyAmount knows the Moroccan French
+                format (§5) — but they know <b>no domain</b>. StatusBadge maps a semantic tone, not a cheque.
+                It MUST NOT import from any domain (§4), which is what makes it usable by all of them.</td></tr>
+            <tr><td><b>Page patterns</b><br><span class="mono">shared/components/patterns</span></td>
+              <td>ListPage, ApprovalQueuePage, DetailPage, DraftLifecyclePage, WorkspacePage, CreateWizard —
+                the five skeletons of Architecture §4.</td>
+              <td>The highest-leverage code in the app: nearly every screen is one of these, configured. They
+                own the layout, the loading/empty/error state machinery (Design System §21–§23), and the
+                URL-state wiring. A domain supplies a <em>definition</em>; the pattern supplies the behavior.</td></tr>
+            <tr><td><b>Domain components</b><br><span class="mono">domains/…/components</span></td>
+              <td>Everything specific to one business concept: a ChequeApprovalPanel, an AgentCapacityCard.</td>
+              <td>Owned by the domain, private to it. Most components in the app live here and should.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout decision">
+        <h4>D-11 · Configuration-driven patterns — with a mandatory escape hatch</h4>
+        <p>Architecture §9 proposes that most resources ship as a <em>definition</em> (endpoints, columns,
+        filters, form schema, permission strings) consumed by the ListPage/DetailPage/FormDrawer patterns —
+        "zero bespoke page code, only a definition file." This document <b>adopts</b> that, because the
+        alternative is hand-building fifteen near-identical CRUD trios and the Discovery report named that the
+        single biggest multiplier of effort in the phase.</p>
+        <p>But config-driven UI has a well-known failure mode, and pretending otherwise would be the weakest
+        moment in this architecture: <b>the abstraction that eats the app.</b> The first three resources fit the
+        config perfectly. The fourth needs one custom column renderer, so a
+        <span class="mono">renderCell</span> callback is added. The fifth needs a custom row action, then a
+        conditional filter, then a special empty state — and eighteen months later the "config" is a
+        Turing-complete DSL that is harder to read than the fifteen simple pages would have been, and only one
+        person understands it.</p>
+        <p><b>The rule that prevents this:</b> the patterns are components with <em>slots</em>, not engines with
+        options. A definition configures the common case; anything unusual is passed as a <em>composed child</em>
+        — real React composition, not another config key. When a resource needs something the definition cannot
+        express, the correct move is to <b>compose the pattern's parts directly</b> and write the page by hand.
+        A hand-written page is a completely acceptable outcome and MUST NOT be treated as a failure of the
+        abstraction — it is the escape hatch working. The failure is bending the config until it can express
+        everything.</p>
+        <p><b>The tripwire:</b> a definition field whose value is a function that takes the pattern's internals
+        as arguments is the DSL forming. Reviewers should reject it and compose instead.</p>
+      </div>
+
+      <h3 class="sub">Resource metadata ownership — what the definition may contain</h3>
+      <p style="font-size:0.9rem; color:var(--muted); max-width:76ch;">D-11's definition is the seam between a
+      domain and the shared patterns, which makes it the most likely thing in this architecture to quietly grow
+      into a dumping ground. This subsection fixes what it owns — and, more importantly, what it MUST NOT.</p>
+
+      <div class="grid cols-2">
+        <div class="card"><h4>The resource owns a definition module</h4>
+          <p>Each resource declares one dedicated configuration module (in its <span class="mono">model/</span>,
+          per §3) holding the <b>declarative metadata the reusable page patterns need</b> — and nothing else.
+          Its legitimate contents: display labels and the resource's naming (singular/plural, per Design System
+          §27's vocabulary registry); table column definitions <em>including each column's priority tier</em>
+          (Design System §14); filter definitions; a reference to the form schema; the set of supported actions;
+          references to the permission strings each action requires; the status→tone presentation mapping
+          (Design System §17); and the references that bind it to its endpoints and query keys.</p>
+          <p>The exact filename is an implementation choice and is deliberately not prescribed here. What is
+          prescribed is that there is <b>one</b> such module per resource, and that it is declarative.</p></div>
+        <div class="card"><h4>It <em>references</em> contracts — it never duplicates them</h4>
+          <p>The definition is a <b>composition of contracts that already have owners</b>, and each of those
+          owners is stated elsewhere in this document. It points at them; it does not restate them.</p>
+          <p>The failure this prevents is subtle and expensive: a definition that <em>copies</em> a permission
+          string or a route path creates a second place where that value lives, and the two will diverge. The
+          divergence will not fail a build — it will simply render a button the API refuses, or guard a route
+          with a permission nobody holds, and it will be found by an operator rather than by a compiler.</p></div>
+      </div>
+
+      <div class="callout rule">
+        <h4>The ownership boundaries — each contract has exactly one owner</h4>
+        <p><b>Routes</b> remain owned by the resource's <span class="mono">routes.ts</span> (§5) — the route
+        table is assembled from route contributions, not from definitions. <b>Query keys</b> remain owned by the
+        query-key factory (§8), which is what the invalidation map (§4, D-3) references. <b>Permission string
+        literals</b> remain owned by the central permission registry (§6), which is the only place such a string
+        appears in the codebase. <b>Validation rules</b> remain owned by the zod schema (§10).</p>
+        <p>The definition <em>references</em> all four. <b>MUST NOT</b> re-declare, re-type, or shadow any of
+        them. If a permission string literal appears inside a resource definition, that is the same defect §6
+        already prohibits, merely relocated.</p>
+        <p><b>And the boundary that keeps it honest:</b> the resource definition MUST NOT become an all-purpose
+        "god configuration" — the single object every future need gets appended to because it is the convenient
+        place to reach. It is declarative metadata for the page patterns, full stop. Business logic, imperative
+        callbacks, data fetching, and conditional behavior do not belong in it: those are code, and code belongs
+        in a component or a hook where it can be read, typed, and tested. When something cannot be expressed as
+        declarative metadata, that is D-11's escape hatch announcing itself — compose the pattern by hand rather
+        than growing the definition to swallow it.</p>
+      </div>
+
+      <h3 class="sub">Promotion to shared — the rule of three, precisely stated</h3>
+      <p style="font-size:0.9rem; color:var(--muted); max-width:76ch;">A component starts in the domain that
+      needs it, and most components stay there permanently. Promotion is a deliberate act with a test to pass —
+      not an automatic consequence of being used twice.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th style="min-width:130px;">Usage</th><th>Verdict</th><th>Reasoning</th></tr></thead>
+          <tbody>
+            <tr><td><b>One domain</b></td>
+              <td><b>Stays in that domain.</b> No discussion.</td>
+              <td>A single use is not evidence of anything. Building for reuse that has not been asked for is
+                the cheapest way to produce an abstraction fitted to a hypothesis.</td></tr>
+            <tr><td><b>Two domains</b></td>
+              <td><b>Does not justify promotion on its own.</b> Evaluate whether the concept is genuinely
+                domain-agnostic. Duplication is an acceptable — often correct — outcome here.</td>
+              <td>Two uses are indistinguishable from a coincidence. An abstraction fitted to exactly two
+                examples is general to neither: it acquires a boolean prop for each new caller until the props
+                are a worse API than the duplication would have been. Ask the real question — "is this one
+                concept, or two things that currently look alike?" — and if the answer is unclear, wait.</td></tr>
+            <tr><td><b>Three or more<br>independent domains</b></td>
+              <td><b>A strong signal — not an automatic requirement.</b> Promote in a pull request that names
+                the call sites and states the shared semantics.</td>
+              <td>The third independent instance is the first honest evidence of a <em>pattern</em> rather than
+                a resemblance. It is still a signal to be evaluated, not a trigger to be obeyed: three
+                superficially similar components with three different meanings should stay three components.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout rule">
+        <h4>The promotion test — semantics first, count second, ownership as the veto</h4>
+        <p><b>Promotion is justified by stable shared semantics, not by reuse count.</b> The count is evidence;
+        the semantics are the argument. The question to answer in review is not "how many places use this?" but
+        "do these places mean <em>the same thing</em> by it, and will they still mean the same thing when one of
+        them changes?" A component used in three domains for three subtly different reasons will be pulled apart
+        by its callers within two sprints, and the shared version will end up with a mode flag per domain —
+        which is duplication with extra steps and a shared file everyone is now afraid to touch.</p>
+        <p><b>The hard veto, and it overrides every count:</b> a component MUST NOT be promoted to shared if
+        doing so requires the shared layer to import a domain type or to understand domain-specific behavior
+        (§2, §4). If the "shared" component needs to know what a cheque is, it is not shared — it is a domain
+        component with three callers, and the correct move is to pass its cheque-ness in as data. This is not a
+        style preference: it is the one boundary in §4 whose failure turns the shared layer into a second,
+        worse copy of the domain layer, and no amount of reuse justifies breaching it.</p>
+        <p><b>Both errors are real, and they are not symmetric.</b> Premature promotion creates weak
+        abstractions — shared code fitted to too few examples, which everyone then works around rather than
+        fixes, because it belongs to no one. Delayed promotion creates duplication — which is ugly, visible, and
+        <em>trivially deletable</em> the day the pattern becomes clear. Given a genuine doubt, prefer the
+        duplication: it is the cheaper mistake to undo. The ownership boundary matters more than the raw reuse
+        count, and a correct duplicate is better than an incorrect abstraction.</p>
+        <p>The exceptions are the components the Architecture already <em>declared</em> shared (the §7 library
+        and the §4 patterns). Those are known-shared by specification and start in the shared layer — this rule
+        governs new discoveries, not decided architecture.</p>
+      </div>
+    </section>
+
+    <!-- ============ 13 ============ -->
+    <section id="s13">
+      <div class="sec-head"><span class="eyebrow">13</span><h2>Shared hooks strategy</h2></div>
+      <p class="lead-p sec-intro">Hooks follow the layers exactly — which means the question "where does this
+      hook go?" is already answered by §2 and needs no separate taxonomy. What this section adds is the rule
+      for the one genuinely hard case: a hook that spans domains.</p>
+
+      <div class="grid cols-3">
+        <div class="card"><h4>Infrastructure hooks</h4>
+          <p>Thin React bindings over infrastructure: <span class="mono">useSession</span> (the current user),
+          <span class="mono">usePermission</span> (the evaluator, §6). They know nothing about Miza's domains
+          and would survive being lifted into another product.</p></div>
+        <div class="card"><h4>Shared hooks</h4>
+          <p>Domain-agnostic but product-shaped: <span class="mono">useUrlFilterState</span> (the typed reader/
+          writer for the query-string state that Design System §15 mandates),
+          <span class="mono">useDebouncedValue</span> (the search debounce of §15's search rules),
+          <span class="mono">useConfirm</span> (imperative access to the confirmation dialog).</p>
+          <p><span class="mono">useUrlFilterState</span> is the load-bearing one: it is the single place the
+          "filter state is one serializable value" contract is implemented, and every list in the app gets it
+          for free by using the ListPage pattern.</p></div>
+        <div class="card"><h4>Domain hooks</h4>
+          <p>Where nearly all data access lives: <span class="mono">useCheques</span>,
+          <span class="mono">useApproveCheque</span>, <span class="mono">useAgentCapacity</span>,
+          <span class="mono">useRestockGate</span>. Each wraps a query or mutation and is the <em>only</em> way
+          the rest of the app reads that resource. Components never call an API module directly (§7).</p></div>
+      </div>
+
+      <div class="callout rule">
+        <h4>The cross-domain hook rule</h4>
+        <p>A hook that fetches from <b>one</b> domain belongs to that domain. A hook that composes data from
+        <b>several</b> domains belongs to <em>the page that composes them</em> — not to a shared "useAgent360"
+        in the shared layer, which would force the shared layer to import from four domains and invert the
+        dependency rule (§4) at its single most important edge.</p>
+        <p><b>The one sanctioned exception</b> is already documented: the restock gate. It is a Grattage rule
+        that Stock's forms must respect (Architecture §5), so Grattage exports the hook from its public surface
+        and Stock imports it. This is mechanism 2 of §4, and it is deliberately the <em>only</em> domain→domain
+        hook import in the application. If a second one is proposed, it needs an ADR — not because the rule is
+        sacred, but because the first exception is always reasonable and the tenth is how the boundary dies.</p>
+      </div>
+
+      <div class="callout">
+        <h4>Avoiding duplication — and avoiding the cure being worse</h4>
+        <p>The genuine duplication risk here is <em>data-fetching logic</em>: two components each calling the
+        same endpoint with slightly different keys, caching separately, and disagreeing. The query-key factory
+        (§8) and the "one hook per resource read" rule eliminate that class entirely — there is exactly one way
+        to fetch a cheque list, so there is exactly one cache entry for it.</p>
+        <p>The <em>false</em> duplication to leave alone: two hooks that look similar but serve different
+        domains. Merging <span class="mono">useCheques</span> and <span class="mono">useDeposits</span> into a
+        <span class="mono">useFinancialRecords</span> because they are structurally alike would produce a hook
+        with a discriminating parameter, two divergent code paths inside it, and a coupling between two domains
+        that the backend keeps separate. Structural similarity is not shared meaning — it is the most common
+        false positive in abstraction, and §12's rule of three exists to filter it.</p>
+      </div>
+    </section>
+
+    <!-- ============ 14 ============ -->
+    <section id="s14">
+      <div class="sec-head"><span class="eyebrow">14</span><h2>Utilities &amp; services</h2></div>
+
+      <h3 class="sub">Formatters — the single implementation of the Design System's data rules</h3>
+      <div class="callout rule">
+        <h4>One module, and formatting exists nowhere else</h4>
+        <p>Design System §5 and §27 specify exactly how money, dates, relative dates, phone numbers,
+        identifiers, percentages, and large numbers render, and §29 specifies how entities are presented. This
+        module is the <b>sole implementation</b> of those rules. <b>MUST:</b> no component formats a value
+        inline — no <span class="mono">toFixed(2)</span> in a table cell, no date string built by hand, ever.</p>
+        <p><b>Why this is a hard rule and not a preference:</b> Design System §5 requires that an absent amount
+        renders as <span class="mono">—</span> and never as <span class="mono">0,00 DH</span> — "on screens that
+        settle real debts, that distinction is financial, not cosmetic." A single inline
+        <span class="mono">value.toFixed(2)</span> in one table silently violates that, in one place, invisibly,
+        and no one finds it until an operator acts on a zero that was really a null. Centralized formatters make
+        that violation impossible to write by accident, and they make the French-first decision (O-1) revisable
+        in one file rather than three hundred.</p>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th style="min-width:130px;">Concern</th><th>Rule</th></tr></thead>
+          <tbody>
+            <tr><td><b>Constants</b></td>
+              <td>Permission strings (§6), status→tone maps (Design System §17), error codes (§11), the
+                <span class="mono">per_page</span> ceiling. Each has exactly one home, and each is
+                <em>data</em>. A magic string appearing in a component is a defect — not for style reasons, but
+                because it cannot be renamed, found, or audited.</td></tr>
+            <tr><td><b>Configuration</b></td>
+              <td>Environment values (API base URL, environment name) are parsed and <b>validated at bootstrap</b>,
+                and the app <b>fails loudly and immediately</b> if one is missing or malformed. It MUST NOT boot
+                into a broken state and surface the problem later as a mysterious network error — a missing API
+                base URL should be a startup crash with a clear message, not a hundred failed requests. Config is
+                read in exactly one module; <span class="mono">import.meta.env</span> appears nowhere else.</td></tr>
+            <tr><td><b>Storage</b></td>
+              <td><b>One module owns <span class="mono">localStorage</span></b> — the session store (§17) — and
+                nothing else in the application touches it. Discovery found <span class="mono">useAuth()</span>
+                reading <span class="mono">localStorage</span> directly on every call and the header reading it
+                independently of the auth hook; that is two consumers of an unowned global, and it is exactly how
+                a logout leaves a stale user in a dropdown. One owner, one interface, and the eventual migration
+                to a different token strategy (§17) becomes a one-file change.</td></tr>
+            <tr><td><b>Helpers</b></td>
+              <td>Live with what they serve (§3: no <span class="mono">utils/</span> folder). A helper used by
+                one resource lives in that resource. Universal ones are named for their job.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout decision">
+        <h4>D-12 · Feature flags are build-time constants, not a runtime service</h4>
+        <p>The instinct when "feature flags" appears in a spec is to reach for LaunchDarkly or to build a flag
+        service with a backend table. <b>Rejected for v1.</b> This is a single-tenant internal back office with
+        one deployment target and no A/B testing requirement, no gradual-rollout requirement, and no need to
+        change behavior for a subset of users at runtime. A flag service would add a network dependency, a cache,
+        a failure mode, and a vendor — to solve a problem this product does not have.</p>
+        <p>What it <em>does</em> have is a real need for a simpler thing: a way to merge incomplete work safely,
+        and a way to keep UI dark for backend endpoints that do not exist yet — Companies and Suppliers have no
+        controllers (Discovery §6; Architecture §5 marks their screens blocked). A typed, build-time config
+        object handles both.</p>
+        <p><b>The rule that keeps flags from becoming permanent debt:</b> every flag MUST be created with a
+        stated removal condition ("remove when the Companies controller ships"). A flag without an expiry is a
+        permanent branch in the code, and permanent branches double the states every future change must be
+        tested against. Flags are scaffolding, and scaffolding comes down.</p>
+      </div>
+
+      <h3 class="sub">Feature-flag lifecycle</h3>
+      <p style="font-size:0.9rem; color:var(--muted); max-width:76ch;">A flag is a branch in the product that
+      lives in the codebase. Two flags are four code paths; five are thirty-two, and nobody tests thirty-two.
+      That combinatorial cost is why a flag must be born with its own death already specified.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th style="min-width:150px;">Every temporary flag MUST have</th><th>Why it is mandatory</th></tr></thead>
+          <tbody>
+            <tr><td><b>A named owner</b></td>
+              <td>A person, not a team. Flags with no owner are removed by nobody, because everybody assumes
+                somebody else knows whether it is still needed. The owner is who gets asked at cleanup.</td></tr>
+            <tr><td><b>A creation reason</b></td>
+              <td>What it exists to enable — "the Companies UI is built but the controller has not shipped."
+                Six months later, the reason is the only thing that tells a stranger whether the flag is still
+                doing anything. A flag whose reason no longer holds is already dead code with a switch on it.</td></tr>
+            <tr><td><b>A removal condition or date</b></td>
+              <td>The concrete event that makes it obsolete ("remove when the Companies controller ships"), or a
+                date. This is what converts a flag from an open-ended branch into a task with an end.</td></tr>
+            <tr><td><b>A documented default per environment</b></td>
+              <td>Its value in development, staging, production, and test — stated in one place, reviewable in a
+                diff. An undocumented per-environment default is how a half-built screen reaches production: not
+                by decision, but because nobody wrote down what the flag was supposed to be there.</td></tr>
+            <tr><td><b>A cleanup task</b></td>
+              <td>Filed when the flag is created, not when it is forgotten. Rollout complete means the flag
+                <em>and both of its branches</em> are collapsed to the surviving one — deleting the flag while
+                leaving the dead branch behind is not cleanup.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout rule">
+        <h4>Expired flags are debt, and product configuration is not a flag</h4>
+        <p><b>An expired flag MUST be removed, not left permanently in place.</b> A flag whose removal condition
+        has been met and which still exists is technical debt in its purest form: it costs a code path, a test
+        matrix dimension, and a moment of confusion for every future reader, in exchange for nothing at all.
+        "It's harmless, leave it" is how a codebase accumulates twenty of them, at which point the real behavior
+        of the product in production is knowable only by reading a config file.</p>
+        <p><b>Long-lived product configuration is not a temporary feature flag, and MUST NOT be modeled as one.</b>
+        The distinction is intent, and it is load-bearing: a flag is <em>scaffolding around an in-progress
+        change</em> and is expected to die; configuration is a <em>permanent, legitimate difference</em> in how
+        the product behaves and is expected to live. Filing permanent configuration as a flag means it inherits
+        a removal condition it will never meet, and it pollutes the flag list until the list stops being
+        actionable — the flags that genuinely need removing become invisible among the ones that never will.
+        Model permanent behavior as configuration (below); model temporary branches as flags.</p>
+      </div>
+
+      <h3 class="sub">Environment configuration strategy</h3>
+      <p style="font-size:0.9rem; color:var(--muted); max-width:76ch;">Four environments, one rule: differences
+      between them are <em>declared in configuration</em>, never discovered in the code.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th style="min-width:120px;">Environment</th><th>Posture</th></tr></thead>
+          <tbody>
+            <tr><td><b>Development</b></td>
+              <td>Verbose logging (§18), relaxed defaults, error reporting off. The only environment where
+                developer convenience is a legitimate input to a configuration decision.</td></tr>
+            <tr><td><b>Test</b></td>
+              <td>Deterministic and hermetic: the API base URL points at MSW (§16), never at a real backend;
+                error reporting and analytics are off; timing-sensitive behavior (debounce, retry backoff) is
+                configurable so tests do not have to wait on real durations. A test run MUST NOT be capable of
+                reaching a production API — that is a configuration guarantee, not a discipline.</td></tr>
+            <tr><td><b>Staging</b></td>
+              <td><b>Mirrors production as closely as possible</b> — same build, same defaults, same
+                conservatism, differing only in endpoints and its environment marker (the staging banner of
+                Design System §20). Staging exists to catch what production will do; every place it is
+                configured to behave differently is a place where it has stopped being able to do that. A
+                staging environment that is "production with debug on" tests a product that will never ship.</td></tr>
+            <tr><td><b>Production</b></td>
+              <td><b>Conservative by default.</b> Errors and warnings only in logs, no debug surfaces, no
+                verbose diagnostics, no unfinished features enabled. Where a setting's correct production value
+                is uncertain, the safe value wins — a flag defaults to <em>off</em>, a feature defaults to
+                <em>hidden</em>, a limit defaults to the <em>lower</em> bound.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout rule">
+        <h4>Five configuration rules</h4>
+        <p><b>(1) Configuration is validated, never assumed.</b> Environment values enter through one validated
+        config module (above) and nowhere else. <b>MUST:</b> missing or malformed required configuration
+        <b>fails fast at bootstrap</b> with a clear message — never a silent boot into a broken state that
+        surfaces later as a hundred mysterious network failures.</p>
+        <p><b>(2) No component branches on an environment name.</b> <span class="mono">if (env === 'production')</span>
+        inside a domain component is forbidden. Branch on a <em>capability</em> the config declares
+        ("is error reporting enabled", "is the staging banner shown"), never on the environment's identity.
+        Environment-name checks scatter across the codebase, are invisible to search when someone adds a fifth
+        environment, and produce components whose behavior in production has never actually been rendered by
+        anyone before a customer sees it.</p>
+        <p><b>(3) No secrets in frontend configuration. Ever.</b> Anything shipped to a browser is public —
+        minification is not concealment, and a build-time environment variable is as readable as a comment. API
+        keys, credentials, and signing secrets MUST NOT appear in frontend config under any circumstance. If a
+        feature appears to require one, it requires a backend endpoint instead, and that is the design
+        conversation to have rather than a value to hide.</p>
+        <p><b>(4) Environment differences are explicit and reviewable.</b> The complete set of differences
+        between staging and production is readable in one place, in a diff, by a person. Behavior that varies by
+        environment through scattered conditionals is behavior nobody can predict without running it.</p>
+        <p><b>(5) Production defaults are conservative</b> — restated because it is the rule that gets bent when
+        a deadline arrives. The cost of a feature reaching production a week late is a week. The cost of an
+        unfinished financial screen reaching production early is measured in something else entirely.</p>
+      </div>
+    </section>
+
+    <!-- ============ 15 ============ -->
+    <section id="s15">
+      <div class="sec-head"><span class="eyebrow">15</span><h2>Performance strategy</h2></div>
+      <p class="lead-p sec-intro">This is an internal back office on office networks, not a consumer site
+      competing for bounce rate. The performance that matters here is <em>interaction</em> performance — a
+      table that filters instantly, a form that never stutters mid-entry — not shaving kilobytes off a first
+      paint that happens once a day. Several conventional optimizations are therefore rejected below as
+      premature, and one is rejected as actively harmful.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th style="min-width:140px;">Concern</th><th>Strategy</th></tr></thead>
+          <tbody>
+            <tr><td><b>Code splitting</b></td>
+              <td>Per <em>domain</em>, not per route (§5, D-4), plus a shared chunk for the pattern library.
+                Matches how operators actually navigate — they work inside one domain for long stretches — so
+                the chunk they need is fetched once and every subsequent screen in that domain is instant.</td></tr>
+            <tr><td><b>Bundle strategy</b></td>
+              <td>The dependency list is the bundle strategy. Two libraries are added by this document (§0) and
+                every further one needs an ADR. A date library, an icon set, and a chart library will each be
+                proposed; each MUST justify its weight, and "it's only 30kb" is not a justification when said
+                four times. Bundle size is monitored in CI as a <em>trend</em>, not a hard gate — a gate gets
+                raised the first time it fails, and then it means nothing.</td></tr>
+            <tr><td><b>Rendering</b></td>
+              <td>The real risks in this app are (1) the serial-waterfall workspace (§8: independent queries
+                MUST fire in parallel) and (2) a table re-rendering every row on every keystroke of the search
+                box — which the §15 debounce and stable row identities both address. Both are structural, and
+                neither is fixed by memoization.</td></tr>
+            <tr><td><b>Images</b></td>
+              <td>The only images in this product are avatars and uploaded proof documents (CIN photos, cheque
+                images). <b>MUST NOT</b> render full-resolution proof images in list cells — a table of fifty
+                cheques must not download fifty multi-megabyte photographs. Thumbnails where the backend offers
+                them; lazy-load below the fold; full resolution only in the viewer that exists to show it.</td></tr>
+            <tr><td><b>Caching</b></td>
+              <td>The Query cache <em>is</em> the application cache, tiered by §8. HTTP caching is not relied
+                upon for authenticated API responses (and Sanctum's bearer responses are not cacheable by
+                intermediaries anyway). One cache, one set of rules, one place to reason about staleness.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout decision">
+        <h4>D-13 · Virtualization is deliberately NOT implemented — and the number that proves it</h4>
+        <p>Every "enterprise dashboard architecture" reaches for row virtualization, and it is the kind of
+        decision that is never questioned because it sounds obviously correct. Here it is <b>rejected</b>, on
+        arithmetic.</p>
+        <p>Design System §14 caps pagination at <span class="mono">per_page ≤ 100</span>, mirroring the API's
+        own clamp, and prohibits infinite scroll outright. The <em>maximum</em> number of rows any table in this
+        application can ever render is therefore <b>100</b> — a number React renders without measurable cost.
+        Virtualization would add a library, break native browser find-in-page (which operators genuinely use to
+        locate a cheque number), complicate sticky headers and the horizontal-scroll behavior §14 requires,
+        break keyboard tab-order through off-screen rows (§10's accessibility floor), and complicate every
+        future table feature — to optimize a bottleneck that <em>cannot occur</em>.</p>
+        <p><b>The trigger to revisit, stated concretely so this stays a decision and not dogma:</b> if a screen
+        ever legitimately needs to render more than ~200 rows at once — an export preview, a reconciliation view
+        the backend cannot paginate — virtualize <em>that screen</em>, with an ADR. Do not virtualize the
+        DataTable for all fifteen resources on the strength of one exception.</p>
+      </div>
+
+      <div class="callout decision">
+        <h4>D-14 · Memoize on evidence, never by default</h4>
+        <p>The convention — wrap every component in <span class="mono">memo</span>, every callback in
+        <span class="mono">useCallback</span>, every derived value in <span class="mono">useMemo</span> — is
+        <b>rejected as a default.</b> It is not free: each memo adds a comparison on every render and a
+        dependency array that is now a correctness liability. A stale dependency array produces a component that
+        renders old data — which in this product means <em>an operator looking at a stale amount</em>, and that
+        is precisely the failure class this whole architecture is organized against. Memoization introduced to
+        avoid a re-render that was never slow has traded a nonexistent performance bug for a real correctness
+        bug.</p>
+        <p><b>The rule:</b> memoize when a profiler shows a problem, or at three specific known-expensive seams
+        — the DataTable's row and cell renderers, the LineItemsEditor's row list (where a running total
+        recomputes on every keystroke), and any chart's data transform. Elsewhere: write the obvious code.
+        React 19 is fast, and the app's slowest operation by three orders of magnitude is the network.</p>
+      </div>
+    </section>
+
+    <!-- ============ 16 ============ -->
+    <section id="s16">
+      <div class="sec-head"><span class="eyebrow">16</span><h2>Testing strategy</h2></div>
+      <p class="lead-p sec-intro">Test what breaks, at the level where breaking is expensive. For this product
+      that means: the money math and the mappers get unit tests, the pages get behavioral tests against a mocked
+      API, and a very small number of end-to-end tests protect the irreversible flows. What it does <em>not</em>
+      mean is a coverage percentage.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th style="min-width:130px;">Level</th><th>Scope</th><th>What it protects, and why it earns its cost</th></tr></thead>
+          <tbody>
+            <tr><td><b>Unit</b> <span class="chip ok">cheap</span></td>
+              <td>Pure logic only: formatters (§14), DTO mappers (§7), the permission evaluator (§6), status→tone
+                maps, the error-code registry's completeness.</td>
+              <td>These are pure functions with high consequence and near-zero test cost — the best ratio in the
+                codebase. The formatter tests are effectively an executable copy of Design System §5/§27, and the
+                mapper tests are where "absent is not zero" is <em>enforced</em> rather than merely written down.
+                A test asserting that a null amount maps to null and renders as <span class="mono">—</span> is
+                worth more than a hundred component snapshots.</td></tr>
+            <tr><td><b>Integration</b> <span class="chip accent">the main investment</span></td>
+              <td>A page, rendered with its real hooks and real patterns, against an API mocked at the network
+                boundary (MSW). Asserts behavior an operator would recognize: the filter narrows the list, the
+                403 renders the calm state, a 409 renders its registered recovery path, the confirm dialog shows
+                the fresh amount, a failed submit keeps the form's values.</td>
+              <td><b>This is where the value is.</b> These tests exercise the actual integration of Query, the
+                mapper, the error registry, and the pattern — the seams where this architecture's bugs will
+                actually live — while remaining refactor-proof, because they touch no internals. Mocking at the
+                network boundary rather than mocking the hooks is what makes them real: a test that mocks
+                <span class="mono">useCheques</span> proves only that the mock works.</td></tr>
+            <tr><td><b>End-to-end</b> <span class="chip warn">few, precious</span></td>
+              <td>A handful of flows against a real backend: login → approve a cheque; create a deposit →
+                validate → confirm the grattage invoice settles; draft a stock movement → add lines → validate.
+                Plus one negative path: the restock gate blocking an allocation.</td>
+              <td>These are the flows where a bug costs money, and they are the only ones that prove the frontend
+                and backend actually agree. They are slow and they are brittle, so there are <em>few</em> — E2E
+                is a smoke alarm for the irreversible paths, not a substitute for the integration layer.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout decision">
+        <h4>D-15 · No coverage target — and mocks derived from the real API contract</h4>
+        <p><b>Coverage percentages are rejected as a quality gate.</b> A coverage number is trivially gamed by
+        testing the easy code, and it actively misdirects effort: 90% coverage achieved by snapshot-testing
+        presentational components while the deposit-settlement flow is untested is <em>worse</em> than 40%
+        coverage concentrated on the money paths, because it produces confidence that is not warranted. The
+        review question is "what would this test have caught?" — not "what is the number?"</p>
+        <p><b>The real risk this section must address is contract drift.</b> Integration tests mock the backend;
+        a mock that has silently diverged from the real API produces a green suite and a broken app — the most
+        expensive failure mode a test suite can have, because it converts the safety net into a source of false
+        confidence. Mitigation: MSW fixtures MUST be derived from the backend's documented contract (the
+        maintained Postman collection and the API endpoint docs), not hand-invented from what a developer
+        assumed the response looked like, and the E2E layer exists precisely to catch the drift that the mocks
+        cannot. Where a backend response shape changes, the fixture is updated in the same pull request — a
+        fixture is part of the API contract, not part of the test's convenience.</p>
+      </div>
+
+      <div class="callout rule">
+        <h4>Test organization</h4>
+        <p>Unit and integration tests live <b>beside the code they test</b>, inside the resource folder — so a
+        feature is deleted, moved, or reviewed as one unit (§1's deletability principle applies to tests too; a
+        mirrored <span class="mono">__tests__</span> tree is a second folder structure to keep in sync, and it
+        never stays in sync). Shared MSW handlers, fixtures, and render helpers live in
+        <span class="mono">src/test/</span>. E2E specs live outside <span class="mono">src/</span> entirely,
+        because they test the product, not the code.</p>
+      </div>
+    </section>
+
+    <!-- ============ 17 ============ -->
+    <section id="s17">
+      <div class="sec-head"><span class="eyebrow">17</span><h2>Security considerations</h2></div>
+      <p class="lead-p sec-intro">The frontend of a financial system is not a security boundary — and the most
+      dangerous thing this document could do is let anyone believe otherwise. This section states what the
+      frontend assumes, what it must never assume, and the one inherited risk it explicitly accepts.</p>
+
+      <div class="callout rule">
+        <h4>The first principle: the client is not trusted, including by us</h4>
+        <p>Every permission gate (§6), every disabled button, every hidden nav item, and every zod schema (§10)
+        is a <b>usability feature</b>. None of them is a security control. All of them can be bypassed by anyone
+        with a browser console, and the architecture assumes they will be.</p>
+        <p><b>The backend is the only authority.</b> It enforces every permission with
+        <span class="mono">permission:*</span> middleware, and it enforces every business invariant in the
+        service layer. If a frontend gate is ever the <em>only</em> thing preventing an action, that is a backend
+        vulnerability with a frontend symptom, and it MUST be reported as such rather than patched with a better
+        gate.</p>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th style="min-width:140px;">Area</th><th>Assumption &amp; rule</th></tr></thead>
+          <tbody>
+            <tr><td><b>Authentication</b></td>
+              <td>Sanctum bearer tokens, obtained from <span class="mono">/auth/login</span>, sent as an
+                <span class="mono">Authorization</span> header. There is <b>no refresh-token flow</b> (Discovery
+                §4). A 401 therefore means the session is over: the client terminates it centrally, clears the
+                store, and redirects to login preserving the return path (§11). The token is never sent anywhere
+                but the API's own origin.</td></tr>
+            <tr><td><b>Authorization</b></td>
+              <td>Permission strings from the login payload, evaluated client-side for rendering only (§6).
+                Never roles (D-5). Never trusted for enforcement (above).</td></tr>
+            <tr><td><b>Sensitive data</b></td>
+              <td>The product handles CIN numbers, phone numbers, identity documents, and monetary amounts.
+                <b>MUST NOT</b> appear in: URLs (record IDs only — never a CIN as a query param, where it lands
+                in browser history and any proxy log), logs, error-reporter payloads (§18), analytics events, or
+                <span class="mono">localStorage</span> beyond the session payload the backend itself returns.</td></tr>
+            <tr><td><b>XSS</b></td>
+              <td>The primary threat, because it is the one that turns the accepted token-storage risk (below)
+                into a real compromise. React escapes by default; the rules that keep that true are absolute.
+                <b>MUST NOT</b> use <span class="mono">dangerouslySetInnerHTML</span> anywhere in this
+                application — there is no requirement in the entire product that needs it, so a request to use
+                it is a design error, not a security exception to negotiate. Never render backend-provided HTML.
+                Never build a URL for an <span class="mono">href</span> from unvalidated input. Dependency
+                hygiene (audited installs, few dependencies — §15) is part of the XSS posture, because a
+                compromised transitive dependency has the same reach as our own code.</td></tr>
+            <tr><td><b>CSRF</b></td>
+              <td><b>Not applicable, and deliberately so.</b> Bearer tokens in an <span class="mono">Authorization</span>
+                header are not ambient credentials: a cross-site form post cannot attach them, which is the
+                entire mechanism CSRF depends on. No CSRF token ritual is needed, and adding one would be
+                cargo-cult. <b>This changes the day auth moves to cookies</b> — see D-16 — at which point CSRF
+                protection becomes mandatory, and that dependency MUST be part of that decision.</td></tr>
+            <tr><td><b>File uploads</b></td>
+              <td>Client-side type and size checks (Design System §12: images/PDF, 2MB documents, 5MB proofs)
+                are <em>UX</em> — they fail fast and explain. The backend re-validates everything; the frontend
+                never treats its own check as sufficient.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout decision">
+        <h4>D-16 · Keep the token in localStorage for v1 — a consciously accepted risk, isolated for exit</h4>
+        <p>The correct security answer is well known: bearer tokens in <span class="mono">localStorage</span> are
+        readable by any JavaScript on the page, so a single XSS becomes a full session compromise, and the token
+        remains valid until manually revoked because there is no refresh/rotation flow. An httpOnly, SameSite
+        cookie would eliminate the exfiltration path entirely.</p>
+        <p><b>The decision is nonetheless to keep localStorage for v1</b>, and it is important to be honest about
+        why, because "we'll fix it later" is how this becomes permanent. Moving to cookie auth is not a frontend
+        change — it is a <em>backend</em> change (Sanctum's stateful cookie mode, CORS and CSRF configuration,
+        session handling across three tokenable models) landing in a backend that has just completed Phase 5.10
+        and is stable. Forcing that change now trades a well-understood, mitigated risk for a poorly-understood
+        one, in the middle of a frontend build, on an internal tool behind an office network. The Discovery
+        report reached the same conclusion — "standard for this app's size, but worth a conscious note."</p>
+        <p><b>What makes this an acceptable decision rather than negligence,</b> and what MUST hold:
+        (1) The XSS rules above are treated as absolute, because they are the compensating control — the entire
+        risk is conditional on an XSS existing. (2) All token access is isolated behind the single session module
+        (§14), so the migration is a one-file change on the frontend rather than a search-and-replace across the
+        app. (3) This is recorded as <b>ADR-0001</b> with an explicit revisit trigger: any external exposure of
+        this dashboard beyond the internal network, or the first backend cycle with capacity for auth work,
+        whichever comes first.</p>
+      </div>
+    </section>
+
+    <!-- ============ 18 ============ -->
+    <section id="s18">
+      <div class="sec-head"><span class="eyebrow">18</span><h2>Observability</h2></div>
+      <p class="lead-p sec-intro">The question observability answers is "did an operator hit a problem we don't
+      know about?" — not "how many people clicked this button." For an internal financial tool those are very
+      different questions, and conflating them is how a product ends up shipping its clients' phone numbers to a
+      third-party analytics vendor.</p>
+
+      <div class="grid cols-2">
+        <div class="card"><h4>Logging</h4>
+          <p>One logger abstraction; <span class="mono">console.*</span> MUST NOT appear in product code. Not for
+          tidiness — because a console call cannot be levelled, filtered, scrubbed, or turned off in production,
+          and because "temporary" debug logging of a request payload is exactly how a CIN number ends up in a
+          browser console during a screen-share.</p>
+          <p>Development logs verbosely; production logs warnings and errors only.</p></div>
+        <div class="card"><h4>Error reporting</h4>
+          <p>Unexpected errors (5xx, render crashes caught by a boundary) are reported to an error service with
+          the request identifier that §11 already carries — so a user saying "it broke" and the recorded event
+          can actually be joined, which is the only reason to have a reference id at all.</p>
+          <p><b>Expected errors are not reported</b> (§11): a 422, a 403, a domain 409 are the system working.
+          Reporting them drowns the real 500s and trains everyone to ignore the channel.</p></div>
+        <div class="card"><h4>PII scrubbing — a MUST, not a setting</h4>
+          <p>Error payloads are scrubbed <b>before</b> they leave the browser: no tokens, no CIN, no phone
+          numbers, no identity-document URLs, no request bodies from financial mutations. Scrubbing at the
+          reporter's server-side is not sufficient — by then the data has already left the building, and the
+          vendor's retention policy is now part of this product's compliance surface.</p></div>
+        <div class="card"><h4>Analytics boundary</h4>
+          <p><b>No third-party product analytics on financial screens.</b> This is a bright line. If usage
+          insight is ever needed (which screens are used, where operators stall), it is collected as coarse,
+          anonymous <em>navigation</em> events, with no record identifiers, no amounts, and no names — and it
+          requires an ADR that states exactly what is collected. A behavioral analytics SDK that captures DOM
+          content will capture cheque amounts and client names by default, and it must never be installed here.</p></div>
+      </div>
+
+      <div class="callout rule">
+        <h4>Correlation is what makes these logs worth keeping</h4>
+        <p>Every structured log entry and every error report carries the backend correlation identifier that
+        §11 captures and <span class="mono">AppError</span> preserves — the same reference the operator is shown
+        as a support code. That single shared string is what turns three separate systems (the user's report, the
+        frontend's error record, the backend's request log) into one traceable event. Without it, a production
+        investigation begins by guessing which of four hundred requests in that minute was the one that failed.</p>
+        <p>The scrubbing rules above are not weakened by correlation — they are what makes it necessary.
+        Because payloads, tokens, documents, and personal data MUST NOT leave the browser (§17), the identifier
+        is the <em>only</em> thing that links a frontend error to its backend context, and the sensitive detail
+        stays where it already safely lives: in the backend's own logs, behind its own access controls.</p>
+      </div>
+
+      <div class="callout">
+        <h4>Performance monitoring — measure the thing that matters</h4>
+        <p>Standard web-vitals are collected, but they are not the metric. The number that reflects this
+        product's actual quality is <b>time from navigation to an interactive, populated table</b> — because that
+        is the operator's unit of work, repeated hundreds of times a day. Track it per domain. A regression there
+        is a real regression; a 40ms shift in a first-paint metric on an internal tool that stays open all day
+        is noise, and chasing it is how teams spend a sprint optimizing something nobody feels.</p>
+      </div>
+    </section>
+
+    <!-- ============ 19 ============ -->
+    <section id="s19">
+      <div class="sec-head"><span class="eyebrow">19</span><h2>Architectural decision records</h2></div>
+      <p class="lead-p sec-intro">This document will be wrong about something within six months. That is not a
+      failure — it is the normal fate of every architecture, and the only question is whether the correction is
+      <em>recorded</em> or merely <em>applied</em>. An ADR is how a rule changes without the reasoning being
+      lost.</p>
+
+      <div class="grid cols-3">
+        <div class="card"><h4>When an ADR is required</h4>
+          <p>Adding a dependency. Changing or violating a rule in this document (including via a lint
+          suppression, §4). Introducing a new cross-domain coupling (§13). Adopting a pattern this document
+          rejected — optimistic updates (D-7), a state library (D-8), virtualization (D-13), a state machine
+          (D-9), cookie auth (D-16). Any decision a future developer would otherwise have to reverse-engineer
+          from the code.</p></div>
+        <div class="card"><h4>What an ADR must contain</h4>
+          <p>Context (what forced the decision), the options <em>considered and rejected</em> with reasons,
+          the decision, and its consequences — including the ones we dislike. An ADR that lists only the chosen
+          option is a changelog entry, not a decision record: the rejected alternatives are the entire value,
+          because they are what stops the next person re-proposing them in a year.</p></div>
+        <div class="card"><h4>How they live</h4>
+          <p>Numbered, dated, append-only markdown in <span class="mono">docs/adr/</span>. Status: Proposed →
+          Accepted → Superseded (by ADR-n). <b>Never edited after acceptance and never deleted</b> — a
+          superseded ADR is the most valuable kind, because it records a road already travelled and why we came
+          back.</p></div>
+      </div>
+
+      <div class="callout rule">
+        <h4>The relationship between this document and the ADR log</h4>
+        <p>This specification is the <b>baseline</b>: decisions D-1 through D-16 are its content and are
+        considered accepted on approval. The ADR log records everything <em>after</em> it. Consequently:
+        <b>MUST:</b> any change to a rule in this document requires an ADR that explicitly supersedes the
+        numbered decision it changes, and a pull request updating this document to match. Two sources of truth
+        that disagree are worse than either alone — and an architecture document that quietly stops describing
+        the code is how a codebase becomes undocumented while appearing documented.</p>
+        <p>ADR-0001 is already written by §17: the localStorage token decision, with its revisit trigger. It is
+        the model for the format.</p>
+      </div>
+    </section>
+
+    <!-- ============ 20 ============ -->
+    <section id="s20">
+      <div class="sec-head"><span class="eyebrow">20</span><h2>Future scalability</h2></div>
+      <p class="lead-p sec-intro">The test of this architecture, exactly as in Design System §25, is the thing
+      that does not exist yet. Here is what each kind of growth actually costs — and one thing that is refused.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th style="min-width:150px;">Growth</th><th>What it costs</th></tr></thead>
+          <tbody>
+            <tr><td><b>A new resource</b><br><span class="chip ok">hours</span></td>
+              <td>One folder in its domain, following the shape in §3: an API module, a mapper, a query-key
+                factory, a resource definition, a route contribution, permission strings. It picks one of the
+                five existing page skeletons. <b>No shared file changes.</b> This is the case that must stay
+                cheap, because it is the case that happens most.</td></tr>
+            <tr><td><b>A new domain</b><br><span class="chip ok">days</span></td>
+              <td>One folder under <span class="mono">domains/</span>, its resources inside it, its permissions
+                in the registry, its nav group in the sidebar (which renders itself from the registry — §6), and
+                its statuses mapped to the six existing badge tones (Design System §17). The only shared file
+                touched is the invalidation map (§4), and only if the new domain's mutations affect others'
+                caches — which is a genuine business coupling that <em>should</em> be declared in one place.</td></tr>
+            <tr><td><b>A new role</b><br><span class="chip ok">near zero</span></td>
+              <td>Nothing, structurally (§6). No component branches on a role; routes and nav carry permission
+                strings. Granting managers dashboard access is a backend permission assignment plus, at most,
+                new registry entries for genuinely new capabilities. This is the direct payoff of D-5.</td></tr>
+            <tr><td><b>A new API / backend change</b><br><span class="chip warn">contained</span></td>
+              <td>A renamed field or a normalized status vocabulary changes <em>one mapper</em> (§7, D-6) — the
+                whole reason the anti-corruption layer exists. The Companies and Suppliers controllers, when they
+                ship, unblock screens already designed: a definition, a route, a flag removal (§14).</td></tr>
+            <tr><td><b>A second frontend</b><br><span class="chip info">anticipated</span></td>
+              <td>The backend already serves three tokenable models (User/Admin, Agent, Client) through one
+                <span class="mono">/auth/login</span>. A future commercial-facing or client-facing app is a
+                separate application that reuses this one's <em>ideas</em>, not its bundle — different users,
+                different devices, different workflows. Nothing here obstructs it, and nothing here should be
+                contorted in advance to accommodate it.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout decision">
+        <h4>D-17 · Micro-frontends: no, and not later either</h4>
+        <p>The section brief asks whether the architecture supports micro-frontends "if ever needed." The honest
+        architectural answer is that it <b>does</b> — the domain boundaries, public surfaces, and dependency
+        rules of §4 are precisely the decomposition that would make extraction possible — and that it
+        <b>should not happen.</b></p>
+        <p>Micro-frontends solve an <em>organizational</em> problem: multiple teams needing to deploy
+        independently without coordinating a release. Miza has one frontend team and one deployment target. In
+        exchange for solving a problem this project does not have, they impose runtime integration complexity,
+        duplicated dependencies across bundles, cross-application state and auth plumbing, and — most damaging
+        here — the near-certain fragmentation of the Design System, whose central promise (§1: "one status
+        vocabulary, one money format, one filter pattern") depends on a single shared implementation. A federated
+        StatusBadge in three bundles at three versions is exactly the outcome the Design System exists to prevent.</p>
+        <p><b>The modular monolith already delivers the benefit people actually want from micro-frontends</b> —
+        independent, deletable, boundaried domains — without paying the distribution tax. If Miza one day has
+        several frontend teams shipping on separate cadences, revisit this with an ADR. Until then, this is a
+        solved problem being re-solved expensively.</p>
+      </div>
+
+      <div class="callout rule">
+        <h4>The decay this architecture is designed to resist</h4>
+        <p>Every rule here has one enemy, and it is not disagreement — it is the reasonable-sounding exception
+        made under deadline. The shared component that imports a domain type "just for the props." The status
+        string compared inline "just this once." The optimistic update on "the one mutation where it's safe."
+        The flag with no removal date. Each is individually defensible, and collectively they are how an
+        architecture becomes a folder layout with a document nobody reads.</p>
+        <p>That is why §4's boundaries are lint-enforced rather than documented, why exceptions must name an ADR
+        rather than a reason, and why the decisions in this specification are numbered: so that breaking one is a
+        deliberate, visible, countable act — and so the person who breaks it, correctly and with good cause, can
+        say <em>which</em> rule they are breaking and <em>why</em>.</p>
+      </div>
+    </section>
+
+    <footer>
+      Frontend Technical Architecture v1.0 — proposed · Stage 4 of 5 (Discovery ✅ → Domain Architecture ✅ →
+      Design System ✅ → <b>Frontend Technical Architecture</b> → Implementation) · No implementation code was
+      written. 17 numbered decisions (D-1 … D-17) become the ADR baseline on approval; ADR-0001 (token storage,
+      §17) carries an explicit revisit trigger. Open decision O-1 (interface language, Design System §27) remains
+      outstanding and is assumed French-first throughout.
+    </footer>
+  </main>
+</div>

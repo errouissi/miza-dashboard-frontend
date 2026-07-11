@@ -1,0 +1,16 @@
+# Normalize line endings to LF in the repository AND in every working tree.
+#
+# `eol=lf` is deliberate and overrides core.autocrlf=true on Windows machines.
+# Prettier's endOfLine defaults to "lf", so without this a fresh clone on Windows
+# gets CRLF files and `pnpm format:check` fails immediately — breaking the
+# verification suite for the next person to clone, and for CI parity.
+* text=auto eol=lf
+
+# Binary — never normalize.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary

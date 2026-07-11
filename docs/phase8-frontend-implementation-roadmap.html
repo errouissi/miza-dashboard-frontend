@@ -1,0 +1,1275 @@
+<title>Phase 8 — Miza Frontend Implementation Roadmap</title>
+<style>
+  :root {
+    --paper: #EEF0F0; --panel: #FFFFFF; --panel-2: #F5F6F6;
+    --ink: #171B1E; --muted: #5B6570; --faint: #8A939B;
+    --line: #D8DDE0; --line-soft: #E4E8EA;
+    --accent: #1F6F6B; --accent-ink: #0E4643; --accent-soft: #DDEDEC;
+    --accent-2: #7A4F9E; --accent-2-soft: #EFE6F5;
+    --ok: #2E7D4F; --ok-soft: #E1F1E6;
+    --warn: #9C6B14; --warn-soft: #FBF0DA;
+    --bad: #B23B3B; --bad-soft: #FBE6E6;
+    --info: #2D6CA2; --info-soft: #E2EDF6;
+    --retire: #6B7078; --retire-soft: #E9EAEC;
+    --shadow: 0 1px 2px rgba(20,24,27,0.04), 0 6px 20px -8px rgba(20,24,27,0.12);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #12161A; --panel: #1A2025; --panel-2: #1F262B; --ink: #E7EBEC;
+      --muted: #9AA6AC; --faint: #707A80; --line: #2A3238; --line-soft: #232A2F;
+      --accent: #4FBDB6; --accent-ink: #A9E7E2; --accent-soft: #17302E;
+      --accent-2: #B79BD6; --accent-2-soft: #2A2035;
+      --ok: #6FCB92; --ok-soft: #16281D; --warn: #E0B15C; --warn-soft: #2E260F;
+      --bad: #E58888; --bad-soft: #301A1A; --info: #7FB3DC; --info-soft: #16232E;
+      --retire: #8A939B; --retire-soft: #23262A;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 10px 30px -10px rgba(0,0,0,0.5);
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #12161A; --panel: #1A2025; --panel-2: #1F262B; --ink: #E7EBEC;
+    --muted: #9AA6AC; --faint: #707A80; --line: #2A3238; --line-soft: #232A2F;
+    --accent: #4FBDB6; --accent-ink: #A9E7E2; --accent-soft: #17302E;
+    --accent-2: #B79BD6; --accent-2-soft: #2A2035;
+    --ok: #6FCB92; --ok-soft: #16281D; --warn: #E0B15C; --warn-soft: #2E260F;
+    --bad: #E58888; --bad-soft: #301A1A; --info: #7FB3DC; --info-soft: #16232E;
+    --retire: #8A939B; --retire-soft: #23262A;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 10px 30px -10px rgba(0,0,0,0.5);
+  }
+  :root[data-theme="light"] {
+    --paper: #EEF0F0; --panel: #FFFFFF; --panel-2: #F5F6F6; --ink: #171B1E;
+    --muted: #5B6570; --faint: #8A939B; --line: #D8DDE0; --line-soft: #E4E8EA;
+    --accent: #1F6F6B; --accent-ink: #0E4643; --accent-soft: #DDEDEC;
+    --accent-2: #7A4F9E; --accent-2-soft: #EFE6F5;
+    --ok: #2E7D4F; --ok-soft: #E1F1E6; --warn: #9C6B14; --warn-soft: #FBF0DA;
+    --bad: #B23B3B; --bad-soft: #FBE6E6; --info: #2D6CA2; --info-soft: #E2EDF6;
+    --retire: #6B7078; --retire-soft: #E9EAEC;
+    --shadow: 0 1px 2px rgba(20,24,27,0.04), 0 6px 20px -8px rgba(20,24,27,0.12);
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); color: var(--ink);
+    font-family: -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    font-size: 16px; line-height: 1.55; overflow-x: hidden; }
+  ::selection { background: var(--accent-soft); color: var(--accent-ink); }
+  a { color: var(--accent); }
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .mono { font-family: ui-monospace, "Cascadia Code", "SF Mono", Consolas, monospace; font-variant-numeric: tabular-nums; }
+  .eyebrow { font-weight: 700; font-size: 0.72rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); }
+  h1, h2, h3, h4 { text-wrap: balance; font-weight: 800; letter-spacing: -0.01em; color: var(--ink); }
+  p { max-width: 76ch; }
+  .lead-p { color: var(--muted); max-width: 72ch; }
+
+  .shell { display: grid; grid-template-columns: 250px minmax(0,1fr); min-height: 100vh; }
+  @media (max-width: 900px) { .shell { grid-template-columns: 1fr; } }
+  nav.toc { position: sticky; top: 0; align-self: start; height: 100vh;
+    border-right: 1px solid var(--line); background: var(--panel-2); padding: 26px 16px; overflow-y: auto; }
+  @media (max-width: 900px) { nav.toc { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--line); } }
+  nav.toc .brand { font-weight: 800; font-size: 0.98rem; margin-bottom: 3px; }
+  nav.toc .brand-sub { font-size: 0.76rem; color: var(--muted); margin-bottom: 18px; }
+  nav.toc ol { list-style: none; margin: 0; padding: 0; counter-reset: sec; display: flex; flex-direction: column; gap: 0; }
+  nav.toc li { counter-increment: sec; }
+  nav.toc a { display: flex; gap: 9px; align-items: baseline; text-decoration: none; color: var(--muted);
+    font-size: 0.78rem; padding: 4px 8px; border-radius: 6px; }
+  nav.toc a:hover { background: var(--panel); color: var(--ink); }
+  nav.toc a::before { content: counter(sec, decimal-leading-zero); font-family: ui-monospace, monospace;
+    font-size: 0.66rem; color: var(--faint); flex: none; }
+
+  main { min-width: 0; }
+  header.hero { padding: 54px clamp(20px, 5vw, 64px) 38px; border-bottom: 1px solid var(--line); }
+  header.hero h1 { font-size: clamp(1.5rem, 3vw, 2.1rem); margin: 12px 0 10px; max-width: 26ch; }
+  header.hero p.lede { color: var(--muted); max-width: 68ch; font-size: 1rem; margin: 0 0 20px; }
+  .meta-row { display: flex; flex-wrap: wrap; gap: 10px 22px; font-size: 0.82rem; color: var(--muted); }
+  .meta-row b { color: var(--ink); font-weight: 700; }
+
+  section { padding: 42px clamp(20px, 5vw, 64px); border-bottom: 1px solid var(--line-soft); }
+  section:last-of-type { border-bottom: none; }
+  .sec-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 8px; }
+  .sec-head h2 { font-size: 1.3rem; margin: 0; }
+  .sec-intro { margin-bottom: 20px; }
+  h3.sub { font-size: 1rem; margin: 26px 0 10px; }
+
+  .callout { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--accent);
+    border-radius: 8px; padding: 16px 20px; box-shadow: var(--shadow); max-width: 80ch; margin: 18px 0 0; }
+  .callout h4 { font-size: 0.92rem; margin: 0 0 6px; }
+  .callout p { margin: 0; color: var(--muted); font-size: 0.92rem; }
+  .callout p + p { margin-top: 8px; }
+  .callout.decision { border-left-color: var(--accent-2); }
+  .callout.decision h4::before { content: "⚖ "; }
+  .callout.rule { border-left-color: var(--warn); }
+  .callout.bad { border-left-color: var(--bad); }
+
+  .grid { display: grid; gap: 14px; }
+  .grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+  .grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
+  @media (max-width: 860px) { .grid.cols-3, .grid.cols-2 { grid-template-columns: 1fr; } }
+
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 15px 17px; box-shadow: var(--shadow); }
+  .card h4 { font-size: 0.88rem; margin: 0 0 6px; }
+  .card p { color: var(--muted); font-size: 0.85rem; margin: 0; }
+  .card p + p { margin-top: 6px; }
+
+  .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); margin-top: 14px; }
+  table { border-collapse: collapse; width: 100%; min-width: 560px; background: var(--panel); }
+  thead th { text-align: left; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted);
+    padding: 9px 14px; border-bottom: 1px solid var(--line); background: var(--panel-2); white-space: nowrap; }
+  tbody td { padding: 9px 14px; border-bottom: 1px solid var(--line-soft); font-size: 0.85rem; vertical-align: top; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover td { background: var(--panel-2); }
+  .group-row td { background: var(--panel-2); font-weight: 700; font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+
+  .chip { display: inline-flex; align-items: center; gap: 5px; font-size: 0.73rem; font-weight: 700;
+    padding: 3px 9px; border-radius: 99px; white-space: nowrap; line-height: 1.6; }
+  .chip.ok { background: var(--ok-soft); color: var(--ok); }
+  .chip.warn { background: var(--warn-soft); color: var(--warn); }
+  .chip.bad { background: var(--bad-soft); color: var(--bad); }
+  .chip.info { background: var(--info-soft); color: var(--info); }
+  .chip.neutral { background: var(--retire-soft); color: var(--retire); }
+  .chip.accent { background: var(--accent-soft); color: var(--accent-ink); }
+  .chip.accent2 { background: var(--accent-2-soft); color: var(--accent-2); }
+
+  code.inline { font-family: ui-monospace, monospace; background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: 4px; padding: 1px 5px; font-size: 0.85em; }
+
+  /* delivery flow */
+  .flow { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; }
+  .flow-step { border: 1px solid var(--line); border-radius: 10px; background: var(--panel); box-shadow: var(--shadow);
+    padding: 13px 18px; border-left: 4px solid var(--accent); display: grid; grid-template-columns: 190px 1fr; gap: 16px; align-items: baseline; }
+  @media (max-width: 760px) { .flow-step { grid-template-columns: 1fr; gap: 4px; } }
+  .flow-step .fs-name { font-weight: 800; font-size: 0.92rem; }
+  .flow-step .fs-why { color: var(--muted); font-size: 0.85rem; }
+  .flow-arrow { text-align: center; font-family: ui-monospace, monospace; font-size: 0.74rem; color: var(--faint); }
+
+  /* milestones */
+  .ms { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); box-shadow: var(--shadow);
+    padding: 20px 24px; margin-bottom: 16px; border-left: 4px solid var(--accent); }
+  .ms.crit { border-left-color: var(--bad); }
+  .ms.seam { border-left-color: var(--accent-2); }
+  .ms-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+  .ms-head .ms-id { font-family: ui-monospace, monospace; font-weight: 800; color: var(--accent); font-size: 0.95rem; }
+  .ms-head h4 { margin: 0; font-size: 1.05rem; }
+  .ms-goal { color: var(--muted); font-size: 0.9rem; margin: 0 0 14px; }
+  .ms-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 760px) { .ms-fields { grid-template-columns: 1fr; } }
+  .ms-field .label { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--faint); font-weight: 700; margin-bottom: 5px; }
+  .ms-field ul { margin: 0; padding-left: 16px; font-size: 0.85rem; color: var(--ink); }
+  .ms-field ul li { margin-bottom: 3px; }
+  .ms-field p { margin: 0; font-size: 0.85rem; color: var(--muted); }
+  .ms-field.full { grid-column: 1 / -1; }
+  .ms-exit { margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--line); }
+  .ms-exit .label { color: var(--accent); }
+
+  footer { padding: 32px clamp(20px,5vw,64px) 56px; color: var(--faint); font-size: 0.82rem; }
+</style>
+
+<div class="shell">
+  <nav class="toc" aria-label="Roadmap sections">
+    <div class="brand">Miza · Phase 8</div>
+    <div class="brand-sub">Frontend Implementation Roadmap v1.0</div>
+    <ol>
+      <li><a href="#s1">Roadmap philosophy</a></li>
+      <li><a href="#s2">Delivery strategy</a></li>
+      <li><a href="#s3">Milestones</a></li>
+      <li><a href="#s4">Detailed phase order</a></li>
+      <li><a href="#s5">Domain rollout</a></li>
+      <li><a href="#s6">Parallel work</a></li>
+      <li><a href="#s7">High-risk areas</a></li>
+      <li><a href="#s8">Acceptance gates</a></li>
+      <li><a href="#s9">Definition of done</a></li>
+      <li><a href="#s10">Transition to implementation</a></li>
+    </ol>
+  </nav>
+
+  <main>
+    <header class="hero">
+      <div class="eyebrow">Execution plan — stage 5 of 5 · no implementation</div>
+      <h1>Frontend Implementation Roadmap</h1>
+      <p class="lede">
+        Four approved documents say <em>what</em> to build, <em>how it should look</em>, and <em>how it must be
+        organized</em>. None of them says <em>in what order</em>, and order is where projects of this shape
+        actually fail. This document sequences the work: what unblocks what, what can run in parallel, what
+        must be proven before it is generalized, and what "done" means at each step.
+      </p>
+      <div class="meta-row">
+        <span><b>Version</b> 1.0 — proposed</span>
+        <span><b>Constraints</b> Discovery ✅ · Domain Architecture ✅ · Design System v1.0 ✅ · Frontend Technical Architecture v1.0 ✅</span>
+        <span><b>Status</b> Awaiting approval before implementation begins</span>
+      </div>
+
+      <div class="callout" style="margin-top:26px;">
+        <h4>How to read this document</h4>
+        <p>The four approved documents are <b>frozen constraints</b>. This roadmap does not revisit a single
+        architectural decision; where it appears to, it is wrong and they win. References are cited as
+        <b>Discovery</b>, <b>Architecture §n</b>, <b>Design System §n</b>, and <b>FTA §n / D-n</b> (the Frontend
+        Technical Architecture and its numbered decisions).</p>
+        <p>What this document <em>does</em> decide is execution: milestone boundaries, sequencing, parallelism,
+        risk mitigation, and gates. Where it recommends an order that differs from the one an approved document
+        sketched, that difference is called out explicitly in a <b>⚖ Decision</b> callout and reconciled — never
+        applied silently.</p>
+      </div>
+    </header>
+
+    <!-- ============ 1 ============ -->
+    <section id="s1">
+      <div class="sec-head"><span class="eyebrow">01</span><h2>Roadmap philosophy</h2></div>
+      <p class="lead-p sec-intro">Six principles govern the ordering. Every sequencing decision in this document
+      is derivable from them, and where two of them conflict, the earlier one wins.</p>
+
+      <div class="grid cols-2">
+        <div class="card"><h4>1 · Build the riskiest unknown early, not the easiest win</h4>
+          <p>Sequence by <em>where the project could fail</em>, not by what demos well. The things that can
+          genuinely derail this build are: a missing backend controller, an abstraction that hardens wrongly, a
+          cross-domain cache bug that shows an operator a stale capacity. Each is scheduled to surface as early
+          as it possibly can.</p>
+          <p><b>Why:</b> a risk discovered in month four costs the four months. The purpose of ordering is to
+          convert unknowns into knowns while there is still time to react cheaply.</p></div>
+
+        <div class="card"><h4>2 · Prove a pattern on real work before generalizing it</h4>
+          <p>No shared abstraction is built <em>before</em> the concrete cases that justify it. The pattern
+          library emerges from the first real resources; it is not authored in advance against an imagined one.</p>
+          <p><b>Why:</b> FTA D-11 names the failure mode precisely — "the abstraction that eats the app" — and
+          FTA §12's rule of three exists to prevent it. A roadmap that builds all six page patterns before
+          shipping a single real screen violates the architecture it is meant to execute. This is the single
+          biggest change this document makes to the sketch in Architecture §11, and §2 argues it fully.</p></div>
+
+        <div class="card"><h4>3 · Every milestone ships something an operator could use</h4>
+          <p>Milestones are vertical, not horizontal. "The API layer is done" is not a milestone; "villes can be
+          created, listed, edited and deleted by a permitted user against the real backend" is.</p>
+          <p><b>Why:</b> horizontal layers cannot be validated — a "finished" data layer with no screen on top of
+          it is a hypothesis. Vertical slices are the only unit of work that proves the layers actually fit
+          together, and they are the only unit a stakeholder can respond to.</p></div>
+
+        <div class="card"><h4>4 · Dependencies dictate order; preference does not</h4>
+          <p>Money attributes transactions to agents; Stock moves inventory between them; Grattage is the seam
+          between the two ledgers. That dependency graph (Architecture §2) is a fact about the business, and it
+          fixes the domain sequence regardless of which domain anyone finds most interesting.</p>
+          <p><b>Why:</b> building a domain whose foreign keys point at a domain that does not exist yet means
+          mocking those references — and every mock is a second implementation that must later be removed and
+          re-tested.</p></div>
+
+        <div class="card"><h4>5 · Unblock the backend before you are blocked by it</h4>
+          <p>Two backend gaps are already known: Companies and Suppliers have no controllers, and several Overview
+          endpoints are unrouted (Discovery §6, Architecture §5). Neither is discovered by this roadmap — both
+          are <em>scheduled</em> by it, as tickets raised at project start rather than at the moment they stall a
+          developer.</p>
+          <p><b>Why:</b> backend work has lead time and a different queue. A dependency raised the week it blocks
+          you is a dependency that blocks you.</p></div>
+
+        <div class="card"><h4>6 · Enforcement infrastructure comes before the code it governs</h4>
+          <p>The boundary lint rule (FTA §4), the formatter module (Design System §5/§27), and the permission
+          registry (FTA §6) are built <em>first</em> — before there is any code to violate them.</p>
+          <p><b>Why:</b> a boundary rule added after three months of building produces two hundred violations,
+          and two hundred violations get suppressed in a batch, and the rule is now decorative. Retrofitting
+          enforcement is not a smaller version of building it early — it is a different, failing activity.</p></div>
+      </div>
+    </section>
+
+    <!-- ============ 2 ============ -->
+    <section id="s2">
+      <div class="sec-head"><span class="eyebrow">02</span><h2>Overall delivery strategy</h2></div>
+      <p class="lead-p sec-intro">The conventional shape for this kind of project — foundation, then
+      infrastructure, then shared UI, then domains, then hardening — is <em>mostly</em> right, and it is wrong in
+      one specific and expensive way. This section adopts it with one deliberate modification.</p>
+
+      <div class="flow">
+        <div class="flow-step"><span class="fs-name">0 · Pre-flight</span>
+          <span class="fs-why">Decisions signed, backend tickets raised, enforcement tooling in place. No product
+          code. Ends the moment a developer could start and be blocked by nothing.</span></div>
+        <div class="flow-arrow">↓</div>
+        <div class="flow-step"><span class="fs-name">1 · Walking skeleton</span>
+          <span class="fs-why">One real resource, end to end, through every layer of the architecture. The
+          infrastructure and the first screen are built <em>together</em>, because that is the only way to know
+          the infrastructure works.</span></div>
+        <div class="flow-arrow">↓</div>
+        <div class="flow-step"><span class="fs-name">2 · Pattern hardening</span>
+          <span class="fs-why">The second and third resources. The shared patterns are <em>extracted</em> here,
+          from three real cases — not invented earlier from zero.</span></div>
+        <div class="flow-arrow">↓</div>
+        <div class="flow-step"><span class="fs-name">3 · Business domains</span>
+          <span class="fs-why">Network → Money → Stock → Grattage, in the dependency order the backend already
+          fixed (Architecture §2). Each domain is now mostly configuration over proven patterns.</span></div>
+        <div class="flow-arrow">↓</div>
+        <div class="flow-step"><span class="fs-name">4 · Integration</span>
+          <span class="fs-why">The cross-domain surfaces — Agent 360, Client 360, the Overview widget grid —
+          which are only meaningful once the domains they compose exist.</span></div>
+        <div class="flow-arrow">↓</div>
+        <div class="flow-step"><span class="fs-name">5 · Hardening</span>
+          <span class="fs-why">Accessibility, performance, end-to-end coverage of the money paths, observability,
+          flag cleanup. Not a phase for finishing features — a phase for making finished features trustworthy.</span></div>
+      </div>
+
+      <div class="callout decision">
+        <h4>R-1 · The foundation is delivered <em>through</em> a real vertical slice, not before one</h4>
+        <p>Architecture §11's Phase 0 proposes building the five layouts, the component library, the permission
+        registry, and the CRUD generators "against no real domain yet — or against a throwaway/reference
+        resource," shipping nothing user-facing. The instinct is sound: get the reusable machinery in place so
+        every later phase is configuration rather than construction. <b>This roadmap adopts the second option
+        §11 offers, and rejects the first</b> — and the distinction is not cosmetic.</p>
+        <p><b>Building the pattern library against no real domain directly contradicts the architecture it is
+        meant to serve.</b> FTA D-11 warns of "the abstraction that eats the app," and FTA §12 requires promotion
+        to shared to be justified by <em>stable shared semantics</em> evidenced across independent uses — with
+        two uses explicitly insufficient. A Phase 0 that authors DataTable, FilterBar, ListPage, DetailPage,
+        DraftLifecyclePage, and the CRUD generator against <em>zero</em> real resources produces exactly the
+        artifact both rules exist to prevent: six abstractions fitted to an imagined caller, hardened before any
+        real one exists, and then bent for months to accommodate the real ones as they arrive. The cost does not
+        appear in Phase 0 — it appears in every phase after it, as friction nobody attributes to the decision
+        that caused it.</p>
+        <p><b>Instead:</b> the foundation is built as the byproduct of shipping <em>Villes</em> — the simplest
+        real resource in the product — end to end (M1). That single slice forces every layer into existence
+        against a real API: the HTTP client, the error normalizer, the mapper, the query keys, the permission
+        registry, the URL filter state, the formatters, the shell. Then Secteurs (M2a) proves the second case,
+        and Products (M2b) the third — at which point the ListPage/FormDrawer/DataTable patterns are
+        <em>extracted</em> from three working screens rather than predicted. The rule of three is not just an
+        architectural rule here; it is the roadmap's sequencing mechanism.</p>
+        <p><b>What is <em>not</em> deferred,</b> and this is the part that keeps §11's intent intact: the things
+        that cannot be retrofitted are still built first, in M0 — the boundary lint rule, the config validator,
+        the permission registry's shape, the formatter module. Enforcement precedes code (§1, principle 6);
+        abstraction follows evidence (principle 2). Those are different things, and Phase 0 conflated them.</p>
+      </div>
+
+      <div class="callout rule">
+        <h4>Why this order minimizes risk — the specific mechanism</h4>
+        <p>Each stage above exists to <b>convert one class of unknown into a known, in ascending order of what it
+        would cost to discover late</b>.</p>
+        <p><b>Pre-flight</b> converts <em>external</em> unknowns (is the language decided? do the endpoints
+        exist? are the error codes documented?) — the ones with the longest lead time and the least
+        controllable. <b>The walking skeleton</b> converts <em>integration</em> unknowns: does our auth actually
+        work against Sanctum, does the mapper handle the real status vocabulary, does the 401 policy behave when
+        five requests fail at once? These are the unknowns that are cheap to fix in one thin slice and
+        catastrophic to discover in the fifteenth. <b>Pattern hardening</b> converts <em>abstraction</em>
+        unknowns: is this really one shape, or three that look alike? <b>The domain phases</b> convert
+        <em>domain</em> unknowns, in dependency order, so no domain is built against a mock of another.
+        <b>Integration</b> converts <em>composition</em> unknowns. <b>Hardening</b> converts <em>quality</em>
+        unknowns — deliberately last, because it is the only class that can be safely discovered late.</p>
+      </div>
+    </section>
+
+    <!-- ============ 3 ============ -->
+    <section id="s3">
+      <div class="sec-head"><span class="eyebrow">03</span><h2>Milestones</h2></div>
+      <p class="lead-p sec-intro">Nine milestones. Each has a goal, deliverables, dependencies, and exit
+      criteria — and each exit criterion is written to be <em>observable</em>, because a criterion that requires
+      judgment to evaluate will be judged generously by the person who wants to move on.</p>
+
+      <div class="ms crit">
+        <div class="ms-head"><span class="ms-id">M0</span><h4>Pre-flight — nothing blocks a developer</h4>
+          <span class="chip bad">blocking</span></div>
+        <p class="ms-goal">Remove every external dependency and put the enforcement machinery in place, before
+        one line of product code exists. This is the only milestone that ships no feature, and it is the one most
+        likely to be skipped under pressure — which is why it is a gate.</p>
+        <div class="ms-fields">
+          <div class="ms-field"><span class="label">Deliverables</span>
+            <ul>
+              <li><b>O-1 signed off</b> — the interface language (French-first, Design System §27). Blocking:
+                every label, error message, and empty state written before this is settled is rework.</li>
+              <li><b>Backend tickets raised</b> — Companies/Suppliers controllers; Overview endpoint routing
+                (<span class="mono">chartData</span>, <span class="mono">recentActivities</span>,
+                <span class="mono">agentsOverview</span>); confirmation of the documented domain error-code
+                catalogue.</li>
+              <li><b>Boundary lint rule</b> enforcing FTA §4's import matrix, failing CI.</li>
+              <li><b>Config validator</b> with fail-fast bootstrap; the four environments defined (FTA §14).</li>
+              <li><b>Test harness</b> — MSW wired, fixtures sourced from the backend's Postman collection
+                (FTA D-15), CI running lint + typecheck + tests.</li>
+              <li><b>ADR log started</b>; ADR-0001 (token storage) recorded as written in FTA §17.</li>
+            </ul></div>
+          <div class="ms-field"><span class="label">Dependencies</span>
+            <p>None. This is the entry point. Two deliverables depend on <em>other people</em> (product sign-off
+            on O-1; the backend team accepting tickets), which is precisely why they are scheduled at the
+            beginning rather than at the moment they bite.</p>
+            <p style="margin-top:8px;"><b>Note:</b> the backend tickets do not need to be <em>delivered</em> to
+            exit M0 — only raised and accepted with an estimate. What must not happen is discovering in M5 that
+            Companies has no API and nobody knew.</p></div>
+        </div>
+        <div class="ms-exit ms-field"><span class="label">Exit criteria</span>
+          <ul>
+            <li>A deliberate boundary violation, committed to a branch, <b>fails CI</b> — demonstrated, not assumed.</li>
+            <li>The app fails to boot, loudly, with a missing required env var — demonstrated.</li>
+            <li>O-1 has a written decision from product.</li>
+            <li>Backend tickets exist, are accepted, and have owners.</li>
+          </ul></div>
+      </div>
+
+      <div class="ms crit">
+        <div class="ms-head"><span class="ms-id">M1</span><h4>Walking skeleton — one resource, every layer</h4>
+          <span class="chip bad">highest risk</span></div>
+        <p class="ms-goal">Ship <b>Villes</b> end to end against the real backend: login → shell → list → filter →
+        create → edit → delete, with permissions, error handling, and URL state. The narrowest possible slice
+        that touches <em>every</em> layer of FTA §2.</p>
+        <div class="ms-fields">
+          <div class="ms-field"><span class="label">Deliverables</span>
+            <ul>
+              <li>HTTP client + interceptors + <span class="mono">AppError</span> normalization (FTA §7, §11).</li>
+              <li><b>The 401 session policy</b>, including concurrent-401 collapse (FTA §11) — the gap Discovery
+                found, closed on day one rather than patched later.</li>
+              <li>Query client + staleTime tiers + key factory for one resource (FTA §8).</li>
+              <li>Session store (the single <span class="mono">localStorage</span> owner) + permission registry
+                and evaluator + route guard generation (FTA §6, §14).</li>
+              <li>AppShell, sidebar rendering from the registry, breadcrumb.</li>
+              <li>Formatters module — money, dates, phone, identifiers (Design System §5/§27).</li>
+              <li>Villes: list, filter-in-URL, create/edit drawer, delete confirmation. Written <em>directly</em>,
+                not through a generator.</li>
+            </ul></div>
+          <div class="ms-field"><span class="label">Dependencies &amp; risks</span>
+            <p><b>Depends on:</b> M0.</p>
+            <p style="margin-top:8px;"><b>This is where the integration risk lives.</b> Everything unproven about
+            the architecture is proven or disproven here: Sanctum bearer flow, the real pagination envelope, the
+            error-code shape, whether the permission strings in the login payload match the registry's names,
+            whether the French/English status vocabulary behaves as the mapper expects.</p>
+            <p style="margin-top:8px;"><b>Villes is chosen deliberately:</b> lowest business stakes, simplest
+            schema, a real endpoint, and no dependency on any other domain. If the architecture is wrong, it is
+            wrong cheaply here.</p></div>
+        </div>
+        <div class="ms-exit ms-field"><span class="label">Exit criteria</span>
+          <ul>
+            <li>A permitted user creates a real ville against the real backend, through the full stack.</li>
+            <li>A user <em>without</em> the permission sees no nav item, no button, and the calm 403 on direct URL entry.</li>
+            <li>A filtered list URL, pasted into a second browser, reproduces the same view (Design System §15).</li>
+            <li>An expired token mid-session produces <b>one</b> clean redirect to login, with the return path preserved — verified with concurrent requests in flight.</li>
+            <li>A forced 500 renders the error state with a support reference; a forced 422 maps to its field.</li>
+          </ul></div>
+      </div>
+
+      <div class="ms">
+        <div class="ms-head"><span class="ms-id">M2</span><h4>Pattern hardening — the rule of three, executed</h4>
+          <span class="chip accent">the extraction point</span></div>
+        <p class="ms-goal">Ship <b>Secteurs</b> and <b>Products</b>, and <em>only then</em> extract the shared
+        ListPage / DataTable / FilterBar / FormDrawer patterns and the resource-definition module from the three
+        working screens.</p>
+        <div class="ms-fields">
+          <div class="ms-field"><span class="label">Deliverables</span>
+            <ul>
+              <li><b>M2a — Secteurs:</b> built by copying Villes. Duplication is <em>expected and correct</em>
+                here (FTA §12: two uses do not justify promotion).</li>
+              <li><b>M2b — Products:</b> the third case. Now the shape is evidence, not a guess.</li>
+              <li><b>M2c — Extraction:</b> DataTable (TanStack Table headless), FilterBar, ListPage,
+                FormDrawer, the resource-definition module (FTA §12), StatusBadge, MoneyAmount, EntityChip,
+                ConfirmActionDialog.</li>
+              <li>Villes and Secteurs <b>refactored onto the extracted patterns</b> — which is the proof the
+                extraction is real.</li>
+            </ul></div>
+          <div class="ms-field"><span class="label">Dependencies &amp; rationale</span>
+            <p><b>Depends on:</b> M1.</p>
+            <p style="margin-top:8px;">This milestone looks wasteful — three near-identical screens, then a
+            refactor — and it is the cheapest insurance in the roadmap. The alternative is designing the
+            DataTable's API from imagination and then discovering in M4 that approval queues need a row state it
+            cannot express.</p>
+            <p style="margin-top:8px;"><b>The refactor of Villes and Secteurs is not optional.</b> If the
+            extracted pattern cannot absorb the two screens it was extracted from, it is not a pattern — and
+            finding that out costs an afternoon here instead of a quarter later.</p></div>
+        </div>
+        <div class="ms-exit ms-field"><span class="label">Exit criteria</span>
+          <ul>
+            <li>Products ships with <b>no new pattern code</b> — a definition, a mapper, a key factory, a route.</li>
+            <li>Villes and Secteurs run on the extracted patterns with no behavior change.</li>
+            <li>The resource-definition module contains no permission literals, no route paths, no business logic (FTA §12).</li>
+            <li><b>A fourth resource is estimable in hours, and the team agrees on the number.</b></li>
+          </ul></div>
+      </div>
+
+      <div class="ms">
+        <div class="ms-head"><span class="ms-id">M3</span><h4>Network — the identity graph</h4>
+          <span class="chip ok">foundation domain</span></div>
+        <p class="ms-goal">Admins, Managers, Commercials, Clients. Every subsequent domain foreign-keys into this
+        one, so it is built before any of them (Architecture §2).</p>
+        <div class="ms-fields">
+          <div class="ms-field"><span class="label">Deliverables</span>
+            <ul>
+              <li>Admins, Agents (managers + commercials), Clients: ListPage + DetailPage + forms.</li>
+              <li><b>CreateWizard</b> — agent onboarding, the only wizard in the product (FTA D-9). Multi-file
+                upload with named slots (Design System §12).</li>
+              <li>EntityChip/entity-picker autocomplete — the one sanctioned infinite query (FTA §8).</li>
+              <li>Client bulk-assign — the first bulk action, exercising the 100-cap and the deliberate
+                all-pages selection step (Design System §14).</li>
+            </ul></div>
+          <div class="ms-field"><span class="label">Dependencies &amp; risks</span>
+            <p><b>Depends on:</b> M2 (patterns), and Reference data for the ville/secteur pickers — which is why
+            Reference was the walking-skeleton vehicle rather than an afterthought.</p>
+            <p style="margin-top:8px;"><b>Risk:</b> the onboarding wizard is the first form complex enough to
+            hurt — ~20 required fields, conditional by role, multi-file. It is also the form where FTA §10's rule
+            ("a lost connection MUST NOT cost a filled wizard its data") is genuinely tested.</p></div>
+        </div>
+        <div class="ms-exit ms-field"><span class="label">Exit criteria</span>
+          <ul>
+            <li>An agent is onboarded end to end, with documents, against the real backend.</li>
+            <li>A network failure at the wizard's final step loses nothing.</li>
+            <li>The entity picker is used everywhere a foreign key is chosen; no raw ID entry exists in any form (FTA §7).</li>
+          </ul></div>
+      </div>
+
+      <div class="ms">
+        <div class="ms-head"><span class="ms-id">M4</span><h4>Money — the first irreversible actions</h4>
+          <span class="chip warn">first money path</span></div>
+        <p class="ms-goal">Cheques, Deposits, Debt Payments. The first approval queues, the first irreversible
+        confirmations, and the first cross-domain cache invalidation.</p>
+        <div class="ms-fields">
+          <div class="ms-field"><span class="label">Deliverables</span>
+            <ul>
+              <li>Cheques: submission, pending queue, approve / reject / annuler.</li>
+              <li>Deposits: list (filterable by type), validate, reject.</li>
+              <li>Debt Payments: list + submit.</li>
+              <li><b>ApprovalQueuePage</b> — first instance of the pattern (Architecture §8).</li>
+              <li><b>The freshness rule, implemented</b> (FTA §8): confirmation dialogs render from a fresh
+                refetch, and refuse the action if the record changed underneath the operator.</li>
+              <li><b>The invalidation map</b> (FTA D-3) — its first real entries:
+                <span class="mono">cheque.approved</span> → agent capacity.</li>
+              <li>Error-code registry entries for the Money domain's 409 families (FTA D-10).</li>
+            </ul></div>
+          <div class="ms-field"><span class="label">Dependencies &amp; parallel track</span>
+            <p><b>Depends on:</b> M3 (transactions attribute to agents).</p>
+            <p style="margin-top:8px;"><b>Parallel track — the DraftLifecyclePage spike.</b> While Money is
+            built, a second developer prototypes the LineItemsEditor and DraftLifecyclePage against Bons
+            (§6, §7). This is the roadmap's main risk mitigation: the hardest pattern in the app is de-risked
+            <em>before</em> the milestone that depends on it four times over.</p></div>
+        </div>
+        <div class="ms-exit ms-field"><span class="label">Exit criteria</span>
+          <ul>
+            <li>Approving a cheque updates the agent's capacity <b>without a manual refresh</b> — the invalidation map, proven.</li>
+            <li>A confirmation dialog opened on a stale record refuses to submit and explains why.</li>
+            <li>Two admins approving the same pending cheque: the second sees a clean domain error, not a crash.</li>
+            <li>No mutation retries automatically, anywhere (FTA §11) — verified by review and test.</li>
+          </ul></div>
+      </div>
+
+      <div class="ms">
+        <div class="ms-head"><span class="ms-id">M5</span><h4>Stock — one lifecycle, four times</h4>
+          <span class="chip warn">largest domain</span></div>
+        <p class="ms-goal">Bons → Allocations → Agent Transfers → Agent Stock Returns. Four resources, one
+        DraftLifecyclePage, proven once and configured three times.</p>
+        <div class="ms-fields">
+          <div class="ms-field"><span class="label">Deliverables</span>
+            <ul>
+              <li>DraftLifecyclePage + LineItemsEditor, productionized from the M4 spike.</li>
+              <li>All four movement types: draft → lines → irreversible validate, plus cancel.</li>
+              <li>Stock domain error codes registered with recovery paths — including
+                <span class="mono">COMMERCIAL_HAS_STOCK_CANNOT_REASSIGN</span> linking to the return flow.</li>
+              <li>Zero-stock reassignment guard surfaced in the Agent edit form (Architecture §6) — a Stock value
+                shown inside a Network form, via public surface only.</li>
+              <li>Companies &amp; Suppliers screens — <b>behind a feature flag</b>, dark until the M0 backend
+                ticket lands (FTA D-12).</li>
+            </ul></div>
+          <div class="ms-field"><span class="label">Dependencies &amp; risks</span>
+            <p><b>Depends on:</b> M3 (agents as counterparties), M4's spike (the lifecycle pattern).</p>
+            <p style="margin-top:8px;"><b>Risk — the Companies/Suppliers blocker.</b> If the backend ticket has
+            not landed, Stock does <em>not</em> stall: the four movement types do not depend on those directory
+            screens. The flag keeps the UI dark and the milestone completes without them, with the flag carrying
+            its removal condition (§7).</p>
+            <p style="margin-top:8px;"><b>Risk — validation is irreversible.</b> This is the milestone where a
+            bug moves real stock. The E2E suite (M8) starts here, not at the end.</p></div>
+        </div>
+        <div class="ms-exit ms-field"><span class="label">Exit criteria</span>
+          <ul>
+            <li>All four movement types validate irreversibly, with stock-check errors rendering their registered recovery path.</li>
+            <li>The fourth movement type required <b>no changes</b> to DraftLifecyclePage — the pattern held.</li>
+            <li>Reassigning a commercial holding stock is blocked <em>in the form</em>, with an explanation, not by a round-tripped 422.</li>
+          </ul></div>
+      </div>
+
+      <div class="ms seam">
+        <div class="ms-head"><span class="ms-id">M6</span><h4>Grattage — the seam</h4>
+          <span class="chip accent2">cross-domain</span></div>
+        <p class="ms-goal">Invoices, outstanding obligations, and the restock gate — the one deliberate
+        domain→domain import in the architecture (FTA §13).</p>
+        <div class="ms-fields">
+          <div class="ms-field"><span class="label">Deliverables</span>
+            <ul>
+              <li>Grattage invoice list / detail / cancel.</li>
+              <li>Outstanding-obligation view per agent.</li>
+              <li><b>The restock-gate hook</b>, exported from Grattage's public surface and consumed by Stock's
+                Allocation and Agent-Transfer forms (Architecture §6, FTA §4 mechanism 2).</li>
+              <li>Invalidation map: <span class="mono">deposit.validated</span> → grattage invoices settle.</li>
+              <li>Deposit ↔ invoice bidirectional links (Architecture §6).</li>
+            </ul></div>
+          <div class="ms-field"><span class="label">Dependencies &amp; scope</span>
+            <p><b>Depends on:</b> M4 (deposit validation) and M5 (stock capacity). Built last among the domains
+            deliberately — a seam is only meaningful once both sides exist, and building it earlier would mean
+            mocking one of them.</p>
+            <p style="margin-top:8px;"><b>Explicitly not built:</b> admin-create and admin-settle. Both routes
+            hard-403 by backend design (Phase 5.8b / 5.10). No UI invokes them, and no workaround is attempted
+            (Architecture §5).</p></div>
+        </div>
+        <div class="ms-exit ms-field"><span class="label">Exit criteria</span>
+          <ul>
+            <li>Validating a reconciliation deposit flips its grattage invoices to settled, visibly, without a refresh.</li>
+            <li>Allocating to a gated commercial surfaces the gate <b>in the form, before submit</b> — not as a post-submit failure.</li>
+            <li>Stock imports exactly one thing from Grattage: the gate hook. Verified by the boundary lint.</li>
+          </ul></div>
+      </div>
+
+      <div class="ms">
+        <div class="ms-head"><span class="ms-id">M7</span><h4>Integration — the composed surfaces</h4></div>
+        <p class="ms-goal">Agent 360, Client 360, and the Overview widget grid — everything that composes domains
+        rather than owning them.</p>
+        <div class="ms-fields">
+          <div class="ms-field"><span class="label">Deliverables</span>
+            <ul>
+              <li>WorkspacePage pattern; Agent 360 (Network + Money + Stock + Grattage) and Client 360.</li>
+              <li>Overview widget grid: KPI tiles, queues, charts (Architecture §5).</li>
+              <li>Independent panel error boundaries — one dead panel must not blank the other four (FTA §11).</li>
+              <li>Parallel query firing verified — no serial waterfall (FTA §8).</li>
+            </ul></div>
+          <div class="ms-field"><span class="label">Dependencies &amp; risks</span>
+            <p><b>Depends on:</b> M3–M6, all complete. This is the milestone that cannot be pulled forward, and
+            attempting to would mean mocking four domains.</p>
+            <p style="margin-top:8px;"><b>Risk:</b> the Overview's chart/activity endpoints were unrouted at
+            discovery. If the M0 ticket has not landed, Overview ships with the widgets whose endpoints exist and
+            flags the rest — the widget grid was designed for exactly this (Architecture §5).</p></div>
+        </div>
+        <div class="ms-exit ms-field"><span class="label">Exit criteria</span>
+          <ul>
+            <li>Agent 360 composes four domains with <b>zero boundary-lint suppressions</b>.</li>
+            <li>Its independent panels fire in parallel — verified in the network panel, not assumed.</li>
+            <li>Killing one panel's endpoint degrades that panel only.</li>
+          </ul></div>
+      </div>
+
+      <div class="ms">
+        <div class="ms-head"><span class="ms-id">M8</span><h4>Hardening — making it trustworthy</h4></div>
+        <p class="ms-goal">Not a phase for finishing features. A phase for proving the finished ones deserve an
+        operator's trust.</p>
+        <div class="ms-fields">
+          <div class="ms-field"><span class="label">Deliverables</span>
+            <ul>
+              <li><b>E2E suite</b> on the irreversible money paths (FTA §16) — begun at M5, completed here.</li>
+              <li>Accessibility pass: keyboard-complete flows, focus visibility, contrast, reduced motion
+                (Design System §1, §10).</li>
+              <li>Performance: no serial waterfalls, time-to-populated-table measured per domain (FTA §18).</li>
+              <li>Observability live: error reporting with PII scrubbing, correlation IDs surfaced as support
+                references (FTA §11, §18).</li>
+              <li><b>Flag cleanup</b> — every expired flag removed with its dead branch (FTA §14).</li>
+              <li>ADR log reconciled with what was actually built.</li>
+            </ul></div>
+          <div class="ms-field"><span class="label">Dependencies</span>
+            <p><b>Depends on:</b> M7.</p>
+            <p style="margin-top:8px;"><b>Why quality is last and this is not a contradiction:</b> the
+            <em>rules</em> (formatters, focus states, error handling, boundaries) are enforced from M0 onward and
+            are never deferred. What is deferred is the <em>audit</em> — the systematic sweep that catches what
+            enforcement missed. Deferring the audit is safe; deferring the rules is not, and this roadmap does
+            neither by accident.</p></div>
+        </div>
+        <div class="ms-exit ms-field"><span class="label">Exit criteria</span>
+          <ul>
+            <li>Every irreversible flow has a passing E2E test against a real backend.</li>
+            <li>Every flow is completable by keyboard alone.</li>
+            <li>Zero expired feature flags; zero boundary suppressions without an ADR.</li>
+            <li>No P1 defects open.</li>
+          </ul></div>
+      </div>
+    </section>
+
+    <!-- ============ 4 ============ -->
+    <section id="s4">
+      <div class="sec-head"><span class="eyebrow">04</span><h2>Detailed implementation order</h2></div>
+      <p class="lead-p sec-intro">The milestones of §3, restated as the sequence a team executes — with the
+      reconciliation to Architecture §11 made explicit, so nobody has to wonder whether this document is
+      contradicting an approved one.</p>
+
+      <h3 class="sub">Reconciliation with the approved Architecture §11 roadmap</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th style="min-width:170px;">Architecture §11</th><th>This roadmap</th><th>Relationship</th></tr></thead>
+          <tbody>
+            <tr><td><b>Phase 0</b> — Platform foundation<br>(shell, patterns, registry, generators)</td>
+              <td><b>M0</b> + <b>M1</b> + <b>M2</b></td>
+              <td><b>Refined, not replaced.</b> The same deliverables, sequenced differently: enforcement and
+                infrastructure first (M0/M1), abstraction <em>after</em> three real cases (M2). §11 explicitly
+                permitted building "against a throwaway/reference resource" — this takes that option and makes
+                the reference resources real, shippable ones (R-1).</td></tr>
+            <tr><td><b>Phase 1</b> — Network &amp; Reference</td>
+              <td><b>M1</b>/<b>M2</b> (Reference) + <b>M3</b> (Network)</td>
+              <td><b>Split, order preserved.</b> §11 already noted Reference "rides along… and Agents/Clients
+                forms need Villes/Secteurs pickers anyway." This makes that dependency explicit by putting
+                Reference first, where it doubles as the walking skeleton.</td></tr>
+            <tr><td><b>Phase 2</b> — Money</td><td><b>M4</b></td>
+              <td><b>Unchanged.</b> Plus a parallel DraftLifecyclePage spike (§6).</td></tr>
+            <tr><td><b>Phase 3</b> — Stock</td><td><b>M5</b></td><td><b>Unchanged.</b></td></tr>
+            <tr><td><b>Phase 4</b> — Grattage</td><td><b>M6</b></td><td><b>Unchanged.</b></td></tr>
+            <tr><td><b>Phase 5</b> — Cross-module integration</td><td><b>M7</b></td><td><b>Unchanged.</b></td></tr>
+            <tr><td>— <span class="chip neutral">not in §11</span></td><td><b>M8</b> — Hardening</td>
+              <td><b>Added.</b> §11 ended at integration. A financial tool needs an explicit hardening milestone,
+                or "quality" becomes whatever was left when the features ran out.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout">
+        <h4>The net change, in one sentence</h4>
+        <p><b>The domain sequence is exactly as approved</b> — Reference → Network → Money → Stock → Grattage →
+        Integration. What changes is <em>how the foundation is delivered</em> (through real slices rather than
+        ahead of them), <em>when abstraction happens</em> (after three cases, not before one), and <em>that
+        hardening is a milestone rather than a hope</em>. No architectural decision is revisited.</p>
+      </div>
+
+      <h3 class="sub">Phase detail</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th style="min-width:70px;">Phase</th><th>Objective &amp; why it exists</th><th>Principal risk</th><th>Validation</th></tr></thead>
+          <tbody>
+            <tr><td><b>M0</b><br><span class="chip bad">gate</span></td>
+              <td><b>Remove external blockers and install enforcement.</b> Exists because the two things this
+                project cannot recover from cheaply — a language decision made late, and boundaries enforced late
+                — are both free to prevent and expensive to fix.</td>
+              <td>Skipped under pressure to "start building." The most likely failure of the whole roadmap.</td>
+              <td>A boundary violation fails CI, demonstrated on a branch.</td></tr>
+            <tr><td><b>M1</b><br><span class="chip bad">risk peak</span></td>
+              <td><b>Prove the architecture end to end on the cheapest possible resource.</b> Exists to convert
+                every integration unknown into a known while the blast radius is one screen.</td>
+              <td>Auth, error, or pagination contract differs from what the documents assumed.</td>
+              <td>A real ville created against the real backend; concurrent-401 produces one redirect.</td></tr>
+            <tr><td><b>M2</b><br><span class="chip accent">extraction</span></td>
+              <td><b>Earn the abstractions.</b> Exists because FTA D-11 and §12 forbid promoting on fewer than
+                three independent cases, and the roadmap must obey the architecture it executes.</td>
+              <td>Extracting too much (a config DSL forms) or too little (duplication persists into M3+).</td>
+              <td>The third resource ships with no new pattern code; the first two refactor onto the pattern
+                cleanly.</td></tr>
+            <tr><td><b>M3</b></td>
+              <td><b>Build the identity graph everything references.</b> Exists first among the business domains
+                because every other domain foreign-keys into it (Architecture §2).</td>
+              <td>The onboarding wizard — 20 fields, conditional, multi-file — is underestimated.</td>
+              <td>An agent onboarded end to end; a network failure at the final step loses nothing.</td></tr>
+            <tr><td><b>M4</b><br><span class="chip warn">money</span></td>
+              <td><b>First irreversible actions and first cross-domain invalidation.</b> Exists before Stock
+                because Stock's capacity gates read values Money produces.</td>
+              <td>A stale-cache approval. The highest-consequence bug class in the product.</td>
+              <td>Approving a cheque updates capacity with no manual refresh; a stale confirmation refuses.</td></tr>
+            <tr><td><b>M5</b><br><span class="chip warn">money</span></td>
+              <td><b>The four-stage physical chain on one lifecycle pattern.</b> Exists after the M4 spike has
+                de-risked that pattern.</td>
+              <td>DraftLifecyclePage does not generalize across all four movement types.</td>
+              <td>The fourth type requires no pattern changes.</td></tr>
+            <tr><td><b>M6</b><br><span class="chip accent2">seam</span></td>
+              <td><b>Close the loop between the two ledgers.</b> Exists last among domains because a seam needs
+                both sides to be real.</td>
+              <td>The one sanctioned cross-domain import becomes two, then five.</td>
+              <td>Boundary lint shows exactly one Grattage→Stock edge.</td></tr>
+            <tr><td><b>M7</b></td>
+              <td><b>Compose what now exists.</b> Exists last because it can only exist last.</td>
+              <td>Serial query waterfalls; boundary violations justified as "it's just the workspace."</td>
+              <td>Parallel firing verified in the network panel; zero suppressions.</td></tr>
+            <tr><td><b>M8</b></td>
+              <td><b>Audit and harden.</b> Exists because quality that is not scheduled is not delivered.</td>
+              <td>Compressed into "the last week" when a date slips.</td>
+              <td>E2E green on every irreversible path; every flow keyboard-complete.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ 5 ============ -->
+    <section id="s5">
+      <div class="sec-head"><span class="eyebrow">05</span><h2>Domain rollout strategy</h2></div>
+      <p class="lead-p sec-intro">The domain order is not a preference and it is not negotiable by taste — it is
+      read directly off the dependency graph the backend already enforces (Architecture §2). This section states
+      the justification, and then answers the one reordering question a reasonable engineer will ask.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th style="min-width:60px;">Order</th><th>Domain</th><th>Why here, and not earlier or later</th></tr></thead>
+          <tbody>
+            <tr><td><b>1</b></td><td><b>Reference</b><br><span class="chip neutral">villes · secteurs · products</span></td>
+              <td><b>First, because it is the cheapest real thing that exists.</b> No lifecycle, no workflow, no
+                dependency on any other domain — and every Network form needs its pickers. It is therefore both
+                the lowest-risk vehicle for proving the architecture (M1) and a genuine prerequisite for M3. The
+                two facts point the same way, which is a good sign that this is right.</td></tr>
+            <tr><td><b>2</b></td><td><b>Network</b><br><span class="chip ok">admins · agents · clients</span></td>
+              <td><b>Second, because everything downstream foreign-keys into it.</b> Cheques attribute to an
+                agent; allocations move stock to an agent; grattage invoices belong to a client. Building any of
+                those first means mocking agents — and a mock is a second implementation you must later remove
+                and re-test. Network also contains the one wizard, so its complexity is met while the schedule
+                still has slack.</td></tr>
+            <tr><td><b>3</b></td><td><b>Money</b><br><span class="chip warn">cheques · deposits · debt payments</span></td>
+              <td><b>Third, because it produces the capacity Stock consumes.</b> Approving a cheque grants an
+                agent rapped and grattage capacity; Stock's allocation forms read it. Building Stock first means
+                its capacity displays have nothing real to read. Money is also structurally simpler than Stock —
+                ListPage, DetailPage, ApprovalQueuePage, all proven by M2 — which makes it the right place to
+                meet the <em>first</em> irreversible action, rather than meeting it for the first time inside the
+                hardest pattern in the app.</td></tr>
+            <tr><td><b>4</b></td><td><b>Stock</b><br><span class="chip warn">bons · allocations · transfers · returns</span></td>
+              <td><b>Fourth, and the largest.</b> Four resources sharing one lifecycle pattern — proven once and
+                reused three times, which is why they are built together rather than scattered. It sits after
+                Money because of capacity, and after the M4 spike because DraftLifecyclePage is the riskiest
+                pattern in the product and should not be met cold.</td></tr>
+            <tr><td><b>5</b></td><td><b>Grattage</b><br><span class="chip accent2">the seam</span></td>
+              <td><b>Fifth, because a seam requires both sides.</b> It consumes Stock and is settled by Money's
+                deposit validation. Built earlier, its two most important behaviors — the settlement cascade and
+                the restock gate — could only be mocked, and a mocked seam proves nothing. Built here, both are
+                testable end to end on the first day they exist.</td></tr>
+            <tr><td><b>6</b></td><td><b>Overview &amp; workspaces</b><br><span class="chip accent">composition</span></td>
+              <td><b>Last, because it owns nothing.</b> It is a read surface over the five domains above
+                (Architecture §5). It cannot be built before them without mocking all of them, and it is the one
+                part of the app whose scope will expand to fill whatever time remains — which is another reason
+                to bound it at the end rather than let it sprawl at the start.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout decision">
+        <h4>R-2 · Should Stock come before Money, to meet the hardest pattern earlier?</h4>
+        <p>This is the strongest available objection to the approved order, and it deserves a real answer rather
+        than deference. The argument: DraftLifecyclePage is the app's riskiest pattern, four resources depend on
+        it, and principle 1 of §1 says <em>build the riskiest unknown early</em>. On that logic Stock should
+        precede Money.</p>
+        <p><b>Rejected — but the concern is legitimate, and it is addressed rather than dismissed.</b></p>
+        <p>Reordering fails on a dependency that is not negotiable: Stock's allocation and transfer forms display
+        and gate on <em>agent capacity</em>, which is produced by Money's cheque approvals. Building Stock first
+        means either mocking capacity (and re-testing it all later against the real thing) or shipping Stock
+        forms whose most important number is fake. Worse, it would mean meeting the product's first
+        <em>irreversible action</em> — a validate that debits one agent and credits another — inside its most
+        complex and least proven UI pattern, simultaneously. Two hard problems at once is not risk reduction; it
+        is risk concentration.</p>
+        <p><b>The concern is answered by a spike, not by a reorder.</b> The DraftLifecyclePage and LineItemsEditor
+        are prototyped in parallel during M4 (§6), against Bons, by a second developer. The riskiest pattern is
+        therefore <em>de-risked before M5 starts</em> — which is what principle 1 actually asks for — while the
+        dependency order stays intact and irreversibility is met first in the simpler domain. This is strictly
+        better than reordering on both axes, and it costs nothing but a decision to schedule it.</p>
+      </div>
+    </section>
+
+    <!-- ============ 6 ============ -->
+    <section id="s6">
+      <div class="sec-head"><span class="eyebrow">06</span><h2>Parallel work opportunities</h2></div>
+      <p class="lead-p sec-intro">Parallelism is a multiplier on throughput and a multiplier on merge pain. This
+      section identifies what can genuinely run concurrently <em>without violating a boundary or racing on a
+      shared file</em> — and states plainly where parallelism must not be attempted.</p>
+
+      <div class="callout rule">
+        <h4>The precondition: parallelism starts at M2, not before</h4>
+        <p><b>M0 and M1 are single-track work and MUST NOT be parallelized.</b> The walking skeleton is one thin
+        vertical slice through every layer; splitting it across developers means two people negotiating the shape
+        of the HTTP client, the error model, and the query keys <em>while discovering them</em>. The coordination
+        cost exceeds the work, and the output is a compromise architecture assembled by committee in week one.</p>
+        <p>One developer builds the skeleton. Everyone else works the genuinely independent track below.</p>
+      </div>
+
+      <h3 class="sub">Track B — independent from day one</h3>
+      <p style="font-size:0.9rem; color:var(--muted); max-width:76ch;">This work has <em>no dependency on the
+      domain layer at all</em> — it is pure, testable, and specified in complete detail by the approved Design
+      System. It can be built by a second developer during M0/M1 and consumed the moment it lands.</p>
+
+      <div class="grid cols-3">
+        <div class="card"><h4>Formatters</h4>
+          <p>Money, dates, relative dates, phone, identifiers, percentages, large numbers, absent values
+          (Design System §5, §27; FTA §14). Pure functions, fully specified, unit-testable in isolation. The
+          highest value-per-hour work in the entire project and it depends on nothing.</p></div>
+        <div class="card"><h4>Presentational primitives</h4>
+          <p>StatusBadge (the six-tone vocabulary, Design System §17), MoneyAmount, EntityChip, the empty-state
+          and error-state components (§22, §23). They take data as props and know no domain — which is exactly
+          what makes them parallelizable.</p></div>
+        <div class="card"><h4>Test &amp; tooling harness</h4>
+          <p>MSW setup, fixtures derived from the Postman collection (FTA D-15), render helpers, CI pipeline,
+          the boundary lint rule. Infrastructure for everyone, blocking no one.</p></div>
+      </div>
+
+      <h3 class="sub">Parallelism by milestone</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th style="min-width:70px;">During</th><th>Track A (primary)</th><th>Track B (parallel)</th><th>Safe because…</th></tr></thead>
+          <tbody>
+            <tr><td><b>M0–M1</b></td>
+              <td>Walking skeleton: HTTP, auth, query, permissions, shell, Villes.</td>
+              <td>Formatters, StatusBadge/MoneyAmount/EntityChip, MSW harness, lint rule.</td>
+              <td>Track B touches no domain and no infrastructure Track A is authoring. They meet only when Villes
+                consumes a formatter — a one-line import.</td></tr>
+            <tr><td><b>M2</b></td>
+              <td>Secteurs → Products → extraction of the shared patterns.</td>
+              <td>Error-code registry entries (as backend codes are documented); E2E harness against a real
+                staging backend.</td>
+              <td>The extraction is <b>single-track by necessity</b> — see the hot-file rule below. Two people
+                extracting one DataTable is the worst possible use of two people.</td></tr>
+            <tr><td><b>M3</b></td>
+              <td>Admins → Agents → Clients (ListPage/DetailPage/forms).</td>
+              <td><b>CreateWizard</b> (agent onboarding) — a distinct pattern, distinct files, one consumer.</td>
+              <td>The wizard is self-contained and its only integration point is the agent create endpoint. Two
+                developers, one domain, no shared file.</td></tr>
+            <tr><td><b>M4</b></td>
+              <td>Cheques → Deposits → Debt Payments; ApprovalQueuePage; invalidation-map entries.</td>
+              <td><b>DraftLifecyclePage + LineItemsEditor spike</b> against Bons (see R-2). <span class="chip warn">key mitigation</span></td>
+              <td>The spike lives in <span class="mono">stock/bons</span> and <span class="mono">shared/patterns</span>;
+                Money touches neither. This is the single most valuable parallel pairing in the roadmap — it
+                converts the project's biggest pattern risk into a known quantity a full milestone early.</td></tr>
+            <tr><td><b>M5</b></td>
+              <td>Bons → Allocations (productionizing the spike).</td>
+              <td>Agent Transfers → Agent Stock Returns, <em>once</em> the pattern is settled by Allocations.</td>
+              <td>Four resources, one pattern: parallelize only <b>after</b> the second resource proves the
+                pattern holds. Splitting all four on day one means four people each bending a still-unstable
+                pattern in four directions.</td></tr>
+            <tr><td><b>M6–M7</b></td>
+              <td>Grattage invoices + the restock-gate hook.</td>
+              <td>Overview widget grid (the widgets whose endpoints exist); WorkspacePage shell.</td>
+              <td>Overview and workspaces read domains through public surfaces only; they add no coupling. The
+                one join point is the gate hook, which Stock consumes after Grattage exports it.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout rule">
+        <h4>Hot files — the shared-state problem of a parallel team</h4>
+        <p>Four files in this architecture are touched by <em>every</em> domain, and they are therefore the
+        merge-conflict and correctness hotspots of any parallel work:</p>
+        <p><b>(1) The permission registry</b> (FTA §6). <b>(2) The invalidation map</b> (FTA D-3). <b>(3) The
+        error-code registry</b> (FTA D-10). <b>(4) The route table assembly</b> (FTA §5).</p>
+        <p>They are <em>intentionally</em> central — that centralization is the whole point of D-3, and
+        decentralizing them to reduce merge friction would reverse an approved decision. So the mitigation is
+        procedural, not architectural: these files are <b>append-mostly</b> (new entries, rarely edited ones),
+        each domain's entries are added in that domain's own pull request, and a change that <em>restructures</em>
+        one of them is a standalone PR that lands alone. Textual conflicts on append-only maps are trivial;
+        semantic conflicts on a restructure are not, and the two must never arrive together.</p>
+      </div>
+
+      <div class="callout bad">
+        <h4>What MUST NOT be parallelized</h4>
+        <p><b>The walking skeleton (M1)</b> — one architecture, discovered once, by one person, or it is
+        discovered three ways.</p>
+        <p><b>The pattern extraction (M2c)</b> — a shared abstraction designed by two people concurrently
+        acquires both of their assumptions and satisfies neither. Extract single-track, then parallelize the
+        consumers.</p>
+        <p><b>Two domains at once, before M3 completes.</b> Every domain foreign-keys into Network; starting Money
+        and Stock in parallel before agents exist means both teams mock agents, both build against the mock, and
+        both re-test when the real thing lands. That is not parallel work — it is duplicated work with a delayed
+        merge.</p>
+        <p><b>Anything that requires suppressing a boundary lint rule to proceed.</b> If parallel work needs a
+        suppression to compile, the split was wrong. Re-cut the work, do not suppress the rule (FTA §4).</p>
+      </div>
+    </section>
+
+    <!-- ============ 7 ============ -->
+    <section id="s7">
+      <div class="sec-head"><span class="eyebrow">07</span><h2>High-risk areas</h2></div>
+      <p class="lead-p sec-intro">Ranked by expected cost — probability multiplied by what it would take to
+      recover. Each row states the mitigation <em>already scheduled</em> in this roadmap, because a risk register
+      that does not change the plan is decoration.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th style="min-width:150px;">Risk</th><th>Why it is serious</th><th>Mitigation — and where it lands</th></tr></thead>
+          <tbody>
+            <tr class="group-row"><td colspan="3">Business &amp; correctness risk — the ones that cost money</td></tr>
+            <tr><td><b>Stale-cache approval</b><br><span class="chip bad">highest consequence</span></td>
+              <td>An operator approves a cheque or validates a deposit against a value that changed underneath
+                them. This is the failure the entire architecture is organized against, and it produces a
+                <em>financially wrong outcome that looks like a successful one</em> — the worst possible
+                combination, because nothing surfaces it.</td>
+              <td>FTA §8's freshness rule is implemented as an <b>M4 deliverable</b>, not a later refinement:
+                confirmations render from a fresh refetch and refuse to submit against a changed record. It is an
+                M4 exit criterion and an E2E test. The invalidation map (D-3) is proven in M4 with
+                <span class="mono">cheque.approved</span> → capacity.</td></tr>
+            <tr><td><b>Cross-domain invalidation gaps</b></td>
+              <td>A mutation in one domain silently fails to refresh another's cache. Subtle, invisible in
+                testing, and indistinguishable from "the UI is a bit slow" until an operator allocates stock
+                against capacity that was spent ten minutes ago.</td>
+              <td>Every invalidation-map entry ships <b>with a test</b>, as part of the mutation's PR (§8's gate).
+                The two highest-stakes edges — cheque→capacity (M4) and deposit→grattage settlement (M6) — are
+                exit criteria for their milestones and covered by E2E.</td></tr>
+            <tr><td><b>Irreversible action in an unproven pattern</b></td>
+              <td>Stock validation debits one agent and credits another, irreversibly, inside DraftLifecyclePage —
+                the app's most complex and least proven pattern.</td>
+              <td>Two scheduled mitigations: irreversibility is met <em>first</em> in the simpler Money domain
+                (M4), and the lifecycle pattern is <em>spiked in parallel</em> during M4 so M5 does not meet it
+                cold (R-2). The two hard problems are deliberately separated in time.</td></tr>
+            <tr class="group-row"><td colspan="3">External &amp; dependency risk — the ones with lead time</td></tr>
+            <tr><td><b>Companies &amp; Suppliers have no backend controller</b></td>
+              <td>Known since Discovery. If it surfaces when a developer reaches for it in M5, Stock stalls or
+                someone builds a workaround that must later be deleted.</td>
+              <td>Ticket raised at <b>M0</b>, months before it is needed. Stock does not depend on it — the four
+                movement types do not need the directory screens — so M5 completes regardless, with the UI dark
+                behind a flag carrying its removal condition (FTA D-12).</td></tr>
+            <tr><td><b>Overview endpoints unrouted</b></td>
+              <td>Discovery flagged <span class="mono">chartData</span>, <span class="mono">recentActivities</span>,
+                <span class="mono">agentsOverview</span> as needing routing. Overview is the landing page —
+                highly visible, and the easiest place for a gap to look like a broken product.</td>
+              <td>Ticket at <b>M0</b>. Overview is a <em>widget grid</em> by design (Architecture §5), so it ships
+                the widgets whose endpoints exist and flags the rest. The architecture already absorbed this
+                risk; the roadmap just has to not waste that.</td></tr>
+            <tr><td><b>O-1 (interface language) unsigned</b></td>
+              <td>Every label, empty state, error message, and confirmation written before this is decided is
+                rework — and it is rework spread across every file, which is the expensive kind.</td>
+              <td><b>An M0 blocking gate.</b> No product copy is written until it is signed. This is the cheapest
+                risk on the list to eliminate and the most annoying to discover late.</td></tr>
+            <tr><td><b>Mock/API contract drift</b></td>
+              <td>MSW fixtures diverge from the real API: the test suite goes green while the app is broken —
+                a safety net that has become a source of false confidence (FTA D-15).</td>
+              <td>Fixtures are derived from the backend's maintained Postman collection, not invented. The E2E
+                suite runs against a <em>real</em> backend and starts at <b>M5</b>, not M8 — so drift is caught by
+                a machine, at a milestone gate, rather than by an operator.</td></tr>
+            <tr class="group-row"><td colspan="3">Architectural erosion risk — the slow ones</td></tr>
+            <tr><td><b>Premature abstraction</b><br><span class="chip warn">structural</span></td>
+              <td>The pattern library hardens against imagined requirements and is then bent for months (FTA
+                D-11's "abstraction that eats the app"). Nobody attributes the resulting friction to the decision
+                that caused it, so it is never corrected.</td>
+              <td><b>This is the risk that reshaped the roadmap</b> (R-1). Abstraction is deferred to M2 and
+                requires three real cases. The M2 exit criterion — the third resource ships with no new pattern
+                code, and the first two refactor onto it cleanly — is the objective test that the abstraction is
+                real rather than assumed.</td></tr>
+            <tr><td><b>Boundary erosion</b></td>
+              <td>The shared layer starts importing domain types "just for the props," and within a year the
+                dependency rules of FTA §4 are decorative.</td>
+              <td>The lint rule is an <b>M0 deliverable — before any code exists to violate it.</b> Retrofitting
+                it later produces a batch of suppressions and a dead rule. Suppression count is reviewed at every
+                gate (§8).</td></tr>
+            <tr><td><b>The config DSL forms</b></td>
+              <td>The resource definition accretes callbacks until it is a programming language that is harder to
+                read than the pages it replaced (FTA §12's tripwire).</td>
+              <td>Reviewed at the M2 gate against FTA §12's explicit rule: definitions hold declarative metadata
+                only; anything else composes the pattern by hand. A hand-written page is an <em>acceptable
+                outcome</em>, and reviewers are told so here so they do not treat it as a failure to be
+                abstracted away.</td></tr>
+            <tr><td><b>Hardening gets compressed</b></td>
+              <td>The date slips, M8 becomes "the last week," and accessibility and E2E are dropped — on a tool
+                whose users are keyboard-heavy operators moving money.</td>
+              <td>M8 is a <b>milestone with exit criteria</b>, not a buffer. The rules it audits (formatters,
+                focus, boundaries, error handling) are enforced continuously from M0, so M8 is a sweep rather
+                than a rescue — which is what makes it survivable if it is compressed.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ 8 ============ -->
+    <section id="s8">
+      <div class="sec-head"><span class="eyebrow">08</span><h2>Acceptance gates</h2></div>
+      <p class="lead-p sec-intro">A gate is a review that a milestone must pass before the next one starts. Its
+      value comes entirely from being <em>refusable</em> — a gate that has never blocked anything is a ceremony,
+      and everyone learns to treat it as one.</p>
+
+      <h3 class="sub">The standing gate — applied at every milestone</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th style="min-width:150px;">Check</th><th>Passes when…</th><th>Source</th></tr></thead>
+          <tbody>
+            <tr><td><b>Architecture conformance</b></td>
+              <td>Boundary lint passes with <b>zero suppressions</b> — or each suppression names an ADR. Axios
+                appears only in the HTTP client. No query-key literals outside a factory. No permission-string
+                literals outside the registry. No raw <span class="mono">localStorage</span> access outside the
+                session module.</td>
+              <td>FTA §4, §6, §7, §8, §14</td></tr>
+            <tr><td><b>Design System conformance</b></td>
+              <td>No hardcoded colors, spacing, or radii — tokens only. <b>No inline formatting</b>: every money,
+                date, phone, and identifier renders through the formatter module. Statuses render through the
+                badge vocabulary, never by string comparison in a component.</td>
+              <td>Design System §3, §5, §17, §27</td></tr>
+            <tr><td><b>Correctness of money paths</b></td>
+              <td>Every mutation in the milestone: no auto-retry, no optimistic update, confirmation renders from
+                fresh data, invalidation-map entry exists <b>and has a test</b>.</td>
+              <td>FTA §8, §11, D-3, D-7</td></tr>
+            <tr><td><b>Error completeness</b></td>
+              <td>Every domain error code the milestone's endpoints can emit has a registry entry with a message,
+                a tone, and a recovery path where one exists. An unregistered code is an incomplete feature, not
+                a follow-up.</td>
+              <td>FTA D-10</td></tr>
+            <tr><td><b>Accessibility floor</b></td>
+              <td>Every new flow is completable by keyboard alone; focus is visible and never removed; no meaning
+                is carried by color alone; touch targets hold at every density.</td>
+              <td>Design System §1, §10</td></tr>
+            <tr><td><b>Test evidence</b></td>
+              <td>Mappers and formatters unit-tested. The milestone's principal flows have integration tests
+                against MSW. <b>No coverage number is reported or requested</b> — the question asked at the gate
+                is "what would these tests have caught?"</td>
+              <td>FTA §16, D-15</td></tr>
+            <tr><td><b>Dependency discipline</b></td>
+              <td>No new dependency without an ADR stating what the existing stack could not do.</td>
+              <td>FTA hero policy, §19</td></tr>
+            <tr><td><b>Documentation</b></td>
+              <td>ADRs written for any decision that deviated from the approved documents. If a contradiction in
+                the frozen documents was discovered, it is raised — not silently worked around.</td>
+              <td>FTA §19</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="sub">Milestone-specific gates — the ones that can actually stop the project</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th style="min-width:70px;">Gate</th><th>The question it exists to ask</th><th>If it fails</th></tr></thead>
+          <tbody>
+            <tr><td><b>G0</b><br>after M0</td>
+              <td>Is the language decided, are the backend tickets accepted with owners, and does a deliberate
+                boundary violation actually fail CI?</td>
+              <td><b>Do not start M1.</b> Every one of these gets more expensive with each week of code written
+                against its absence. This gate is short and it is absolute.</td></tr>
+            <tr><td><b>G1</b><br>after M1</td>
+              <td>Did the architecture survive contact with the real backend — auth, pagination envelope, error
+                shape, status vocabulary, permission strings?</td>
+              <td><b>Stop and reconcile.</b> A mismatch here means an approved document contradicts reality, and
+                that is the one condition under which the frozen documents are reopened (per their own terms).
+                Fix the document, then continue. Do not paper over it in code.</td></tr>
+            <tr><td><b>G2</b><br>after M2</td>
+              <td>Did the third resource ship with no new pattern code? Did the first two refactor cleanly onto
+                the extracted pattern? Is the resource definition still declarative?</td>
+              <td><b>Do not start M3.</b> Every domain after this multiplies whatever the pattern got wrong by
+                fifteen. This is the highest-leverage gate in the roadmap.</td></tr>
+            <tr><td><b>G4</b><br>after M4</td>
+              <td>Does approving a cheque refresh capacity with no manual reload? Does a stale confirmation
+                refuse to submit?</td>
+              <td><b>Do not start M5.</b> Stock is built on the assumption that cross-domain invalidation works.
+                If it does not, Stock will be built on a broken foundation and the bug will surface as
+                "occasionally the stock numbers are wrong" — which is nearly impossible to diagnose later.</td></tr>
+            <tr><td><b>G5</b><br>after M5</td>
+              <td>Did the fourth movement type require zero changes to DraftLifecyclePage?</td>
+              <td>If it did require changes, the pattern is not a pattern. Fix it before Grattage consumes the
+                forms it lives in.</td></tr>
+            <tr><td><b>G7</b><br>after M7</td>
+              <td>Does Agent 360 compose four domains with zero boundary suppressions, and do its panels fire in
+                parallel?</td>
+              <td>A suppression here means the sanctioned cross-domain mechanisms (FTA §4) did not cover a real
+                need — which is an architectural finding worth an ADR, not a lint exception.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout rule">
+        <h4>Who gates, and the one rule that keeps gates honest</h4>
+        <p>A gate is passed by a reviewer who did not build the milestone. Self-certification defeats the
+        purpose — not because engineers are dishonest, but because the person who built it is the person least
+        able to see what they assumed.</p>
+        <p><b>A failed gate stops the next milestone; it does not "add a follow-up ticket."</b> The follow-up
+        ticket is how every one of these rules dies: it converts a blocking defect into a backlog item that is
+        deprioritized against feature work forever. If a gate is worth defining, it is worth being blocked by —
+        and if the team is unwilling to be blocked by it, it should be deleted from this document rather than
+        quietly ignored, because a gate everyone routes around teaches the team that the rules here are
+        optional.</p>
+      </div>
+    </section>
+
+    <!-- ============ 9 ============ -->
+    <section id="s9">
+      <div class="sec-head"><span class="eyebrow">09</span><h2>Definition of milestone completion</h2></div>
+      <p class="lead-p sec-intro">"Done" is the most abused word in software planning, because everyone means
+      something different by it and nobody says which. Here it means one thing, and it is checkable by someone
+      who was not in the room.</p>
+
+      <div class="callout rule">
+        <h4>A milestone is done when all seven hold — not six</h4>
+        <p><b>(1) Functionally complete.</b> Every deliverable listed in §3 exists and works against the
+        <em>real</em> backend — not against MSW. A feature that has only ever run against a mock is a feature
+        that has never run.</p>
+        <p><b>(2) Exit criteria demonstrated.</b> Each of the milestone's exit criteria has been <em>shown</em> —
+        performed in front of the reviewer — not asserted in a status update. The criteria in §3 are written to
+        be demonstrable precisely so this is possible.</p>
+        <p><b>(3) The standing gate passes</b> (§8), reviewed by someone who did not build it.</p>
+        <p><b>(4) Tests exist at the right level:</b> mappers and formatters unit-tested; principal flows covered
+        by integration tests; irreversible flows covered by E2E from M5 onward.</p>
+        <p><b>(5) Nothing is left dark by accident.</b> Every feature flag introduced in the milestone has an
+        owner, a reason, a removal condition, and a documented per-environment default (FTA §14). A flag hiding
+        an unfinished feature is fine; a flag nobody can explain is not.</p>
+        <p><b>(6) Decisions are recorded.</b> Any deviation from the four approved documents has an ADR. Any
+        contradiction <em>discovered in</em> them has been raised, not worked around.</p>
+        <p><b>(7) No P1 defects.</b> For this product a P1 is defined narrowly and unambiguously: <em>anything
+        that could cause an operator to act on a wrong financial value, or to take an irreversible action they
+        did not intend.</em> A cosmetic misalignment is not a P1. A stale amount in a confirmation dialog is,
+        and it blocks the milestone.</p>
+      </div>
+
+      <div class="callout">
+        <h4>What "done" explicitly does not mean</h4>
+        <p><b>It does not mean "merged."</b> Code on the main branch that has never run against the real backend
+        is not done; it is a hypothesis with good syntax.</p>
+        <p><b>It does not mean "demoed."</b> A demo shows the happy path. Done includes the 403, the 409, the
+        dropped connection, and the empty state — which is why they are exit criteria rather than nice-to-haves,
+        and why the Design System spent four sections on them.</p>
+        <p><b>It does not mean "we'll harden it in M8."</b> M8 audits what the rules already required
+        continuously. It is not a debt-repayment window, and treating it as one is how it becomes one.</p>
+      </div>
+    </section>
+
+    <!-- ============ 10 ============ -->
+    <section id="s10">
+      <div class="sec-head"><span class="eyebrow">10</span><h2>Transition to implementation</h2></div>
+      <p class="lead-p sec-intro">Five documents, one repository, and a team that now has to start typing. This
+      section is the handover: what to read, what to do first, and the repeatable procedure for every resource
+      after the third one.</p>
+
+      <h3 class="sub">What a developer reads, and in what order</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th style="min-width:60px;">Order</th><th>Document</th><th>Read it for</th></tr></thead>
+          <tbody>
+            <tr><td><b>1</b></td><td><b>Frontend Technical Architecture</b></td>
+              <td>How the code is organized and what the rules are. This is the one a developer returns to daily;
+                the 17 numbered decisions are the answers to the questions they will be tempted to re-ask.</td></tr>
+            <tr><td><b>2</b></td><td><b>Design System</b></td>
+              <td>What the interface must look and behave like. Consulted every time a component is built, and
+                the source of every formatting and status rule.</td></tr>
+            <tr><td><b>3</b></td><td><b>Domain Architecture</b></td>
+              <td>What the business is and how the modules relate. Read once, thoroughly, then referenced when
+                crossing a domain.</td></tr>
+            <tr><td><b>4</b></td><td><b>Discovery</b></td>
+              <td>What already exists and what the backend's gaps are. Read once; it is history, but it is the
+                history that explains several decisions.</td></tr>
+            <tr><td><b>5</b></td><td><b>This roadmap</b></td>
+              <td>What to build next, and what "done" means when they get there.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="sub">The resource recipe — the repeatable procedure after M2</h3>
+      <p style="font-size:0.9rem; color:var(--muted); max-width:76ch;">From M3 onward, adding a resource should
+      be a <em>procedure</em>, not a design exercise. If it is not — if a developer has to make an architectural
+      decision to add a resource — then either the patterns are wrong or the resource is genuinely exceptional,
+      and both are worth noticing rather than absorbing silently. The steps below are the checklist; each cites
+      the document that governs it, and none of them is a decision.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th style="min-width:50px;">Step</th><th>Do</th><th>Governed by</th></tr></thead>
+          <tbody>
+            <tr><td><b>1</b></td><td>Add the resource's permission strings to the central registry.</td><td>FTA §6</td></tr>
+            <tr><td><b>2</b></td><td>Write the API module: endpoints, DTO types (private), and the mapper — including the status vocabulary, and preserving absent-vs-zero.</td><td>FTA §7, D-6</td></tr>
+            <tr><td><b>3</b></td><td>Write the query-key factory and the query/mutation hooks; assign the staleness tier by what the data costs when it is wrong.</td><td>FTA §8</td></tr>
+            <tr><td><b>4</b></td><td>Write the zod schema (create/edit derived from one base).</td><td>FTA §10</td></tr>
+            <tr><td><b>5</b></td><td>Write the resource definition: labels, columns <em>with priority tiers</em>, filters, actions, permission references, status→tone mapping. Declarative only.</td><td>FTA §12, DS §14, §17</td></tr>
+            <tr><td><b>6</b></td><td>Contribute the routes, each carrying its permission string.</td><td>FTA §5</td></tr>
+            <tr><td><b>7</b></td><td>Register the domain error codes this resource's endpoints can emit, with messages and recovery paths.</td><td>FTA D-10</td></tr>
+            <tr><td><b>8</b></td><td>Add invalidation-map entries for any mutation whose effects cross a domain — <em>with a test</em>.</td><td>FTA D-3</td></tr>
+            <tr><td><b>9</b></td><td>Export the public surface in <span class="mono">index.ts</span>. Nothing else leaves the folder.</td><td>FTA §4</td></tr>
+            <tr><td><b>10</b></td><td>Test: mapper units, integration behaviors against MSW, E2E if the resource has an irreversible action.</td><td>FTA §16</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout rule">
+        <h4>The escape hatch, and when to use it</h4>
+        <p>If a resource cannot be expressed through the recipe, <b>do not bend the recipe.</b> Compose the
+        pattern's parts and write the page by hand — FTA §12's escape hatch, working exactly as designed. A
+        hand-written page is an acceptable, non-exceptional outcome and MUST NOT be treated as a failure to
+        abstract.</p>
+        <p>What <em>is</em> worth escalating: <b>the third time</b> the recipe fails for the same reason. Once is
+        a special case; three times is a pattern the architecture missed, and it deserves an ADR rather than a
+        third workaround.</p>
+      </div>
+
+      <h3 class="sub">Day one</h3>
+      <div class="grid cols-3">
+        <div class="card"><h4>Before any product code</h4>
+          <p>Confirm O-1 is signed. Raise the two backend tickets. Land the boundary lint rule, the config
+          validator, and the MSW harness. Open the ADR log with ADR-0001. This is M0, and it is short —
+          but it is a gate, and G0 is refusable.</p></div>
+        <div class="card"><h4>The first product commit</h4>
+          <p>Is part of the walking skeleton (M1), on Villes. One developer. Not a component library, not a
+          folder scaffold — a login, a shell, a list, and a real record created against the real backend.</p></div>
+        <div class="card"><h4>Everyone else, meanwhile</h4>
+          <p>Track B (§6): formatters, StatusBadge, MoneyAmount, EntityChip, the test harness. Fully specified by
+          the Design System, dependent on nothing, and needed by every screen that follows.</p></div>
+      </div>
+
+      <div class="callout">
+        <h4>The one condition under which the frozen documents reopen</h4>
+        <p>The four approved documents are constraints, and this roadmap does not revisit them. But they were
+        written before a single line ran against the real backend, and G1 exists precisely because reality gets a
+        vote. <b>If implementation discovers a genuine contradiction</b> — the pagination envelope differs from
+        what was assumed, a permission string does not exist, a status value was missed — <b>the document is
+        corrected, through review, and this roadmap adjusts.</b> That is not a failure of the specifications; it
+        is the process working, and it is exactly what the FTA's own ADR rule (§19) was written to handle.</p>
+        <p>What must <em>not</em> happen is the code quietly diverging from the documents while both are believed
+        to agree. That is how a codebase becomes undocumented while appearing documented — and it is the specific
+        decay every gate in §8 exists to prevent.</p>
+      </div>
+    </section>
+
+    <footer>
+      Frontend Implementation Roadmap v1.0 — proposed · Stage 5 of 5 (Discovery ✅ → Domain Architecture ✅ →
+      Design System ✅ → Frontend Technical Architecture ✅ → <b>Implementation Roadmap</b>) · No implementation
+      code was written. Two roadmap decisions (R-1: foundation through a vertical slice; R-2: spike rather than
+      reorder) refine the execution of Architecture §11 without altering its approved domain sequence. Blocking
+      pre-flight items: O-1 sign-off (interface language), Companies/Suppliers controllers, Overview endpoint
+      routing.
+    </footer>
+  </main>
+</div>

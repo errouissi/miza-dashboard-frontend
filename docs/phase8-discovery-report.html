@@ -1,0 +1,808 @@
+<title>Phase 8 — Backend Dashboard: Discovery &amp; Architecture Review</title>
+<style>
+  @font-face {
+    font-family: 'ui-mono-fallback';
+    src: local('Cascadia Code'), local('SF Mono');
+  }
+
+  :root {
+    --paper: #EEF0F0;
+    --panel: #FFFFFF;
+    --panel-2: #F5F6F6;
+    --ink: #171B1E;
+    --muted: #5B6570;
+    --faint: #8A939B;
+    --line: #D8DDE0;
+    --line-soft: #E4E8EA;
+    --accent: #1F6F6B;
+    --accent-ink: #0E4643;
+    --accent-soft: #DDEDEC;
+    --ok: #2E7D4F;
+    --ok-soft: #E1F1E6;
+    --warn: #9C6B14;
+    --warn-soft: #FBF0DA;
+    --bad: #B23B3B;
+    --bad-soft: #FBE6E6;
+    --retire: #6B7078;
+    --retire-soft: #E9EAEC;
+    --shadow: 0 1px 2px rgba(20,24,27,0.04), 0 6px 20px -8px rgba(20,24,27,0.12);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #12161A;
+      --panel: #1A2025;
+      --panel-2: #1F262B;
+      --ink: #E7EBEC;
+      --muted: #9AA6AC;
+      --faint: #707A80;
+      --line: #2A3238;
+      --line-soft: #232A2F;
+      --accent: #4FBDB6;
+      --accent-ink: #A9E7E2;
+      --accent-soft: #17302E;
+      --ok: #6FCB92;
+      --ok-soft: #16281D;
+      --warn: #E0B15C;
+      --warn-soft: #2E260F;
+      --bad: #E58888;
+      --bad-soft: #301A1A;
+      --retire: #8A939B;
+      --retire-soft: #23262A;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 10px 30px -10px rgba(0,0,0,0.5);
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #12161A; --panel: #1A2025; --panel-2: #1F262B; --ink: #E7EBEC;
+    --muted: #9AA6AC; --faint: #707A80; --line: #2A3238; --line-soft: #232A2F;
+    --accent: #4FBDB6; --accent-ink: #A9E7E2; --accent-soft: #17302E;
+    --ok: #6FCB92; --ok-soft: #16281D; --warn: #E0B15C; --warn-soft: #2E260F;
+    --bad: #E58888; --bad-soft: #301A1A; --retire: #8A939B; --retire-soft: #23262A;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 10px 30px -10px rgba(0,0,0,0.5);
+  }
+  :root[data-theme="light"] {
+    --paper: #EEF0F0; --panel: #FFFFFF; --panel-2: #F5F6F6; --ink: #171B1E;
+    --muted: #5B6570; --faint: #8A939B; --line: #D8DDE0; --line-soft: #E4E8EA;
+    --accent: #1F6F6B; --accent-ink: #0E4643; --accent-soft: #DDEDEC;
+    --ok: #2E7D4F; --ok-soft: #E1F1E6; --warn: #9C6B14; --warn-soft: #FBF0DA;
+    --bad: #B23B3B; --bad-soft: #FBE6E6; --retire: #6B7078; --retire-soft: #E9EAEC;
+    --shadow: 0 1px 2px rgba(20,24,27,0.04), 0 6px 20px -8px rgba(20,24,27,0.12);
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    font-size: 16px;
+    line-height: 1.55;
+    overflow-x: hidden;
+  }
+  ::selection { background: var(--accent-soft); color: var(--accent-ink); }
+
+  a { color: var(--accent); }
+  a:focus-visible, button:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px;
+  }
+
+  .mono {
+    font-family: ui-monospace, "Cascadia Code", "SF Mono", Consolas, "Liberation Mono", monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .eyebrow {
+    font-family: -apple-system, "Segoe UI", Arial, sans-serif;
+    font-weight: 700;
+    font-size: 0.72rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  h1, h2, h3, h4 { text-wrap: balance; font-weight: 800; letter-spacing: -0.01em; color: var(--ink); }
+
+  /* ---------- shell layout ---------- */
+  .shell { display: grid; grid-template-columns: 240px minmax(0,1fr); min-height: 100vh; }
+  @media (max-width: 900px) { .shell { grid-template-columns: 1fr; } }
+
+  nav.toc {
+    position: sticky; top: 0; align-self: start; height: 100vh;
+    border-right: 1px solid var(--line); background: var(--panel-2);
+    padding: 28px 18px; overflow-y: auto;
+  }
+  @media (max-width: 900px) { nav.toc { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--line); } }
+  nav.toc .brand { font-weight: 800; font-size: 1rem; margin-bottom: 3px; }
+  nav.toc .brand-sub { font-size: 0.78rem; color: var(--muted); margin-bottom: 22px; }
+  nav.toc ol { list-style: none; margin: 0; padding: 0; counter-reset: sec; display: flex; flex-direction: column; gap: 2px; }
+  nav.toc li { counter-increment: sec; }
+  nav.toc a {
+    display: flex; gap: 10px; align-items: baseline; text-decoration: none;
+    color: var(--muted); font-size: 0.87rem; padding: 7px 8px; border-radius: 6px;
+  }
+  nav.toc a:hover { background: var(--panel); color: var(--ink); }
+  nav.toc a::before {
+    content: counter(sec, decimal-leading-zero);
+    font-family: ui-monospace, monospace; font-size: 0.72rem; color: var(--faint); flex: none;
+  }
+
+  main { min-width: 0; }
+
+  header.hero {
+    padding: 56px clamp(20px, 5vw, 64px) 40px;
+    border-bottom: 1px solid var(--line);
+  }
+  header.hero .eyebrow { margin-bottom: 12px; }
+  header.hero h1 { font-size: clamp(1.6rem, 3vw, 2.3rem); margin: 0 0 10px; max-width: 20ch; }
+  header.hero p.lede { color: var(--muted); max-width: 62ch; font-size: 1.02rem; margin: 0 0 20px; }
+  .meta-row { display: flex; flex-wrap: wrap; gap: 10px 22px; font-size: 0.82rem; color: var(--muted); }
+  .meta-row b { color: var(--ink); font-weight: 700; }
+
+  section { padding: 44px clamp(20px, 5vw, 64px); border-bottom: 1px solid var(--line-soft); }
+  section:last-of-type { border-bottom: none; }
+  .sec-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 22px; }
+  .sec-head h2 { font-size: 1.35rem; margin: 0; }
+  .sec-head .eyebrow { white-space: nowrap; }
+
+  p { max-width: 74ch; }
+  .lead-p { color: var(--muted); max-width: 70ch; }
+
+  /* ---------- callout ---------- */
+  .callout {
+    background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--accent);
+    border-radius: 8px; padding: 18px 22px; box-shadow: var(--shadow); max-width: 78ch;
+  }
+  .callout h3 { font-size: 0.95rem; margin: 0 0 8px; }
+  .callout p { margin: 0; color: var(--muted); font-size: 0.94rem; }
+  .callout p + p { margin-top: 8px; }
+
+  /* ---------- cards / grid ---------- */
+  .grid { display: grid; gap: 14px; }
+  .grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+  .grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
+  @media (max-width: 760px) { .grid.cols-3, .grid.cols-2 { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 16px 18px; box-shadow: var(--shadow);
+  }
+  .card h4 { font-size: 0.88rem; margin: 0 0 6px; }
+  .card .stat { font-size: 1.7rem; font-weight: 800; font-family: ui-monospace, monospace; }
+  .card .stat-label { font-size: 0.78rem; color: var(--muted); margin-top: 2px; }
+
+  /* ---------- tables ---------- */
+  .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); }
+  table { border-collapse: collapse; width: 100%; min-width: 560px; background: var(--panel); }
+  thead th {
+    text-align: left; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.07em;
+    color: var(--muted); padding: 10px 14px; border-bottom: 1px solid var(--line);
+    background: var(--panel-2); white-space: nowrap; position: sticky; top: 0;
+  }
+  tbody td { padding: 10px 14px; border-bottom: 1px solid var(--line-soft); font-size: 0.88rem; vertical-align: top; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover td { background: var(--panel-2); }
+  td.mono, th.mono { font-size: 0.82rem; }
+  .domain-row td { background: var(--panel-2); font-weight: 700; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+
+  /* ---------- status chips ---------- */
+  .chip {
+    display: inline-flex; align-items: center; gap: 5px; font-size: 0.75rem; font-weight: 700;
+    padding: 3px 9px; border-radius: 99px; white-space: nowrap; line-height: 1.6;
+  }
+  .chip.ok { background: var(--ok-soft); color: var(--ok); }
+  .chip.warn { background: var(--warn-soft); color: var(--warn); }
+  .chip.bad { background: var(--bad-soft); color: var(--bad); }
+  .chip.retire { background: var(--retire-soft); color: var(--retire); }
+  .chip.neutral { background: var(--panel-2); color: var(--muted); border: 1px solid var(--line); }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 10px 18px; margin: 18px 0 0; font-size: 0.83rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 7px; }
+
+  /* ---------- nav map (tree) ---------- */
+  .navmap { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 24px clamp(16px,3vw,32px); box-shadow: var(--shadow); overflow-x: auto; }
+  .tree { list-style: none; margin: 0; padding: 0; font-family: ui-monospace, monospace; font-size: 0.85rem; min-width: 480px; }
+  .tree li { position: relative; padding-left: 26px; margin: 3px 0; }
+  .tree li::before {
+    content: ""; position: absolute; left: 8px; top: 0; bottom: 0; width: 1px; background: var(--line);
+  }
+  .tree li:last-child::before { bottom: calc(100% - 12px); }
+  .tree li::after {
+    content: ""; position: absolute; left: 8px; top: 12px; width: 16px; height: 1px; background: var(--line);
+  }
+  .tree > li { padding-left: 0; }
+  .tree > li::before, .tree > li::after { display: none; }
+  .tree ul { list-style: none; margin: 2px 0 2px 4px; padding: 0; }
+  .node { display: inline-flex; align-items: center; gap: 8px; padding: 2px 0; }
+  .node .path { color: var(--ink); font-weight: 600; }
+  .node .desc { color: var(--muted); font-family: -apple-system, "Segoe UI", Arial, sans-serif; font-size: 0.78rem; }
+
+  /* ---------- debt list ---------- */
+  .debt { display: flex; flex-direction: column; gap: 12px; max-width: 84ch; }
+  .debt-item {
+    display: grid; grid-template-columns: 96px 1fr; gap: 14px; padding: 14px 16px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow);
+  }
+  @media (max-width: 640px) { .debt-item { grid-template-columns: 1fr; } }
+  .debt-item .sev { align-self: start; }
+  .debt-item h4 { margin: 0 0 4px; font-size: 0.9rem; }
+  .debt-item p { margin: 0; color: var(--muted); font-size: 0.86rem; }
+
+  /* ---------- roadmap ---------- */
+  .roadmap { list-style: none; margin: 0; padding: 0; max-width: 80ch; }
+  .roadmap li {
+    display: grid; grid-template-columns: 40px 1fr; gap: 16px; padding: 16px 0;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .roadmap li:last-child { border-bottom: none; }
+  .roadmap .num {
+    font-family: ui-monospace, monospace; font-weight: 800; font-size: 1rem; color: var(--accent);
+  }
+  .roadmap h4 { margin: 0 0 4px; font-size: 0.96rem; }
+  .roadmap p { margin: 0; color: var(--muted); font-size: 0.87rem; }
+  .roadmap .why { margin-top: 6px; font-size: 0.8rem; color: var(--faint); font-style: italic; }
+
+  footer {
+    padding: 34px clamp(20px,5vw,64px) 56px; color: var(--faint); font-size: 0.82rem;
+  }
+
+  code.inline {
+    font-family: ui-monospace, monospace; background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: 4px; padding: 1px 5px; font-size: 0.85em;
+  }
+</style>
+
+<div class="shell">
+  <nav class="toc" aria-label="Report sections">
+    <div class="brand">Miza · Phase 8</div>
+    <div class="brand-sub">Backend Dashboard — Discovery</div>
+    <ol>
+      <li><a href="#stack">Stack &amp; structure</a></li>
+      <li><a href="#pages">Page inventory</a></li>
+      <li><a href="#navmap">Navigation map</a></li>
+      <li><a href="#auth">Auth &amp; permissions</a></li>
+      <li><a href="#features">Feature × API mapping</a></li>
+      <li><a href="#debt">Technical debt</a></li>
+      <li><a href="#architecture">Recommended architecture</a></li>
+      <li><a href="#roadmap">Implementation order</a></li>
+    </ol>
+  </nav>
+
+  <main>
+    <header class="hero">
+      <div class="eyebrow">Discovery report — no code written</div>
+      <h1>The legacy dashboard is a shell. The backend is the real system.</h1>
+      <p class="lede">
+        Full audit of <code class="inline">C:\Miza\frontend</code> against the current
+        <code class="inline">C:\Miza\backend</code> API surface. Nine routes exist; five render a single
+        placeholder line. The parts that <em>are</em> built — auth, routing, layout, sidebar — are sound
+        and worth keeping. Everything else is unclaimed territory, and the backend already has far more
+        domains (stock, deposits, cheques, grattage, allocations, transfers) than the frontend has pages for.
+      </p>
+      <div class="meta-row">
+        <span><b>Reviewed</b> 2026-07-11</span>
+        <span><b>Frontend</b> React 19 · Vite 7 · TS · Tailwind 4 · shadcn/ui</span>
+        <span><b>Backend</b> Laravel · Sanctum · Spatie permissions</span>
+        <span><b>Status</b> Read-only review, awaiting sign-off</span>
+      </div>
+    </header>
+
+    <!-- ============ 1. STACK ============ -->
+    <section id="stack">
+      <div class="sec-head">
+        <span class="eyebrow">01</span>
+        <h2>Stack &amp; project structure</h2>
+      </div>
+      <p class="lead-p">The frontend was scaffolded correctly and never filled in. It has an opinionated,
+      modern toolchain — nothing here needs replacing, only extending.</p>
+
+      <div class="grid cols-3" style="margin-top:20px;">
+        <div class="card">
+          <h4>Framework</h4>
+          <p style="color:var(--muted); font-size:0.86rem; margin:0;">React 19 + TypeScript, built on Vite 7.
+          Path alias <code class="inline">@</code> → <code class="inline">src/</code>.</p>
+        </div>
+        <div class="card">
+          <h4>UI layer</h4>
+          <p style="color:var(--muted); font-size:0.86rem; margin:0;">shadcn/ui ("new-york", neutral base) +
+          Tailwind CSS v4 via the Vite plugin — no <code class="inline">tailwind.config</code> file. Only
+          9 primitives generated so far (avatar, button, dropdown, input, separator, sheet, sidebar,
+          skeleton, tooltip).</p>
+        </div>
+        <div class="card">
+          <h4>Routing</h4>
+          <p style="color:var(--muted); font-size:0.86rem; margin:0;">react-router-dom v7,
+          <code class="inline">BrowserRouter</code>, all routes declared flat in one file.</p>
+        </div>
+        <div class="card">
+          <h4>Data fetching</h4>
+          <p style="color:var(--muted); font-size:0.86rem; margin:0;">Bare axios instance with a bearer-token
+          interceptor. <b style="color:var(--bad)">No React Query / SWR</b> — every page will hand-roll its
+          own loading/error/cache state unless one is introduced.</p>
+        </div>
+        <div class="card">
+          <h4>Forms</h4>
+          <p style="color:var(--muted); font-size:0.86rem; margin:0;">react-hook-form + zod +
+          @hookform/resolvers, used correctly on the one form that exists (Login).</p>
+        </div>
+        <div class="card">
+          <h4>Tables &amp; charts</h4>
+          <p style="color:var(--muted); font-size:0.86rem; margin:0;"><b style="color:var(--bad)">No table
+          library, no chart library.</b> Neither has been chosen yet — first real decision Phase 8 needs
+          to make.</p>
+        </div>
+      </div>
+
+      <div class="callout" style="margin-top:24px;">
+        <h3>State management: intentionally absent</h3>
+        <p>There is no Redux/Zustand/Context store. <code class="inline">useAuth()</code> reads directly
+        from <code class="inline">localStorage</code> on every call via <code class="inline">authStorage.ts</code>.
+        This is a deliberate, reasonable choice for an app this size — it should stay this way until a
+        concrete cross-page state need appears (e.g. shared filter state), rather than being pre-emptively
+        added.</p>
+      </div>
+    </section>
+
+    <!-- ============ 2. PAGE INVENTORY ============ -->
+    <section id="pages">
+      <div class="sec-head">
+        <span class="eyebrow">02</span>
+        <h2>Page inventory</h2>
+      </div>
+      <p class="lead-p">Every route the router knows about, and exactly what's behind it.</p>
+
+      <div class="table-wrap" style="margin-top:18px;">
+        <table>
+          <thead>
+            <tr><th>Route</th><th>File</th><th>State</th><th>Notes</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="mono">/login</td><td class="mono">pages/Login.tsx</td>
+              <td><span class="chip ok">Real</span></td>
+              <td>Full RHF + zod form, calls <code class="inline">/auth/login</code>, persists token+user, redirects to <code class="inline">/dashboard</code>. Plain HTML inputs, not shadcn — inconsistent with the rest of the design system.</td></tr>
+            <tr><td class="mono">/dashboard</td><td class="mono">pages/Dashboard.tsx</td>
+              <td><span class="chip bad">Stub</span></td>
+              <td><code class="inline">&lt;div&gt;Dashboard (empty)&lt;/div&gt;</code>. Only route wrapped in <code class="inline">RequirePermission</code> (<code class="inline">access-dashboard</code>).</td></tr>
+            <tr><td class="mono">/admins</td><td class="mono">pages/Admins.tsx</td>
+              <td><span class="chip bad">Stub</span></td>
+              <td>Placeholder text only. Route has <b>no</b> permission guard despite the backend gating admin CRUD behind <code class="inline">create-admin</code>/<code class="inline">update-admin</code>/etc.</td></tr>
+            <tr><td class="mono">/agents</td><td class="mono">pages/Agents.tsx</td>
+              <td><span class="chip bad">Stub</span></td>
+              <td>Placeholder text only. No permission guard on the route.</td></tr>
+            <tr><td class="mono">/clients</td><td class="mono">pages/Clients.tsx</td>
+              <td><span class="chip bad">Stub</span></td>
+              <td>Placeholder text only. No permission guard on the route.</td></tr>
+            <tr><td class="mono">/transactions</td><td class="mono">pages/Transactions.tsx</td>
+              <td><span class="chip bad">Stub</span></td>
+              <td>Placeholder text only. No corresponding backend domain named "transactions" exists — nearest concepts are deposits, cheques, and debt payments (see §5).</td></tr>
+            <tr><td class="mono">/profile</td><td class="mono">pages/Profile.tsx</td>
+              <td><span class="chip warn">Partial</span></td>
+              <td>Read-only display of name/email/roles from localStorage. Comment marks it: "Next step: real form + API call." No update-profile backend endpoint exists yet either.</td></tr>
+            <tr><td class="mono">/security</td><td class="mono">pages/Security.tsx</td>
+              <td><span class="chip bad">Stub</span></td>
+              <td>Static "Password form will be here" placeholder.</td></tr>
+            <tr><td class="mono">/404 (auth)</td><td class="mono">pages/404.tsx</td>
+              <td><span class="chip ok">Real</span></td>
+              <td>Simple, correct. Used both for the wildcard route and as the <code class="inline">RequirePermission</code> denial target.</td></tr>
+            <tr class="domain-row"><td colspan="4">Shell (not routed pages, but load-bearing)</td></tr>
+            <tr><td class="mono">DashboardLayout</td><td class="mono">app/layout/DashboardLayout.tsx</td>
+              <td><span class="chip ok">Real</span></td>
+              <td><code class="inline">SidebarProvider</code> + <code class="inline">AppSidebar</code> + <code class="inline">AppHeader</code> + routed <code class="inline">&lt;Outlet/&gt;</code>. Clean, minimal, worth keeping as-is.</td></tr>
+            <tr><td class="mono">AppSidebar</td><td class="mono">app/layout/AppSidebar.tsx</td>
+              <td><span class="chip ok">Real</span></td>
+              <td>Renders <code class="inline">MENU</code> filtered by role. Returns <code class="inline">null</code> entirely if user lacks <code class="inline">access-dashboard</code>.</td></tr>
+            <tr><td class="mono">AppHeader</td><td class="mono">app/layout/AppHeader.tsx</td>
+              <td><span class="chip ok">Real</span></td>
+              <td>Avatar initials + dropdown → Profile / Security / Logout. Reads user directly from storage, bypassing <code class="inline">useAuth()</code> — minor inconsistency, not a bug.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ 3. NAV MAP ============ -->
+    <section id="navmap">
+      <div class="sec-head">
+        <span class="eyebrow">03</span>
+        <h2>Navigation map</h2>
+      </div>
+      <p class="lead-p">Route tree as declared in <code class="inline">AppRoutes.tsx</code>. Guard shown in
+      brackets; <span style="color:var(--bad); font-weight:700;">red</span> marks a route reachable by any
+      logged-in user regardless of role or permission.</p>
+
+      <div class="navmap" style="margin-top:18px;">
+        <ul class="tree">
+          <li><span class="node"><span class="path">/login</span><span class="desc">public</span></span></li>
+          <li><span class="node"><span class="path">ProtectedRoute</span><span class="desc">[has token]</span></span>
+            <ul>
+              <li><span class="node"><span class="path">DashboardLayout</span><span class="desc">sidebar + header shell</span></span>
+                <ul>
+                  <li><span class="node"><span class="path">/ → /dashboard</span><span class="desc">redirect</span></span></li>
+                  <li><span class="node"><span class="path">/dashboard</span><span class="desc">[permission: access-dashboard]</span></span></li>
+                  <li><span class="node"><span class="path">/profile</span><span class="desc" style="color:var(--bad);">[no guard]</span></span></li>
+                  <li><span class="node"><span class="path">/security</span><span class="desc" style="color:var(--bad);">[no guard]</span></span></li>
+                  <li><span class="node"><span class="path">/admins</span><span class="desc" style="color:var(--bad);">[no guard — sidebar-only]</span></span></li>
+                  <li><span class="node"><span class="path">/agents</span><span class="desc" style="color:var(--bad);">[no guard — sidebar-only]</span></span></li>
+                  <li><span class="node"><span class="path">/clients</span><span class="desc" style="color:var(--bad);">[no guard — sidebar-only]</span></span></li>
+                  <li><span class="node"><span class="path">/transactions</span><span class="desc" style="color:var(--bad);">[no guard — sidebar-only]</span></span></li>
+                  <li><span class="node"><span class="path">* → 404</span><span class="desc">authenticated catch-all</span></span></li>
+                </ul>
+              </li>
+            </ul>
+          </li>
+        </ul>
+      </div>
+
+      <div class="callout" style="margin-top:20px;">
+        <h3>Sidebar visibility ≠ route protection</h3>
+        <p><code class="inline">AppSidebar</code> filters <code class="inline">MENU</code> by
+        <code class="inline">role</code> client-side, but <code class="inline">AppRoutes.tsx</code> only wraps
+        <code class="inline">/dashboard</code> in <code class="inline">RequirePermission</code>. A logged-in
+        <code class="inline">commercial</code> or <code class="inline">manager</code> — roles the frontend's
+        <code class="inline">Role</code> type doesn't even list — can navigate to
+        <code class="inline">/admins</code> directly by URL; the page just won't be in their sidebar.
+        Today this is harmless (the pages are empty), but it's a gap to close before real admin CRUD UI
+        lands there. See §6.</p>
+      </div>
+    </section>
+
+    <!-- ============ 4. AUTH ============ -->
+    <section id="auth">
+      <div class="sec-head">
+        <span class="eyebrow">04</span>
+        <h2>Auth &amp; permissions model</h2>
+      </div>
+      <p class="lead-p">Token-based, not cookie-based — matches the backend's Sanctum bearer-token design.</p>
+
+      <div class="grid cols-2" style="margin-top:18px;">
+        <div class="card">
+          <h4>Frontend</h4>
+          <p style="color:var(--muted); font-size:0.86rem;">
+          <code class="inline">login()</code> → <code class="inline">POST /auth/login</code> → token + user
+          object stored in <code class="inline">localStorage</code> (keys: <code class="inline">token</code>,
+          <code class="inline">user</code>). Axios interceptor attaches
+          <code class="inline">Authorization: Bearer …</code> to every request. No refresh-token flow, no
+          token-expiry handling — a 401 mid-session has no defined UX.</p>
+        </div>
+        <div class="card">
+          <h4>Backend</h4>
+          <p style="color:var(--muted); font-size:0.86rem;">
+          Sanctum, one unified <code class="inline">/auth/login</code> for three tokenable models
+          (User/Admin, Agent, Client). Spatie roles:
+          <code class="inline">super-admin</code>, <code class="inline">admin</code>,
+          <code class="inline">manager</code>, <code class="inline">commercial</code> — four, all on the
+          <code class="inline">sanctum</code> guard. Permission strings returned in the login payload
+          drive every route-level <code class="inline">permission:*</code> middleware.</p>
+        </div>
+      </div>
+
+      <div class="callout" style="margin-top:20px;">
+        <h3>Frontend's role model is narrower than the backend's</h3>
+        <p><code class="inline">app/permissions/menu.ts</code> types <code class="inline">Role</code> as
+        <code class="inline">"super-admin" | "admin"</code> only. <code class="inline">manager</code> and
+        <code class="inline">commercial</code> exist as real, permissioned backend roles but have zero
+        representation in the frontend menu or route model. That's fine if Phase 8 stays admin-facing only
+        — worth confirming as a scope decision rather than an oversight (see §7, Q1 open question).</p>
+      </div>
+    </section>
+
+    <!-- ============ 5. FEATURE MAPPING ============ -->
+    <section id="features">
+      <div class="sec-head">
+        <span class="eyebrow">05</span>
+        <h2>Feature inventory × backend API mapping</h2>
+      </div>
+      <p class="lead-p">Every backend domain, grouped, against what the frontend currently does with it.</p>
+      <div class="legend">
+        <span><span class="chip ok">✅ supported</span> route exists, backend is stable, just needs UI</span>
+        <span><span class="chip warn">🟡 partial</span> some backend support, gaps remain</span>
+        <span><span class="chip bad">❌ needs API</span> no backend endpoint at all</span>
+        <span><span class="chip retire">🚫 retire</span> dead or superseded surface</span>
+      </div>
+
+      <div class="table-wrap" style="margin-top:18px;">
+        <table>
+          <thead>
+            <tr><th style="min-width:150px;">Domain</th><th>Frontend today</th><th>Status</th><th class="mono">Key backend routes</th></tr>
+          </thead>
+          <tbody>
+            <tr class="domain-row"><td colspan="4">Identity</td></tr>
+            <tr><td>Login</td><td>Built</td><td><span class="chip ok">✅</span></td>
+              <td class="mono">POST /auth/login · GET /me · POST /auth/logout</td></tr>
+            <tr><td>Profile edit</td><td>Read-only stub</td><td><span class="chip bad">❌</span></td>
+              <td class="mono">— no update-profile endpoint exists</td></tr>
+            <tr><td>Change password</td><td>Empty stub</td><td><span class="chip warn">🟡</span></td>
+              <td class="mono">Client OTP flow exists (client/change-password/*); no admin/agent self password-change endpoint</td></tr>
+
+            <tr class="domain-row"><td colspan="4">Dashboard</td></tr>
+            <tr><td>Stat tiles (agents, deposits, debt)</td><td>Empty stub</td><td><span class="chip ok">✅</span></td>
+              <td class="mono">GET /admin/dashboard/statistics</td></tr>
+            <tr><td>Charts (deposits over time, by method, agent trend)</td><td>Empty stub</td><td><span class="chip warn">🟡</span></td>
+              <td class="mono">DashboardController::chartData() exists but <b style="color:var(--bad)">is not routed</b> — controller code is dead until wired</td></tr>
+            <tr><td>Recent activity feed</td><td>Empty stub</td><td><span class="chip warn">🟡</span></td>
+              <td class="mono">DashboardController::recentActivities() exists, <b style="color:var(--bad)">not routed</b></td></tr>
+            <tr><td>Agents-by-city overview</td><td>Empty stub</td><td><span class="chip warn">🟡</span></td>
+              <td class="mono">DashboardController::agentsOverview() exists, <b style="color:var(--bad)">not routed</b></td></tr>
+
+            <tr class="domain-row"><td colspan="4">Admins</td></tr>
+            <tr><td>List / create / update / block / delete admins</td><td>Empty stub</td><td><span class="chip ok">✅</span></td>
+              <td class="mono">GET/POST/PUT/PATCH/DELETE /admin/admins</td></tr>
+
+            <tr class="domain-row"><td colspan="4">Agents (managers &amp; commercials)</td></tr>
+            <tr><td>List managers / commercials, filters</td><td>Empty stub</td><td><span class="chip ok">✅</span></td>
+              <td class="mono">GET /admin/agents/managers · /commercials</td></tr>
+            <tr><td>Agent detail, create (multi-file upload), update, block/activate</td><td>Empty stub</td><td><span class="chip ok">✅</span></td>
+              <td class="mono">GET/POST/DELETE /admin/agents/{id} · block · activate · toggle-status</td></tr>
+            <tr><td>Manager → commercial sub-team view</td><td>Empty stub</td><td><span class="chip ok">✅</span></td>
+              <td class="mono">GET /admin/agents/{id}/sub-data</td></tr>
+            <tr><td>Grattage outstanding / restock-gate badge</td><td>Empty stub</td><td><span class="chip ok">✅</span></td>
+              <td class="mono">GET /admin/agents/{id}/grattage-outstanding</td></tr>
+
+            <tr class="domain-row"><td colspan="4">Clients</td></tr>
+            <tr><td>List with filters, detail, stats, assign/reassign/bulk-assign, block, reset password</td><td>Empty stub</td><td><span class="chip ok">✅</span></td>
+              <td class="mono">GET/POST/PUT/DELETE /admin/clients · assign-bulk · statistics</td></tr>
+
+            <tr class="domain-row"><td colspan="4">Money — Cheques &amp; Deposits</td></tr>
+            <tr><td>Cheque submission, list, pending queue, approve/reject/annuler</td><td>"Transactions" stub (unclear intent)</td><td><span class="chip ok">✅</span></td>
+              <td class="mono">GET/POST /admin/cheques · pending · approve · reject · annuler</td></tr>
+            <tr><td>Deposits: list/filter, validate, reject</td><td>"Transactions" stub</td><td><span class="chip ok">✅</span></td>
+              <td class="mono">GET/POST /admin/depos · validate · reject</td></tr>
+            <tr><td>Debt payments (admin's own debt to the company)</td><td>No page at all</td><td><span class="chip ok">✅</span></td>
+              <td class="mono">GET/POST /admin/debt-payments</td></tr>
+
+            <tr class="domain-row"><td colspan="4">Grattage (stock retail sales)</td></tr>
+            <tr><td>Invoice list/detail, cancel</td><td>No page at all</td><td><span class="chip ok">✅</span></td>
+              <td class="mono">GET /admin/grattage-invoices · cancel</td></tr>
+            <tr><td>Admin create / settle</td><td>—</td><td><span class="chip retire">🚫</span></td>
+              <td class="mono">POST .../grattage-invoices &amp; PUT .../settle both hard-403 by design (Phase 5.8b/5.10) — do not build UI for these</td></tr>
+
+            <tr class="domain-row"><td colspan="4">Stock chain (supplier → company → manager → commercial)</td></tr>
+            <tr><td>Bons (supplier ingestion): list/detail, draft, lines, validate/cancel</td><td>No page at all</td><td><span class="chip ok">✅</span></td>
+              <td class="mono">/admin/bons full CRUD + validate/cancel + nested lines</td></tr>
+            <tr><td>Allocations (company → agent): same lifecycle</td><td>No page at all</td><td><span class="chip ok">✅</span></td>
+              <td class="mono">/admin/allocations full CRUD + validate + nested lines</td></tr>
+            <tr><td>Agent transfers (manager → commercial)</td><td>No page at all</td><td><span class="chip ok">✅</span></td>
+              <td class="mono">/admin/agent-transfers full CRUD + validate + nested lines</td></tr>
+            <tr><td>Agent stock returns (commercial → manager)</td><td>No page at all</td><td><span class="chip ok">✅</span></td>
+              <td class="mono">/admin/agent-stock-returns full CRUD + validate + nested lines</td></tr>
+            <tr><td>Companies &amp; suppliers admin (create/edit the parties bons reference)</td><td>No page at all</td><td><span class="chip bad">❌</span></td>
+              <td class="mono">Models + migrations exist; <b style="color:var(--bad)">zero controllers/routes</b> — currently seeder-only</td></tr>
+
+            <tr class="domain-row"><td colspan="4">Reference data</td></tr>
+            <tr><td>Villes / Secteurs / Products</td><td>No page at all</td><td><span class="chip ok">✅</span></td>
+              <td class="mono">apiResource villes · secteurs · products</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ 6. TECH DEBT ============ -->
+    <section id="debt">
+      <div class="sec-head">
+        <span class="eyebrow">06</span>
+        <h2>Technical debt</h2>
+      </div>
+      <p class="lead-p">Ranked by what it costs to leave alone while Phase 8 builds on top of it.</p>
+
+      <div class="debt" style="margin-top:18px;">
+        <div class="debt-item">
+          <span class="sev chip bad">Frontend</span>
+          <div><h4>Only one route is permission-gated</h4>
+          <p><code class="inline">/admins</code>, <code class="inline">/agents</code>,
+          <code class="inline">/clients</code>, <code class="inline">/transactions</code>,
+          <code class="inline">/profile</code>, <code class="inline">/security</code> are reachable by any
+          authenticated user by URL — the sidebar hides them, the router doesn't. Needs
+          <code class="inline">RequirePermission</code> wired per-route against real backend permission
+          strings before real CRUD UI ships behind them.</p></div>
+        </div>
+        <div class="debt-item">
+          <span class="sev chip bad">Backend</span>
+          <div><h4>Dashboard has three dead controller methods</h4>
+          <p><code class="inline">chartData()</code>, <code class="inline">recentActivities()</code>,
+          <code class="inline">agentsOverview()</code> are fully implemented in
+          <code class="inline">DashboardController</code> but <code class="inline">routes/api.php</code> only
+          wires <code class="inline">index()</code>. Cheap to fix (three route lines), but the Dashboard page
+          can't show charts or an activity feed until it's done.</p></div>
+        </div>
+        <div class="debt-item">
+          <span class="sev chip bad">Backend</span>
+          <div><h4>Companies &amp; Suppliers have no API</h4>
+          <p>Both are first-class entities in the stock domain (bons reference them by ID) but neither has
+          a controller. Any "manage suppliers" or "manage companies" screen is blocked until these are
+          built — flag this to the backend track now, since Phase 8 will hit it as soon as the Bons UI
+          needs a supplier picker.</p></div>
+        </div>
+        <div class="debt-item">
+          <span class="sev chip warn">Frontend</span>
+          <div><h4><code class="inline">Role</code> type only knows two of four backend roles</h4>
+          <p><code class="inline">"super-admin" | "admin"</code> — <code class="inline">manager</code> and
+          <code class="inline">commercial</code> are invisible to the menu system. Likely fine if this
+          dashboard stays admin/super-admin only (agents have their own app surface per the API docs), but
+          should be a confirmed decision, not a silent gap.</p></div>
+        </div>
+        <div class="debt-item">
+          <span class="sev chip warn">Frontend</span>
+          <div><h4>No data-fetching or table library chosen</h4>
+          <p>Every future list page (agents, clients, cheques, deposits, bons…) needs pagination, filters,
+          loading and error states. Building each by hand nine-plus times is the single biggest
+          multiplier of effort in this phase — see §7.</p></div>
+        </div>
+        <div class="debt-item">
+          <span class="sev chip warn">Frontend</span>
+          <div><h4>Login page bypasses the design system</h4>
+          <p>Plain <code class="inline">&lt;input&gt;</code>/<code class="inline">&lt;button&gt;</code> with
+          Tailwind utility classes, not the shadcn primitives already installed
+          (<code class="inline">Input</code>/<code class="inline">Button</code> exist in
+          <code class="inline">components/ui</code> and are unused here). Small, but it's the first thing
+          every user sees.</p></div>
+        </div>
+        <div class="debt-item">
+          <span class="sev chip neutral">Backend</span>
+          <div><h4>Token storage has no rotation/expiry story</h4>
+          <p>Bearer tokens in <code class="inline">localStorage</code> with no refresh flow is standard for
+          this app's size, but worth a conscious note: a compromised token is valid until manually revoked
+          server-side. Not a Phase 8 blocker, just an inherited constraint.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 7. ARCHITECTURE ============ -->
+    <section id="architecture">
+      <div class="sec-head">
+        <span class="eyebrow">07</span>
+        <h2>Recommended new dashboard architecture</h2>
+      </div>
+      <p class="lead-p">Keep the shell. It's correctly built and every backend domain fits through it
+      without structural change. The work is additive, not corrective.</p>
+
+      <div class="grid cols-2" style="margin-top:20px;">
+        <div class="card">
+          <h4>Keep as-is</h4>
+          <p style="color:var(--muted); font-size:0.86rem;">Router structure, <code class="inline">ProtectedRoute</code>,
+          <code class="inline">DashboardLayout</code>/<code class="inline">AppSidebar</code>/<code class="inline">AppHeader</code>,
+          the axios instance + interceptor pattern, shadcn/Tailwind as the design system, RHF+zod for forms.</p>
+        </div>
+        <div class="card">
+          <h4>Add: data layer</h4>
+          <p style="color:var(--muted); font-size:0.86rem;">A query/cache library (TanStack Query is the
+          natural fit for this axios-based setup) sitting on top of one service module per backend domain,
+          mirroring <code class="inline">src/services/</code> — <code class="inline">clients.ts</code>,
+          <code class="inline">agents.ts</code>, <code class="inline">deposits.ts</code>, etc. Removes the
+          need to hand-roll loading/error/refetch on every page.</p>
+        </div>
+        <div class="card">
+          <h4>Add: one table primitive</h4>
+          <p style="color:var(--muted); font-size:0.86rem;">Nearly every domain in §5 is "paginated list +
+          filters + row actions." A single composable table (TanStack Table headless + shadcn styling) built
+          once against the Clients list, then reused for agents, cheques, deposits, bons, etc., rather than
+          rebuilt per page.</p>
+        </div>
+        <div class="card">
+          <h4>Add: one lifecycle-detail primitive</h4>
+          <p style="color:var(--muted); font-size:0.86rem;">Bons, Allocations, Agent Transfers, and Agent
+          Stock Returns all share the identical backend shape: draft → add/edit/remove lines → validate
+          (irreversible). One detail-page pattern (header + editable line table + validate action with
+          confirmation) serves all four instead of four bespoke screens.</p>
+        </div>
+        <div class="card">
+          <h4>Add: permission-driven routing</h4>
+          <p style="color:var(--muted); font-size:0.86rem;">Replace the two independent gates (§3, §4) with
+          one: derive route access directly from the <code class="inline">permissions[]</code> array the
+          login response already returns, the same array <code class="inline">RequirePermission</code>
+          already reads — so menu visibility and route protection can't drift apart again.</p>
+        </div>
+        <div class="card">
+          <h4>Add: charts, once routes exist</h4>
+          <p style="color:var(--muted); font-size:0.86rem;">A lightweight charting library (Recharts fits a
+          shadcn-styled dashboard well) for the deposits-over-time / by-method / agent-registration series —
+          blocked only on wiring the three dead controller methods in §6.</p>
+        </div>
+      </div>
+
+      <div class="callout" style="margin-top:24px;">
+        <h3>Open question worth a decision before build starts</h3>
+        <p><b>Q1 — scope of roles.</b> Is this dashboard admin/super-admin only, or does it also need to
+        serve managers and commercials (who already have a separate <code class="inline">/agent/*</code> API
+        surface, per the backend docs)? This determines whether §4's <code class="inline">Role</code> type
+        needs widening or whether the current two-role model is correct as-is.</p>
+      </div>
+    </section>
+
+    <!-- ============ 8. ROADMAP ============ -->
+    <section id="roadmap">
+      <div class="sec-head">
+        <span class="eyebrow">08</span>
+        <h2>Recommended implementation order</h2>
+      </div>
+      <p class="lead-p">Sequenced by dependency and payoff — each step either unblocks the next or ships
+      something visible on its own.</p>
+
+      <ol class="roadmap" style="margin-top:8px;">
+        <li>
+          <span class="num">1</span>
+          <div>
+            <h4>Wire the three dead dashboard routes</h4>
+            <p>Add route lines for <code class="inline">chartData</code>, <code class="inline">recentActivities</code>,
+            <code class="inline">agentsOverview</code> — backend logic already exists.</p>
+            <p class="why">Why first: near-zero backend effort, unblocks the highest-visibility frontend page.</p>
+          </div>
+        </li>
+        <li>
+          <span class="num">2</span>
+          <div>
+            <h4>Build the Dashboard page</h4>
+            <p>Stat tiles, charts, recent-activity feed against the now-complete stats API.</p>
+            <p class="why">Why: it's the landing page every session hits; also the first place the table/chart primitives from §7 get built and proven.</p>
+          </div>
+        </li>
+        <li>
+          <span class="num">3</span>
+          <div>
+            <h4>Clients module</h4>
+            <p>List + filters, detail, assign/reassign/bulk-assign, status toggle.</p>
+            <p class="why">Why: backend explicitly marked stable/complete, broadest existing filter surface — the best place to finalize the shared table pattern.</p>
+          </div>
+        </li>
+        <li>
+          <span class="num">4</span>
+          <div>
+            <h4>Agents module (managers &amp; commercials)</h4>
+            <p>List, detail, multi-file create form, block/activate, grattage-outstanding badge.</p>
+            <p class="why">Why: reuses the Clients table pattern; the create form is the first real multi-file-upload UI needed.</p>
+          </div>
+        </li>
+        <li>
+          <span class="num">5</span>
+          <div>
+            <h4>Money domain: Cheques, Deposits, Debt Payments</h4>
+            <p>Submission, pending queue, approve/reject/annuler; deposit validate/reject.</p>
+            <p class="why">Why: highest business sensitivity (irreversible financial actions) — sequenced after the team has proven the patterns on lower-stakes domains.</p>
+          </div>
+        </li>
+        <li>
+          <span class="num">6</span>
+          <div>
+            <h4>Grattage invoices (read + cancel only)</h4>
+            <p>List/detail/cancel. Explicitly skip building UI for admin-create or settle — both are hard-403'd by backend design.</p>
+            <p class="why">Why: depends on Agents (for outstanding-obligation context) landing first.</p>
+          </div>
+        </li>
+        <li>
+          <span class="num">7</span>
+          <div>
+            <h4>Stock chain: Bons → Allocations → Agent Transfers → Agent Stock Returns</h4>
+            <p>Build the shared draft/lines/validate detail primitive once against Bons, then reuse for the other three in sequence.</p>
+            <p class="why">Why: identical backend shape across all four — one build, three reuses. Ordered by position in the physical stock chain (supplier-facing first).</p>
+          </div>
+        </li>
+        <li>
+          <span class="num">8</span>
+          <div>
+            <h4>Admins management</h4>
+            <p>List/create/update/block/delete — super-admin only, low traffic.</p>
+            <p class="why">Why: narrowest audience, safe to defer without blocking anything else.</p>
+          </div>
+        </li>
+        <li>
+          <span class="num">9</span>
+          <div>
+            <h4>Reference data: Villes, Secteurs, Products</h4>
+            <p>Simple CRUD tables, no lifecycle, no filters of consequence.</p>
+            <p class="why">Why: lowest complexity and lowest urgency — good backlog filler, not a dependency for anything above.</p>
+          </div>
+        </li>
+      </ol>
+
+      <div class="callout" style="margin-top:26px;">
+        <h3>Explicitly out of scope until backend work lands</h3>
+        <p><b>Companies &amp; Suppliers admin UI</b> — cannot start until controllers/routes exist for
+        these models (§6). Recommend raising this as a small backend ticket before Bons UI (step 7) needs
+        a supplier picker.</p>
+      </div>
+    </section>
+
+    <footer>
+      No code was written for this review. Report reflects the repository state on 2026-07-11 — awaiting
+      review before Phase 8 implementation begins.
+    </footer>
+  </main>
+</div>

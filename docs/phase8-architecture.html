@@ -1,0 +1,710 @@
+<title>Phase 8 — Domain-Driven Dashboard Architecture</title>
+<style>
+  :root {
+    --paper: #EEF0F0;
+    --panel: #FFFFFF;
+    --panel-2: #F5F6F6;
+    --ink: #171B1E;
+    --muted: #5B6570;
+    --faint: #8A939B;
+    --line: #D8DDE0;
+    --line-soft: #E4E8EA;
+    --accent: #1F6F6B;
+    --accent-ink: #0E4643;
+    --accent-soft: #DDEDEC;
+    --accent-2: #7A4F9E;
+    --accent-2-soft: #EFE6F5;
+    --ok: #2E7D4F; --ok-soft: #E1F1E6;
+    --warn: #9C6B14; --warn-soft: #FBF0DA;
+    --bad: #B23B3B; --bad-soft: #FBE6E6;
+    --retire: #6B7078; --retire-soft: #E9EAEC;
+    --shadow: 0 1px 2px rgba(20,24,27,0.04), 0 6px 20px -8px rgba(20,24,27,0.12);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #12161A; --panel: #1A2025; --panel-2: #1F262B; --ink: #E7EBEC;
+      --muted: #9AA6AC; --faint: #707A80; --line: #2A3238; --line-soft: #232A2F;
+      --accent: #4FBDB6; --accent-ink: #A9E7E2; --accent-soft: #17302E;
+      --accent-2: #B79BD6; --accent-2-soft: #2A2035;
+      --ok: #6FCB92; --ok-soft: #16281D; --warn: #E0B15C; --warn-soft: #2E260F;
+      --bad: #E58888; --bad-soft: #301A1A; --retire: #8A939B; --retire-soft: #23262A;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 10px 30px -10px rgba(0,0,0,0.5);
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #12161A; --panel: #1A2025; --panel-2: #1F262B; --ink: #E7EBEC;
+    --muted: #9AA6AC; --faint: #707A80; --line: #2A3238; --line-soft: #232A2F;
+    --accent: #4FBDB6; --accent-ink: #A9E7E2; --accent-soft: #17302E;
+    --accent-2: #B79BD6; --accent-2-soft: #2A2035;
+    --ok: #6FCB92; --ok-soft: #16281D; --warn: #E0B15C; --warn-soft: #2E260F;
+    --bad: #E58888; --bad-soft: #301A1A; --retire: #8A939B; --retire-soft: #23262A;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 10px 30px -10px rgba(0,0,0,0.5);
+  }
+  :root[data-theme="light"] {
+    --paper: #EEF0F0; --panel: #FFFFFF; --panel-2: #F5F6F6; --ink: #171B1E;
+    --muted: #5B6570; --faint: #8A939B; --line: #D8DDE0; --line-soft: #E4E8EA;
+    --accent: #1F6F6B; --accent-ink: #0E4643; --accent-soft: #DDEDEC;
+    --accent-2: #7A4F9E; --accent-2-soft: #EFE6F5;
+    --ok: #2E7D4F; --ok-soft: #E1F1E6; --warn: #9C6B14; --warn-soft: #FBF0DA;
+    --bad: #B23B3B; --bad-soft: #FBE6E6; --retire: #6B7078; --retire-soft: #E9EAEC;
+    --shadow: 0 1px 2px rgba(20,24,27,0.04), 0 6px 20px -8px rgba(20,24,27,0.12);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font-family: -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    font-size: 16px; line-height: 1.55; overflow-x: hidden;
+  }
+  ::selection { background: var(--accent-soft); color: var(--accent-ink); }
+  a { color: var(--accent); }
+  a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .mono { font-family: ui-monospace, "Cascadia Code", "SF Mono", Consolas, monospace; font-variant-numeric: tabular-nums; }
+  .eyebrow { font-weight: 700; font-size: 0.72rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); }
+  h1, h2, h3, h4 { text-wrap: balance; font-weight: 800; letter-spacing: -0.01em; color: var(--ink); }
+  p { max-width: 74ch; }
+  .lead-p { color: var(--muted); max-width: 70ch; }
+
+  .shell { display: grid; grid-template-columns: 240px minmax(0,1fr); min-height: 100vh; }
+  @media (max-width: 900px) { .shell { grid-template-columns: 1fr; } }
+  nav.toc {
+    position: sticky; top: 0; align-self: start; height: 100vh;
+    border-right: 1px solid var(--line); background: var(--panel-2); padding: 28px 18px; overflow-y: auto;
+  }
+  @media (max-width: 900px) { nav.toc { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--line); } }
+  nav.toc .brand { font-weight: 800; font-size: 1rem; margin-bottom: 3px; }
+  nav.toc .brand-sub { font-size: 0.78rem; color: var(--muted); margin-bottom: 22px; }
+  nav.toc ol { list-style: none; margin: 0; padding: 0; counter-reset: sec; display: flex; flex-direction: column; gap: 2px; }
+  nav.toc li { counter-increment: sec; }
+  nav.toc a { display: flex; gap: 10px; align-items: baseline; text-decoration: none; color: var(--muted); font-size: 0.85rem; padding: 7px 8px; border-radius: 6px; }
+  nav.toc a:hover { background: var(--panel); color: var(--ink); }
+  nav.toc a::before { content: counter(sec, decimal-leading-zero); font-family: ui-monospace, monospace; font-size: 0.7rem; color: var(--faint); flex: none; }
+
+  main { min-width: 0; }
+  header.hero { padding: 56px clamp(20px, 5vw, 64px) 40px; border-bottom: 1px solid var(--line); }
+  header.hero h1 { font-size: clamp(1.5rem, 3vw, 2.15rem); margin: 12px 0 10px; max-width: 22ch; }
+  header.hero p.lede { color: var(--muted); max-width: 64ch; font-size: 1.02rem; margin: 0 0 20px; }
+  .meta-row { display: flex; flex-wrap: wrap; gap: 10px 22px; font-size: 0.82rem; color: var(--muted); }
+  .meta-row b { color: var(--ink); font-weight: 700; }
+
+  section { padding: 44px clamp(20px, 5vw, 64px); border-bottom: 1px solid var(--line-soft); }
+  section:last-of-type { border-bottom: none; }
+  .sec-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 10px; }
+  .sec-head h2 { font-size: 1.35rem; margin: 0; }
+  .sec-intro { margin-bottom: 22px; }
+
+  .callout { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 8px; padding: 18px 22px; box-shadow: var(--shadow); max-width: 78ch; }
+  .callout h3 { font-size: 0.95rem; margin: 0 0 8px; }
+  .callout p { margin: 0; color: var(--muted); font-size: 0.94rem; }
+  .callout p + p { margin-top: 8px; }
+  .callout.purple { border-left-color: var(--accent-2); }
+
+  .grid { display: grid; gap: 14px; }
+  .grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+  .grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
+  @media (max-width: 760px) { .grid.cols-3, .grid.cols-2 { grid-template-columns: 1fr; } }
+
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; box-shadow: var(--shadow); }
+  .card h4 { font-size: 0.9rem; margin: 0 0 6px; }
+  .card p { color: var(--muted); font-size: 0.86rem; margin: 0; }
+
+  .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); }
+  table { border-collapse: collapse; width: 100%; min-width: 560px; background: var(--panel); }
+  thead th { text-align: left; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); padding: 10px 14px; border-bottom: 1px solid var(--line); background: var(--panel-2); white-space: nowrap; }
+  tbody td { padding: 10px 14px; border-bottom: 1px solid var(--line-soft); font-size: 0.87rem; vertical-align: top; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover td { background: var(--panel-2); }
+
+  .chip { display: inline-flex; align-items: center; gap: 5px; font-size: 0.74rem; font-weight: 700; padding: 3px 9px; border-radius: 99px; white-space: nowrap; line-height: 1.6; }
+  .chip.ok { background: var(--ok-soft); color: var(--ok); }
+  .chip.warn { background: var(--warn-soft); color: var(--warn); }
+  .chip.bad { background: var(--bad-soft); color: var(--bad); }
+  .chip.accent { background: var(--accent-soft); color: var(--accent-ink); }
+  .chip.accent2 { background: var(--accent-2-soft); color: var(--accent-2); }
+  .chip.neutral { background: var(--panel-2); color: var(--muted); border: 1px solid var(--line); }
+
+  /* ---------- domain map diagram ---------- */
+  .domain-map { display: flex; flex-direction: column; gap: 8px; }
+  .dm-band { border: 1px dashed var(--line); border-radius: 10px; padding: 10px 16px; text-align: center; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--faint); }
+  .dm-flow { text-align: center; font-family: ui-monospace, monospace; font-size: 0.72rem; color: var(--faint); padding: 2px 0; }
+  .dm-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+  @media (max-width: 760px) { .dm-row { grid-template-columns: 1fr; } }
+  .dm-row.wide { grid-template-columns: 1fr; }
+  .dm-node { border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; background: var(--panel); box-shadow: var(--shadow); }
+  .dm-node.seam { border: 1.5px solid var(--accent); background: var(--accent-soft); }
+  .dm-node.home { border: 1.5px solid var(--accent-2); background: var(--accent-2-soft); text-align: center; }
+  .dm-node h4 { margin: 0 0 4px; font-size: 0.98rem; }
+  .dm-node .sub { font-size: 0.8rem; color: var(--muted); }
+  .dm-node .tag { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--faint); font-weight: 700; margin-bottom: 6px; display: block; }
+
+  /* ---------- module dossier ---------- */
+  .module { border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 10px; background: var(--panel); box-shadow: var(--shadow); padding: 22px 24px; margin-bottom: 18px; }
+  .module.seam-mod { border-left-color: var(--accent-2); }
+  .module .mod-head { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 4px; }
+  .module .mod-head h3 { font-size: 1.08rem; margin: 0; }
+  .module .mod-sub { color: var(--muted); font-size: 0.85rem; margin: 0 0 16px; }
+  .mod-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 760px) { .mod-fields { grid-template-columns: 1fr; } }
+  .mod-field .label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--faint); font-weight: 700; margin-bottom: 6px; }
+  .mod-field p, .mod-field ul { margin: 0; font-size: 0.87rem; color: var(--ink); }
+  .mod-field ul { padding-left: 0; list-style: none; display: flex; flex-direction: column; gap: 3px; }
+  .mod-field li.mono { font-size: 0.79rem; color: var(--muted); }
+  .mod-field.full { grid-column: 1 / -1; }
+
+  /* ---------- nav tree mockup ---------- */
+  .navmock { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 20px clamp(14px,3vw,28px); box-shadow: var(--shadow); overflow-x: auto; }
+  .navtree { list-style: none; margin: 0; padding: 0; font-size: 0.88rem; min-width: 320px; }
+  .navtree > li { margin-bottom: 10px; }
+  .navtree .grp { display: flex; align-items: center; gap: 8px; font-weight: 700; color: var(--ink); padding: 4px 0; }
+  .navtree .grp .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex: none; }
+  .navtree ul { list-style: none; margin: 4px 0 0 15px; padding: 0 0 0 12px; border-left: 1px solid var(--line); display: flex; flex-direction: column; gap: 3px; }
+  .navtree ul li { color: var(--muted); padding: 3px 0; font-size: 0.84rem; }
+  .navtree ul li b { color: var(--ink); font-weight: 600; }
+
+  /* ---------- roadmap phases ---------- */
+  .phase { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); box-shadow: var(--shadow); padding: 22px 24px; margin-bottom: 16px; }
+  .phase-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 6px; }
+  .phase-head .p-num { font-family: ui-monospace, monospace; font-weight: 800; color: var(--accent); font-size: 1rem; }
+  .phase-head h4 { margin: 0; font-size: 1.05rem; }
+  .phase .domains { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 12px; }
+  .phase p { color: var(--muted); font-size: 0.88rem; margin: 0 0 8px; }
+  .phase .deliv { margin: 0; padding-left: 18px; font-size: 0.85rem; color: var(--ink); }
+  .phase .deliv li { margin-bottom: 3px; }
+  .phase .depends { font-size: 0.78rem; color: var(--faint); font-style: italic; margin-top: 10px; }
+
+  code.inline { font-family: ui-monospace, monospace; background: var(--panel-2); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; font-size: 0.85em; }
+
+  footer { padding: 34px clamp(20px,5vw,64px) 56px; color: var(--faint); font-size: 0.82rem; }
+</style>
+
+<div class="shell">
+  <nav class="toc" aria-label="Report sections">
+    <div class="brand">Miza · Phase 8</div>
+    <div class="brand-sub">Dashboard Architecture</div>
+    <ol>
+      <li><a href="#principles">Design principles</a></li>
+      <li><a href="#map">Domain map</a></li>
+      <li><a href="#nav">Navigation &amp; sidebar</a></li>
+      <li><a href="#layouts">Shared layout system</a></li>
+      <li><a href="#modules">Top-level modules</a></li>
+      <li><a href="#workflows">Cross-module workflows</a></li>
+      <li><a href="#components">Component library</a></li>
+      <li><a href="#patterns">Reusable page patterns</a></li>
+      <li><a href="#crud">Reusable CRUD structure</a></li>
+      <li><a href="#permissions">Permission architecture</a></li>
+      <li><a href="#roadmap">Domain-driven roadmap</a></li>
+    </ol>
+  </nav>
+
+  <main>
+    <header class="hero">
+      <div class="eyebrow">Architecture proposal — no code written</div>
+      <h1>A dashboard shaped like the business, not like the old screens</h1>
+      <p class="lede">
+        The legacy pages (<code class="inline">/admins</code>, <code class="inline">/agents</code>,
+        <code class="inline">/clients</code>, <code class="inline">/transactions</code>) are discarded as
+        an information architecture. In their place: five business domains — <b>Network</b>,
+        <b>Money</b>, <b>Stock</b>, <b>Grattage</b>, and <b>Reference</b> — mirroring the domain
+        boundaries the backend already enforces (<code class="inline">architecture-roadmap.md</code>'s
+        Stock/Money split, the Grattage seam, the Spatie permission graph). Every module below is sized
+        to a real cluster of backend routes, not a placeholder file.
+      </p>
+      <div class="meta-row">
+        <span><b>Input</b> approved Phase 8 discovery report</span>
+        <span><b>Output</b> IA, layout system, component/pattern library, permission model, roadmap</span>
+        <span><b>Status</b> Design only — awaiting approval before implementation</span>
+      </div>
+    </header>
+
+    <!-- 1 PRINCIPLES -->
+    <section id="principles">
+      <div class="sec-head"><span class="eyebrow">01</span><h2>Design principles</h2></div>
+      <div class="grid cols-3 sec-intro" style="margin-top:18px;">
+        <div class="card"><h4>Domain-first IA</h4><p>Navigation groups by what the business does (move stock,
+        move money, sell grattage), not by what CRUD screen exists. A module exists because a backend
+        domain exists — never the reverse.</p></div>
+        <div class="card"><h4>One shape per repeating problem</h4><p>The backend already repeats two shapes
+        constantly: "paginated list with filters" and "draft → lines → irreversible validate." The frontend
+        should build each shape exactly once and configure it per domain, not rebuild it per page.</p></div>
+        <div class="card"><h4>Permissions as the single source of truth for access</h4><p>Every nav item,
+        route, and action button reads from the same permission registry the backend already returns at
+        login — closing the sidebar/route drift flagged in the discovery report.</p></div>
+      </div>
+    </section>
+
+    <!-- 2 DOMAIN MAP -->
+    <section id="map">
+      <div class="sec-head"><span class="eyebrow">02</span><h2>Domain map</h2></div>
+      <p class="lead-p sec-intro">How the five domains relate, layered the way the backend's own
+      architecture doc describes it: Network underpins everything; Stock and Money are strictly separated
+      ledgers; Grattage is the seam where they touch; Reference data sits underneath as shared lookup.</p>
+
+      <div class="domain-map">
+        <div class="dm-row wide"><div class="dm-node home"><span class="tag">Entry point</span>
+          <h4>Overview</h4><span class="sub">Role-aware landing page — composed from every domain below, owns nothing itself</span></div></div>
+        <div class="dm-flow">↓ reads from</div>
+        <div class="dm-row wide"><div class="dm-node"><span class="tag">Foundation · identity</span>
+          <h4>Network</h4><span class="sub">Admins · Managers · Commercials · Clients — every other domain foreign-keys into this one</span></div></div>
+        <div class="dm-flow">↓ moves inventory · ↓ moves cash</div>
+        <div class="dm-row">
+          <div class="dm-node"><span class="tag">Ledger — physical</span><h4>Stock</h4>
+            <span class="sub">Bons → Allocations → Transfers → Returns. Append-only, four-shape lifecycle.</span></div>
+          <div class="dm-node seam"><span class="tag">The seam</span><h4>Grattage</h4>
+            <span class="sub">Consumes Stock, generates a settlement obligation Money resolves. Restock gate lives here.</span></div>
+          <div class="dm-node"><span class="tag">Ledger — financial</span><h4>Money</h4>
+            <span class="sub">Cheques → capacity. Deposits → settles Grattage. Debt Payments → admin's own balance.</span></div>
+        </div>
+        <div class="dm-flow">↓ both reference</div>
+        <div class="dm-row wide"><div class="dm-band">Reference &amp; Settings — Villes · Secteurs · Products · Companies · Suppliers</div></div>
+      </div>
+
+      <div class="callout purple" style="margin-top:22px;">
+        <h3>Why Grattage isn't filed under Stock or Money</h3>
+        <p>It's tempting to nest Grattage under either Stock (it consumes commercial stock) or Money (it
+        creates a settlement obligation). The backend explicitly keeps it as neither — <code class="inline">architecture-roadmap.md</code>
+        calls the two domains "strictly separated... share no tables and write through no common service,"
+        with Grattage/reconciliation as the one coupling point. Giving it its own top-level module — rather
+        than burying it as a tab inside Stock or Money — keeps that boundary visible to whoever builds the
+        UI next, and gives the restock-gate rule (§6) one obvious home instead of two half-homes.</p>
+      </div>
+    </section>
+
+    <!-- 3 NAV -->
+    <section id="nav">
+      <div class="sec-head"><span class="eyebrow">03</span><h2>Navigation &amp; sidebar</h2></div>
+      <p class="lead-p sec-intro">Two-level nav: five collapsible domain groups plus Overview, each expanding
+      to its sub-modules. Group membership and item labels below are the literal proposed sidebar copy.</p>
+
+      <div class="navmock">
+        <ul class="navtree">
+          <li><div class="grp"><span class="dot"></span>Overview</div></li>
+          <li><div class="grp"><span class="dot"></span>Network</div>
+            <ul><li><b>Admins</b></li><li><b>Managers</b></li><li><b>Commercials</b></li><li><b>Clients</b></li></ul></li>
+          <li><div class="grp"><span class="dot"></span>Money</div>
+            <ul><li><b>Cheques</b> <span class="chip warn" style="margin-left:4px;">queue</span></li><li><b>Deposits</b> <span class="chip warn" style="margin-left:4px;">queue</span></li><li><b>Debt Payments</b></li></ul></li>
+          <li><div class="grp"><span class="dot"></span>Stock</div>
+            <ul><li><b>Bons</b> <span class="mono" style="font-size:.75rem;">(Supplier → Company)</span></li>
+                <li><b>Allocations</b> <span class="mono" style="font-size:.75rem;">(Company → Agent)</span></li>
+                <li><b>Agent Transfers</b> <span class="mono" style="font-size:.75rem;">(Manager → Commercial)</span></li>
+                <li><b>Agent Stock Returns</b> <span class="mono" style="font-size:.75rem;">(Commercial → Manager)</span></li>
+                <li><b>Companies &amp; Suppliers</b> <span class="chip bad" style="margin-left:4px;">needs API</span></li></ul></li>
+          <li><div class="grp"><span class="dot"></span>Grattage</div>
+            <ul><li><b>Invoices</b></li><li><b>Outstanding &amp; Restock Gate</b></li></ul></li>
+          <li><div class="grp"><span class="dot"></span>Settings</div>
+            <ul><li><b>Villes</b></li><li><b>Secteurs</b></li><li><b>Products</b></li></ul></li>
+        </ul>
+      </div>
+
+      <div class="grid cols-2" style="margin-top:20px;">
+        <div class="card"><h4>Sidebar rendering rule</h4><p>A domain group renders only if the user holds
+        at least one permission belonging to it; a sub-item renders only if its own specific permission is
+        present. Same registry as route guards (§10) — one list, two consumers, can't drift.</p></div>
+        <div class="card"><h4>Breadcrumb</h4><p><code class="inline">Domain › Sub-module › Entity</code> —
+        e.g. <code class="inline">Stock › Allocations › ALLOC-0142</code>. Doubles as the back-navigation
+        target from any detail or workspace page.</p></div>
+      </div>
+    </section>
+
+    <!-- 4 LAYOUTS -->
+    <section id="layouts">
+      <div class="sec-head"><span class="eyebrow">04</span><h2>Shared layout system</h2></div>
+      <p class="lead-p sec-intro">Five page skeletons cover every screen in the domain map. A new
+      backend resource gets a new page by picking one of these, not by designing a sixth.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th style="min-width:170px;">Layout</th><th>Structure</th><th>Used by</th></tr></thead>
+          <tbody>
+            <tr><td><b>AppShell</b></td><td>Sidebar (domain nav) + header (breadcrumb, search, profile) + routed content area. Kept unchanged from the current build.</td><td>Every screen</td></tr>
+            <tr><td><b>ListPage</b></td><td>Filter bar → data table → pagination. Optional right-side drawer for quick create.</td><td>Clients, Admins, Cheques, Deposits, Grattage Invoices, reference tables</td></tr>
+            <tr><td><b>DetailPage</b></td><td>Header block (title, status chip, key facts) + sectioned or tabbed body + activity/audit trail.</td><td>Admin detail, single Client, single Cheque</td></tr>
+            <tr><td><b>DraftLifecyclePage</b></td><td>Header (status, validate/cancel actions) + editable line-item table + running total + confirmation-gated irreversible actions.</td><td>Bons, Allocations, Agent Transfers, Agent Stock Returns</td></tr>
+            <tr><td><b>WorkspacePage</b></td><td>Entity header + composed panels pulled from <em>multiple</em> domains (the only layout that crosses domain boundaries by design).</td><td>Agent 360, Client 360 (§6)</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 5 MODULES -->
+    <section id="modules">
+      <div class="sec-head"><span class="eyebrow">05</span><h2>Top-level modules</h2></div>
+      <p class="lead-p sec-intro">Purpose, backend surface, and forward-looking notes for each domain,
+      plus the Overview module that sits above all of them.</p>
+
+      <div class="module" style="border-left-color:var(--accent-2);">
+        <div class="mod-head"><h3>Overview <span class="chip accent2">home</span></h3></div>
+        <p class="mod-sub">The only module with no CRUD of its own — a composed read surface over every other domain.</p>
+        <div class="mod-fields">
+          <div class="mod-field"><span class="label">Purpose</span>
+            <p>Answer, at a glance: is the network healthy, is cash moving, is stock exposure normal, what
+            needs a decision right now (pending cheques, pending deposits, overdue grattage).</p></div>
+          <div class="mod-field"><span class="label">Backend APIs</span>
+            <ul>
+              <li class="mono">GET /admin/dashboard/statistics</li>
+              <li class="mono">chartData / recentActivities / agentsOverview — need routing (discovery §6)</li>
+              <li class="mono">Composed: /admin/cheques/pending, /admin/depos?status=pending, /admin/grattage-invoices?status=overdue</li>
+            </ul></div>
+          <div class="mod-field full"><span class="label">Future scalability</span>
+            <p>Built as a widget grid, not a fixed page — each stat tile, chart, or queue is one widget
+            reading one endpoint. A sixth domain later adds a widget, never a redesign. Widget visibility
+            follows the same permission registry as the sidebar (§10).</p></div>
+        </div>
+      </div>
+
+      <div class="module">
+        <div class="mod-head"><h3>Network <span class="chip ok">foundation</span></h3></div>
+        <p class="mod-sub">Admins, Managers, Commercials, Clients — the org graph every other domain
+        references by <code class="inline">agent_id</code> / <code class="inline">client_id</code>.</p>
+        <div class="mod-fields">
+          <div class="mod-field"><span class="label">Purpose</span>
+            <p>Manage who can act in the system (internal admins, field managers and commercials) and who
+            they serve (clients). Owns onboarding, status (active/blocked), assignment, and the
+            manager↔commercial hierarchy.</p></div>
+          <div class="mod-field"><span class="label">Backend APIs</span>
+            <ul>
+              <li class="mono">/admin/admins — full CRUD + block</li>
+              <li class="mono">/admin/agents — store, managers, commercials, show, update, block, activate, toggle-status, sub-data, grattage-outstanding</li>
+              <li class="mono">/admin/clients — index, store, unassigned, statistics, show, update, destroy, status, assign, assign-bulk, unassign, reset-password</li>
+            </ul></div>
+          <div class="mod-field full"><span class="label">Future scalability</span>
+            <p>The manager→commercial hierarchy is one level deep today. Model the org chart as a generic
+            tree component (parent/children, not hardcoded "manager" and "commercial" columns) so a future
+            third tier (e.g. regional director) is a data change, not a UI rewrite. Client self-registration
+            (OTP) already exists server-side with no admin surface yet — a "pending registrations" queue is
+            a natural first extension.</p></div>
+        </div>
+      </div>
+
+      <div class="module">
+        <div class="mod-head"><h3>Money <span class="chip neutral">ledger</span></h3></div>
+        <p class="mod-sub">Cheques, Deposits, Debt Payments — everything that moves cash or grants stock
+        capacity.</p>
+        <div class="mod-fields">
+          <div class="mod-field"><span class="label">Purpose</span>
+            <p>Turn a cheque into rapped (cash-like) and grattage (stock-capacity) advances; validate cash
+            deposits, including the ones that reconcile a grattage obligation; track each admin's own debt
+            to the company.</p></div>
+          <div class="mod-field"><span class="label">Backend APIs</span>
+            <ul>
+              <li class="mono">/admin/cheques — store, index, pending, show, approve, reject, annuler, agent history</li>
+              <li class="mono">/admin/depos — index, store, show, validate, reject</li>
+              <li class="mono">/admin/debt-payments — index, store</li>
+            </ul></div>
+          <div class="mod-field full"><span class="label">Future scalability</span>
+            <p>Deposits already carry a <code class="inline">type</code>/<code class="inline">status</code>
+            distinction (ordinary vs. Phase 5.10 grattage-reconciliation deposits) — the list view should
+            filter/tab by type from day one, so a third deposit type later is a filter option, not a new
+            page. Pending Cheques and Pending Deposits are both natural instances of the shared
+            ApprovalQueuePage pattern (§8).</p></div>
+        </div>
+      </div>
+
+      <div class="module">
+        <div class="mod-head"><h3>Stock <span class="chip neutral">ledger</span></h3></div>
+        <p class="mod-sub">Bons → Allocations → Agent Transfers → Agent Stock Returns — the physical chain
+        from supplier to commercial, plus the parties and products it moves.</p>
+        <div class="mod-fields">
+          <div class="mod-field"><span class="label">Purpose</span>
+            <p>Track inventory as it descends Supplier → Company (Bon) → Manager (Allocation) → Commercial
+            (Agent Transfer), and back up on return (Agent Stock Return). Every screen here is a variation
+            of "draft, add lines, validate" — validation is irreversible and stock-checked.</p></div>
+          <div class="mod-field"><span class="label">Backend APIs</span>
+            <ul>
+              <li class="mono">/admin/bons — CRUD + validate/cancel + nested lines</li>
+              <li class="mono">/admin/allocations — CRUD + validate + nested lines</li>
+              <li class="mono">/admin/agent-transfers — CRUD + validate + nested lines</li>
+              <li class="mono">/admin/agent-stock-returns — CRUD + validate + nested lines</li>
+              <li class="mono">/admin/products — apiResource</li>
+              <li class="mono">Companies / Suppliers — <span class="chip bad">no controller yet</span></li>
+            </ul></div>
+          <div class="mod-field full"><span class="label">Future scalability</span>
+            <p>All four movement types share one shape and one error-code family (insufficient stock,
+            binding mismatch, role/status drift). Generalize into a single configurable "stock movement"
+            primitive (§9) — a hypothetical fifth movement type becomes a config entry, not a new page
+            class. A cross-cutting "stock ledger" view (filterable by agent, company, or movement type) is
+            a natural addition once all four exist. Companies &amp; Suppliers directory screens are blocked
+            until the backend ships controllers for them — flagged in the discovery report, unchanged here.</p></div>
+        </div>
+      </div>
+
+      <div class="module seam-mod">
+        <div class="mod-head"><h3>Grattage <span class="chip accent2">the seam</span></h3></div>
+        <p class="mod-sub">Retail sales layer — commercials sell stock to clients for cash and incur a
+        same/next-day settlement obligation. Read + reconciliation surface only; creation and settlement
+        are commercial-only / deposit-driven by backend design.</p>
+        <div class="mod-fields">
+          <div class="mod-field"><span class="label">Purpose</span>
+            <p>Give admins visibility into sales the field made (invoices), which are still owed
+            (outstanding obligation per agent), and which commercials are currently blocked from receiving
+            new stock (restock gate) — without duplicating the commercial's own sale-entry flow.</p></div>
+          <div class="mod-field"><span class="label">Backend APIs</span>
+            <ul>
+              <li class="mono">/admin/grattage-invoices — index, show, cancel (store &amp; settle hard-403 by design)</li>
+              <li class="mono">/admin/agents/{id}/grattage-outstanding — obligation + restock-gate state</li>
+            </ul></div>
+          <div class="mod-field full"><span class="label">Future scalability</span>
+            <p>The restock gate is a rule that <em>other</em> domains must respect (Stock's Allocation and
+            Agent Transfer forms), not a Grattage-only concern — it should ship as a shared hook/component
+            consumed cross-domain (§6), not buried in this module alone. Do not build UI for admin-create or
+            admin-settle: both routes are intentionally disabled server-side (Phase 5.8b / 5.10) and are
+            candidates for deletion on the backend, not for a frontend workaround.</p></div>
+        </div>
+      </div>
+
+      <div class="module">
+        <div class="mod-head"><h3>Reference &amp; Settings <span class="chip neutral">low churn</span></h3></div>
+        <p class="mod-sub">Villes, Secteurs, Products — lookup data other domains depend on.</p>
+        <div class="mod-fields">
+          <div class="mod-field"><span class="label">Purpose</span>
+            <p>Maintain the geography and product catalog that Agents, Clients, Bons, and Allocations all
+            select from. No workflow, no lifecycle — pure reference tables.</p></div>
+          <div class="mod-field"><span class="label">Backend APIs</span>
+            <ul><li class="mono">apiResource villes / secteurs / products</li></ul></div>
+          <div class="mod-field full"><span class="label">Future scalability</span>
+            <p>The proving ground for the generic CRUD-config generator (§9) — lowest risk, fastest to
+            build, and validates the pattern before it's relied on for higher-stakes domains.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6 WORKFLOWS -->
+    <section id="workflows">
+      <div class="sec-head"><span class="eyebrow">06</span><h2>Cross-module workflows</h2></div>
+      <p class="lead-p sec-intro">Where the domain boundaries in §2 are deliberately crossed by the UI —
+      each one backed by a real coupling the backend already enforces.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th style="min-width:190px;">Workflow</th><th>Crosses</th><th>UI behavior</th></tr></thead>
+          <tbody>
+            <tr><td><b>Agent 360</b></td><td>Network + Money + Stock + Grattage</td>
+              <td>Agent detail becomes a WorkspacePage: profile (Network), cheque/deposit history (Money),
+              current stock balance + transfer/return history (Stock), outstanding obligation + restock
+              gate (Grattage) — one screen, reached from the Network module.</td></tr>
+            <tr><td><b>Client 360</b></td><td>Network + Grattage</td>
+              <td>Client detail composes profile/assignment history (Network) with purchase history via
+              grattage invoices (Grattage).</td></tr>
+            <tr><td><b>Cheque approval → capacity</b></td><td>Money → Stock</td>
+              <td>Approving a cheque changes an agent's rapped/grattage capacity immediately; Stock's
+              Allocation/Agent Transfer forms must invalidate and refetch that agent's capacity rather than
+              showing stale numbers.</td></tr>
+            <tr><td><b>Deposit validation → Grattage settlement</b></td><td>Money → Grattage</td>
+              <td>Validating a reconciliation deposit flips grattage invoices pending/overdue → settled. The
+              Deposit detail links to the invoice(s) it settled; the Invoice detail links back to its
+              settling deposit.</td></tr>
+            <tr><td><b>Restock gate check</b></td><td>Grattage → Stock</td>
+              <td>Before submitting an Allocation or Agent Transfer to a commercial with an outstanding
+              obligation, the form surfaces the gate state inline (shared hook, §5 Grattage) instead of
+              failing only after submit.</td></tr>
+            <tr><td><b>Zero-stock reassignment guard</b></td><td>Stock → Network</td>
+              <td>Reassigning a commercial's manager is backend-blocked while they hold stock. The Agent
+              edit form (Network) shows the live Stock balance inline and disables the manager field with an
+              explanation rather than letting the request round-trip to a 422.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 7 COMPONENTS -->
+    <section id="components">
+      <div class="sec-head"><span class="eyebrow">07</span><h2>Reusable component library</h2></div>
+      <p class="lead-p sec-intro">Built once, configured per domain. Grouped by the three things the task
+      called out — tables, filters, forms — plus the small set of domain-agnostic primitives everything
+      else leans on.</p>
+
+      <div class="grid cols-2" style="margin-top:18px;">
+        <div class="card"><h4>DataTable</h4><p>Headless table + sort + row actions + empty/loading/error
+        states. One instance styled once against shadcn, reused by every list in the app.</p></div>
+        <div class="card"><h4>FilterBar</h4><p>Search input + typed filter chips (select, date-range,
+        status) declared per resource, synced to the URL query string so filtered views are linkable and
+        survive a refresh.</p></div>
+        <div class="card"><h4>LineItemsEditor</h4><p>Product + quantity + unit price row editor with running
+        total. Powers Bon, Allocation, Agent Transfer, and Agent Stock Return line entry — one component,
+        four domains.</p></div>
+        <div class="card"><h4>ConfirmActionDialog</h4><p>Typed confirmation for irreversible actions
+        (validate, approve, annuler, cancel) — states the consequence in the resource's own terms, not a
+        generic "are you sure?".</p></div>
+        <div class="card"><h4>StatusBadge</h4><p>One semantic-color chip vocabulary (pending / active /
+        validated / settled / overdue / blocked / cancelled) reused across every domain's status column
+        instead of each module inventing its own palette.</p></div>
+        <div class="card"><h4>MoneyAmount</h4><p>Tabular-nums currency formatting with a consistent
+        DH/decimal convention — used anywhere an amount renders, from stat tiles to line-item totals.</p></div>
+        <div class="card"><h4>EntityLink</h4><p>Mini agent/client/company chip (avatar + name, click-through
+        to detail) — replaces raw IDs anywhere a foreign key would otherwise render as a number.</p></div>
+        <div class="card"><h4>FileUploadField</h4><p>Preview + validation wrapper around the image/PDF
+        uploads Agent onboarding and Cheque submission both require.</p></div>
+        <div class="card"><h4>Timeline</h4><p>Created → validated/settled → cancelled audit trail, reused on
+        every DetailPage and DraftLifecyclePage that has a status history.</p></div>
+        <div class="card"><h4>StatCard / ChartCard</h4><p>Overview widget shells (§5) — a labelled number or
+        a labelled chart in a consistent frame, so new dashboard widgets drop in without new layout code.</p></div>
+        <div class="card"><h4>PermissionGate</h4><p><code class="inline">&lt;Can permission="…"&gt;</code> —
+        wraps any button, nav item, or route; renders nothing (or a disabled state with reason) when the
+        permission is absent. See §10.</p></div>
+        <div class="card"><h4>FormDrawer</h4><p>Slide-over create/edit form shell (RHF + zod), used for
+        every "quick create" action off a ListPage without leaving the list context.</p></div>
+      </div>
+    </section>
+
+    <!-- 8 PATTERNS -->
+    <section id="patterns">
+      <div class="sec-head"><span class="eyebrow">08</span><h2>Reusable page patterns</h2></div>
+      <p class="lead-p sec-intro">The five layouts from §4, mapped to which domains actually instantiate
+      them — this is the proof that five shapes cover the whole app.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Pattern</th><th>Instantiated by</th><th>Distinguishing feature</th></tr></thead>
+          <tbody>
+            <tr><td><b>ListPage</b></td><td>Admins, Managers, Commercials, Clients, Villes, Secteurs, Products, Grattage Invoices</td><td>Filter bar + DataTable + pagination; plain CRUD, no lifecycle</td></tr>
+            <tr><td><b>ApprovalQueuePage</b></td><td>Pending Cheques, Pending Deposits</td><td>ListPage variant defaulted to an actionable subset (status=pending) with inline approve/reject</td></tr>
+            <tr><td><b>DetailPage</b></td><td>Single Admin, single Cheque, single Deposit, single Debt Payment</td><td>Header + facts + Timeline; no editable line items</td></tr>
+            <tr><td><b>DraftLifecyclePage</b></td><td>Bons, Allocations, Agent Transfers, Agent Stock Returns</td><td>LineItemsEditor + ConfirmActionDialog-gated validate/cancel; the one genuinely new pattern this app needs</td></tr>
+            <tr><td><b>CreateWizard</b></td><td>Agent onboarding (multi-file, role-conditional fields)</td><td>Multi-step form over FileUploadField + conditional zod schema; the only multi-step flow in the app</td></tr>
+            <tr><td><b>WorkspacePage</b></td><td>Agent 360, Client 360</td><td>Composes panels from multiple domains (§6) — the only cross-domain layout</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 9 CRUD -->
+    <section id="crud">
+      <div class="sec-head"><span class="eyebrow">09</span><h2>Reusable CRUD structure</h2></div>
+      <p class="lead-p sec-intro">Most of §5's modules are the same CRUD shape wearing different field
+      names. Rather than hand-building ~15 near-identical list/detail/form trios, define each resource
+      once as data and let the ListPage/DetailPage/FormDrawer patterns read that definition.</p>
+
+      <div class="card" style="max-width:78ch;">
+        <h4>Resource definition (concept, not code)</h4>
+        <p>Per domain resource: its endpoints (list/create/show/update/delete), its table columns, its
+        filter fields, its create/edit form schema, and the permission string gating each action. Villes,
+        Secteurs, Products, and Admins are pure instances of this — zero bespoke page code, only a
+        definition file. Clients and Agents extend the same base definition with the extra pieces they
+        genuinely need (bulk-assign, multi-file onboarding, status-specific actions) rather than being
+        built from scratch.</p>
+      </div>
+
+      <div class="callout" style="margin-top:18px;">
+        <h3>Where the generic structure stops</h3>
+        <p>Bons, Allocations, Agent Transfers, and Agent Stock Returns are <em>not</em> forced into the plain
+        CRUD generator — they get their own "stock movement" definition (line items, validate/cancel
+        transitions, domain error codes) feeding the DraftLifecyclePage pattern instead. Two generators,
+        not one overloaded one: plain-resource CRUD, and stock-movement lifecycle.</p>
+      </div>
+    </section>
+
+    <!-- 10 PERMISSIONS -->
+    <section id="permissions">
+      <div class="sec-head"><span class="eyebrow">10</span><h2>Permission architecture</h2></div>
+      <p class="lead-p sec-intro">One registry, three consumers — the fix for the sidebar/route drift the
+      discovery report flagged.</p>
+
+      <div class="grid cols-3" style="margin-top:18px;">
+        <div class="card"><h4>1. Registry</h4><p>A single map of domain → action → backend permission
+        string, mirroring the backend's own <code class="inline">App\Authorization\*Permissions</code>
+        classes (<code class="inline">BonPermissions</code>, <code class="inline">AllocationPermissions</code>,
+        etc.) so the two stay named the same thing on both sides.</p></div>
+        <div class="card"><h4>2. Route guards</h4><p>Every route in the router is generated from the
+        registry, not hand-wrapped per route — closing the gap where five legacy routes had no guard at
+        all.</p></div>
+        <div class="card"><h4>3. UI gating</h4><p>Sidebar items, action buttons, and form fields all read
+        the same registry through the <code class="inline">PermissionGate</code> component (§7) — a
+        permission added to the registry shows up consistently everywhere in one change.</p></div>
+      </div>
+
+      <div class="callout" style="margin-top:20px;">
+        <h3>Role model note</h3>
+        <p>The backend has four roles (<code class="inline">super-admin</code>, <code class="inline">admin</code>,
+        <code class="inline">manager</code>, <code class="inline">commercial</code>); this architecture is
+        scoped to the two admin-facing roles per the discovery report's open question. If Managers or
+        Commercials are later given dashboard access, the registry and route-guard generator need no
+        change — only new entries — because nothing here hardcodes the two-role assumption structurally.</p>
+      </div>
+    </section>
+
+    <!-- 11 ROADMAP -->
+    <section id="roadmap">
+      <div class="sec-head"><span class="eyebrow">11</span><h2>Domain-driven roadmap</h2></div>
+      <p class="lead-p sec-intro">Sequenced by which domains other domains depend on — not by which single
+      page looks best first. Each phase ships a complete domain (list + detail + lifecycle where relevant),
+      not a scattering of half-built pages across several domains.</p>
+
+      <div class="phase">
+        <div class="phase-head"><span class="p-num">Phase 0</span><h4>Platform foundation</h4></div>
+        <div class="domains"><span class="chip accent">Shared shell</span><span class="chip accent">Permission registry</span><span class="chip accent">Pattern library</span></div>
+        <p>Build the five layouts (§4), the component library (§7), the permission registry (§10), and the
+        CRUD/lifecycle generators (§9) against no real domain yet — or against a throwaway/reference
+        resource. Nothing user-facing ships, but every later phase becomes configuration instead of
+        construction.</p>
+        <ul class="deliv"><li>AppShell, ListPage, DetailPage, DraftLifecyclePage, WorkspacePage shells</li>
+        <li>DataTable, FilterBar, LineItemsEditor, StatusBadge, PermissionGate, ConfirmActionDialog</li>
+        <li>Permission registry wired to route guards</li></ul>
+        <p class="depends">Depends on: nothing. Everything else depends on this.</p>
+      </div>
+
+      <div class="phase">
+        <div class="phase-head"><span class="p-num">Phase 1</span><h4>Network &amp; Reference</h4></div>
+        <div class="domains"><span class="chip ok">Admins</span><span class="chip ok">Agents</span><span class="chip ok">Clients</span><span class="chip neutral">Villes</span><span class="chip neutral">Secteurs</span><span class="chip neutral">Products</span></div>
+        <p>The identity graph and the lookup tables it and everything downstream reference. Reference data
+        rides along here because it's trivially cheap once the CRUD generator exists (Phase 0) and Agents/
+        Clients forms need Villes/Secteurs pickers anyway.</p>
+        <ul class="deliv"><li>Admins, Managers, Commercials, Clients — full ListPage + DetailPage + forms</li>
+        <li>Agent onboarding CreateWizard</li>
+        <li>Villes, Secteurs, Products — generated from the CRUD definition</li></ul>
+        <p class="depends">Depends on: Phase 0. Everything from here on references agents/clients by ID.</p>
+      </div>
+
+      <div class="phase">
+        <div class="phase-head"><span class="p-num">Phase 2</span><h4>Money</h4></div>
+        <div class="domains"><span class="chip ok">Cheques</span><span class="chip ok">Deposits</span><span class="chip ok">Debt Payments</span></div>
+        <p>The financial ledger, buildable as soon as Network exists to attribute transactions to. Approval
+        queues here are the first real instance of the ApprovalQueuePage pattern.</p>
+        <ul class="deliv"><li>Cheque submission, pending queue, approve/reject/annuler</li>
+        <li>Deposit list/validate/reject, filterable by type</li>
+        <li>Debt Payments list + submit</li></ul>
+        <p class="depends">Depends on: Phase 1 (agent/admin identity).</p>
+      </div>
+
+      <div class="phase">
+        <div class="phase-head"><span class="p-num">Phase 3</span><h4>Stock</h4></div>
+        <div class="domains"><span class="chip ok">Bons</span><span class="chip ok">Allocations</span><span class="chip ok">Agent Transfers</span><span class="chip ok">Agent Stock Returns</span><span class="chip bad">Companies &amp; Suppliers</span></div>
+        <p>The four-stage physical chain, built together since they share one DraftLifecyclePage
+        instantiation — proving it once against Bons and reusing it three times costs far less than building
+        four bespoke screens. Companies/Suppliers directory UI is blocked until a backend ticket lands
+        (discovery report §6); raise that ticket at the start of this phase, not the end.</p>
+        <ul class="deliv"><li>Bons: draft, lines, validate/cancel</li>
+        <li>Allocations, Agent Transfers, Agent Stock Returns — same pattern, reused</li>
+        <li>Zero-stock reassignment guard surfaced in the Agent edit form (§6)</li></ul>
+        <p class="depends">Depends on: Phase 1 (agents, companies as counterparties) and Phase 0's
+        stock-movement generator.</p>
+      </div>
+
+      <div class="phase">
+        <div class="phase-head"><span class="p-num">Phase 4</span><h4>Grattage</h4></div>
+        <div class="domains"><span class="chip accent2">Invoices</span><span class="chip accent2">Outstanding &amp; Restock Gate</span></div>
+        <p>Built last among the domains deliberately — it's the seam, and a seam is only meaningful once
+        both sides exist. By this point Stock capacity and Money's deposit-validate flow are both real, so
+        the settlement linkage (§6) can be built and tested end-to-end rather than mocked.</p>
+        <ul class="deliv"><li>Invoice list/detail/cancel</li>
+        <li>Outstanding-obligation view per agent</li>
+        <li>Restock-gate hook, consumed by Phase 3's Allocation/Agent Transfer forms</li></ul>
+        <p class="depends">Depends on: Phase 2 (Money's deposit-validate settlement) and Phase 3 (Stock capacity).</p>
+      </div>
+
+      <div class="phase">
+        <div class="phase-head"><span class="p-num">Phase 5</span><h4>Cross-module integration</h4></div>
+        <div class="domains"><span class="chip accent2">Agent 360</span><span class="chip accent2">Client 360</span><span class="chip accent2">Overview widgets</span></div>
+        <p>Only possible once every domain it composes exists. Assemble the WorkspacePages (§6) and finish
+        wiring the Overview module's widget grid (§5) against the now-complete set of stats and queue
+        endpoints.</p>
+        <ul class="deliv"><li>Agent 360 workspace</li><li>Client 360 workspace</li>
+        <li>Overview: full KPI/chart/queue widget set</li></ul>
+        <p class="depends">Depends on: Phases 1–4 all complete.</p>
+      </div>
+    </section>
+
+    <footer>
+      Architecture proposal only — no implementation code was written. Awaiting approval before Phase 8
+      build begins.
+    </footer>
+  </main>
+</div>

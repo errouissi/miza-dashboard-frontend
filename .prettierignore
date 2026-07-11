@@ -1,0 +1,5 @@
+dist
+coverage
+pnpm-lock.yaml
+docs
+src/shared/components/ui
