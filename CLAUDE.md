@@ -66,3 +66,31 @@ Do not copy patterns from it, do not synchronise with it, do not preserve compat
   approved task are in `docs/implementation-status.md`.
 - Always report: **changed files, verification commands run, risks, and unresolved blockers.**
 - Do not commit or push unless asked.
+
+## Recommended Model
+
+Whenever a prompt is generated for Claude, always include:
+
+Recommended model
+
+Reason
+
+The recommendation must match the nature of the task.
+
+Examples:
+
+- Opus 4
+  - Architecture
+  - Planning
+  - Reviews
+  - Refactoring
+  - Complex debugging
+  - Cross-domain reasoning
+
+- Sonnet 4
+  - Focused implementation
+  - Documentation
+  - Small backend/frontend tasks
+  - Testing
+  - Git operations
+  - Formatting

@@ -55,7 +55,35 @@ until the first two are answered, and no product copy may be written before O-1 
 | B-2 | **Overview endpoints unrouted** — `chartData`, `recentActivities`, `agentsOverview`. | Backend | Part of the Overview widget grid (M7). Ships with the widgets whose endpoints exist. |
 | B-3 | **Domain error-code catalogue unconfirmed.** Needed to populate the error-code registry (FTA D-10). | Backend | Complete error handling; partially fillable per-domain as codes are documented. *(Codes are now known to exist and are enumerable from `app/Exceptions/**` + `app/Http/Exceptions/*Renderer.php` — what is missing is confirmation of the catalogue, not its existence.)* |
 | B-4 | **No request-correlation support.** The backend has no middleware that emits or logs a request ID. The frontend now generates and sends `X-Request-Id` and preserves it on `AppError` — but until the backend **logs** it, correlation is a frontend-only trace and cannot be joined to a backend log line. Frontend already consumes a backend-supplied ID if one appears, so this needs no frontend change when it lands. | Backend | Real end-to-end debugging (FTA §11, §18). Not blocking. |
-| **B-5** | **`VilleController` returns `Ville::all()`** — no pagination, no `data`/`meta` envelope, no filters. Every other admin controller paginates (`per_page` max 100). | Backend / Product | **Blocks the M1-B walking skeleton as specified** (Roadmap M1: "list → filter"). Either paginate Villes, or choose a different M1-B resource. Must be resolved before M1-B starts. |
+| ~~B-5~~ | ~~**`VilleController` returns `Ville::all()`**~~ — **RESOLVED (backend, pending review/commit).** `GET /api/v1/admin/villes` now returns the standard paginated envelope. See the contract below. | Backend | ~~Blocks M1-B~~ — **unblocked.** |
+
+## The Villes list contract (B-5, resolved) — what M1-B builds against
+
+```
+GET /api/v1/admin/villes?page=1&per_page=15&search=casa&sort=nom_ville&direction=asc
+
+page       integer, min 1                  default 1
+per_page   integer, min 1, MAX 100         default 15
+search     string, max 255 — nom_ville, CASE-INSENSITIVE ("CASA" -> "Casablanca")
+sort       nom_ville | id                  default nom_ville
+direction  asc | desc                      default asc
+
+200 -> { data: [ { id, nom_ville } ], links: {...}, meta: { current_page, per_page,
+         total, last_page, ... } }          <-- this is the shape Paginated<T> normalizes
+422 -> { message, errors: { per_page: [...] } }   <-- normalizer kind: "validation"
+403 -> Laravel default 403, NO `code` field       <-- normalizer kind: "permission"
+       (AuthorizationExceptionRenderer is path-gated to the four Phase-4A stock domains;
+        villes is not in its scope. The envelope-based normalizer handles this correctly
+        via its status fallback — no frontend change needed.)
+```
+
+Default order is `nom_ville ASC`, not `created_at DESC`: the `villes` table has **no timestamp
+columns at all**, so `created_at` is not a sortable field here. Do not assume the other admin
+lists' default ordering applies.
+
+**Envelope divergence to expect:** Villes/Bons use `{data, links, meta}`; Clients/Agents use
+`{success, data: <paginator>}`. Both normalize to one `Paginated<T>` via each resource's own
+mapper (FTA D-6) — this is what the anti-corruption layer is for. Not a blocker.
 
 ## Not yet built (deliberately)
 
@@ -67,8 +95,7 @@ No business feature exists. No Villes. No domain folders. No pages, layout, side
 **M1-B — Walking skeleton (PR-2).** Login → AppShell (sidebar/header/outlet) → router with
 generated guards → **Villes** end to end against the real backend, with URL filter state.
 
-**Blocked on B-5** (Villes has no pagination or filters) — resolve before starting, or the
-skeleton cannot deliver "list → filter" as the roadmap specifies.
+**Unblocked** — B-5 is resolved; the Villes list contract is above.
 
 Also feeds M1-B: login must send the `app` input the backend expects (`check.app:admin`), and
 the session is established via `sessionManager.start()` — the login *call* belongs to a domain
