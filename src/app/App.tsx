@@ -1,23 +1,26 @@
-import { config } from "@/infrastructure/config";
+import { useEffect } from "react";
+import { RouterProvider } from "react-router-dom";
+import { QueryProvider } from "@/app/providers/query-provider";
+import { wireSessionTermination } from "@/app/bootstrap/wire-session";
+import { router } from "@/app/router/router";
 
 /**
- * M0 bootstrap root.
+ * The application root — composition only.
  *
- * Deliberately not a page and not a placeholder for any future domain. It exists
- * so the app builds and runs, and so a bad configuration surfaces immediately.
- * The real shell (AppShell: sidebar + header + routed outlet) arrives in M1 with
- * the walking skeleton.
+ * There is no SessionProvider, and its absence is a decision: the session is an
+ * external store subscribed via useSyncExternalStore, because a Provider would have
+ * to live in app/ and domains/ may not import app/ (FTA §4). It also deletes a bug
+ * class outright — there is no Provider to forget to mount.
+ *
+ * Session termination is wired on mount rather than at module scope, so the
+ * subscription is owned by a React lifecycle and torn down cleanly in tests.
  */
 export function App() {
+  useEffect(() => wireSessionTermination(), []);
+
   return (
-    <main className="flex min-h-svh flex-col items-center justify-center gap-2 p-8 text-center">
-      <h1 className="text-xl font-semibold">Miza Dashboard</h1>
-      <p className="text-muted-foreground text-sm">
-        M0 bootstrap. No features implemented — the walking skeleton lands in M1.
-      </p>
-      <p className="text-muted-foreground font-mono text-xs">
-        environment: {config.environment} · api: {config.apiBaseUrl}
-      </p>
-    </main>
+    <QueryProvider>
+      <RouterProvider router={router} />
+    </QueryProvider>
   );
 }
