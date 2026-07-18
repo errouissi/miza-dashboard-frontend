@@ -4,6 +4,7 @@ import {
   createAdmin,
   deleteAdmin,
   fetchAdmins,
+  fetchAssignablePermissions,
   toggleAdminStatus,
   updateAdmin,
   type CreateAdminInput,
@@ -28,10 +29,39 @@ export function useAdminsQuery() {
   });
 }
 
-/** Every mutation reshapes the single list, so all of them invalidate its whole space. */
+/**
+ * The assignable-permission catalogue (backend B-6).
+ *
+ * STATIC tier: this is the authorization VOCABULARY, not identity data. It
+ * changes only when a phase ships a new permission — a deployment event, not a
+ * working-day one. Contrast the admin list itself, which is SLOW because it
+ * carries account status.
+ *
+ * `enabled` is the caller's, and it matters: the endpoint is gated on
+ * `create-admin|update-admin` while the Admins LIST is gated on
+ * `access-dashboard`. A read-only operator can open the page but would get a 403
+ * here, so the query must not fire until the form that needs it is actually open.
+ */
+export function useAssignablePermissionsQuery({ enabled }: { enabled: boolean }) {
+  return useQuery({
+    queryKey: adminsKeys.assignablePermissions(),
+    queryFn: fetchAssignablePermissions,
+    staleTime: STALE_TIMES.STATIC,
+    enabled,
+  });
+}
+
+/**
+ * Every mutation reshapes the single list, so all of them invalidate the LIST
+ * space — deliberately `lists()` and not `all`.
+ *
+ * `all` would also drop the assignable-permission catalogue, which no admin
+ * mutation can change: creating or blocking an admin does not alter what MAY be
+ * assigned. Invalidating it would re-fetch 66 rows on every save for nothing.
+ */
 function useInvalidateAdmins() {
   const queryClient = useQueryClient();
-  return () => queryClient.invalidateQueries({ queryKey: adminsKeys.all });
+  return () => queryClient.invalidateQueries({ queryKey: adminsKeys.lists() });
 }
 
 export function useCreateAdminMutation() {

@@ -16,6 +16,28 @@ only summarises the rules that get broken most often. Read them, do not re-deriv
 If the code and a document disagree, the document wins — unless implementation has found a
 genuine contradiction, in which case **raise it**, do not work around it.
 
+## Project documentation (living — updated as work proceeds)
+
+Four Markdown files track the project itself. The frozen documents above say what to build;
+these say where we are and what has been decided along the way.
+
+- **`docs/next-session.md`** — **start here.** Session handover: current focus, next task,
+  what must not be changed, and the verification steps to run before writing code.
+- `docs/project-status.md` — current live status: milestone, branch, blockers, backend
+  dependencies. Overwritten after each milestone.
+- `docs/decisions.md` — **append-only** architectural decision log (`ADR-0002`+).
+  Never rewrite or delete an entry; supersede it with a new one.
+- `docs/implementation-status.md` — historical implementation record: how each milestone
+  was delivered, and how gates were evaluated.
+
+`decisions.md` records decisions made **during implementation**. Decisions inside the frozen
+documents (`D-1 … D-17`) are not repeated there, and `ADR-0001` is the localStorage token
+decision already written into FTA §17.
+
+At the end of every implementation session: update `project-status.md` and
+`next-session.md`, and **append** to `decisions.md` only if a real architectural decision
+was made.
+
 ## Commands
 
 Package manager is **pnpm** (`pnpm-lock.yaml`).
@@ -63,7 +85,7 @@ Do not copy patterns from it, do not synchronise with it, do not preserve compat
 
 - **Review first, modify second.** Read the relevant code before changing it.
 - **Do not implement beyond the currently assigned milestone.** Current milestone and next
-  approved task are in `docs/implementation-status.md`.
+  approved task are in `docs/next-session.md` (with fuller status in `docs/project-status.md`).
 - Always report: **changed files, verification commands run, risks, and unresolved blockers.**
 - Do not commit or push unless asked.
 

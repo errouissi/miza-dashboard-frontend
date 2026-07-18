@@ -35,7 +35,8 @@ function signInWith(permissions: string[]) {
 
 /**
  * Rows carry `created_at`, `roles` and `permissions` exactly as the backend sends
- * them. All three are intentionally unmapped; nothing downstream may depend on them.
+ * them. `created_at` and `roles` are intentionally unmapped; `permissions` IS
+ * mapped (the edit form seeds from it) but is never rendered in the LIST.
  */
 function row(id: number, name: string, email: string, isActive: boolean) {
   return {
@@ -53,6 +54,25 @@ function adminsHandler(rows: ReturnType<typeof row>[], onRequest?: (url: URL) =>
   return http.get(`${API}/admin/admins`, ({ request }) => {
     onRequest?.(new URL(request.url));
     return HttpResponse.json(rows);
+  });
+}
+
+/**
+ * The B-6 catalogue: `{ data: [{name, label, group}] }`, name ASC, no links/meta.
+ * Blank-named and non-assignable rows are excluded server-side, so the fixture
+ * contains none — the frontend does no filtering and must not be tested as if it did.
+ */
+const CATALOGUE = [
+  { name: "access-dashboard", label: "Access Dashboard", group: "Dashboard" },
+  { name: "block-admin", label: "Block Admin", group: "Admin Management" },
+  { name: "create-admin", label: "Create Admin", group: "Admin Management" },
+  { name: "view-agents", label: "View Agents", group: "Agent Management" },
+];
+
+function catalogueHandler(entries: typeof CATALOGUE = CATALOGUE, onRequest?: () => void) {
+  return http.get(`${API}/admin/permissions`, () => {
+    onRequest?.();
+    return HttpResponse.json({ data: entries });
   });
 }
 
@@ -134,10 +154,11 @@ describe("status rendering", () => {
   });
 });
 
-describe("unmapped fields", () => {
+describe("fields not shown in the list", () => {
   it("does not render created_at, roles or permissions", async () => {
-    // All three arrive on the wire and are dropped by the mapper. Permissions in
-    // particular are out of scope (BC-M/BC-D) and must not leak into the UI.
+    // created_at and roles are dropped by the mapper. `permissions` IS mapped —
+    // the edit form seeds from it — but the LIST has no permissions column, so
+    // none of the three may appear here.
     server.use(adminsHandler([row(1, "Active Admin", "active@example.com", true)]));
     renderPage();
 
@@ -316,10 +337,11 @@ describe("create", () => {
     return screen.findByRole("dialog");
   }
 
-  it("creates an admin, sending name, email and password", async () => {
+  it("creates an admin, sending name, email, password and the selected permissions", async () => {
     let created: unknown;
     server.use(
       adminsHandler([]),
+      catalogueHandler(),
       http.post(`${API}/admin/admins`, async ({ request }) => {
         created = await request.json();
         return HttpResponse.json(
@@ -343,6 +365,7 @@ describe("create", () => {
     fireEvent.change(within(dialog).getByLabelText(/password/i), {
       target: { value: "supersecret" },
     });
+    fireEvent.click(await within(dialog).findByLabelText("Access Dashboard"));
     fireEvent.click(within(dialog).getByRole("button", { name: /save/i }));
 
     await waitFor(() =>
@@ -350,16 +373,20 @@ describe("create", () => {
         name: "New Admin",
         email: "new@example.com",
         password: "supersecret",
+        // Exactly the checked NAME — never the label or the group.
+        permissions: ["access-dashboard"],
       }),
     );
   });
 
-  it("NEVER sends a permissions key", async () => {
-    // BC-M/BC-D: no catalogue is published and an empty-named permission exists.
-    // Sending the key at all would be inventing a contract.
+  it("sends an empty permissions array when nothing is selected", async () => {
+    // A new admin with no extra grants is a legitimate outcome, not an error.
+    // The backend skips the sync when the array is empty (`filled()`), so the
+    // account keeps the `admin` role's defaults.
     let created: Record<string, unknown> | undefined;
     server.use(
       adminsHandler([]),
+      catalogueHandler(),
       http.post(`${API}/admin/admins`, async ({ request }) => {
         created = (await request.json()) as Record<string, unknown>;
         return HttpResponse.json(
@@ -381,16 +408,77 @@ describe("create", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: /save/i }));
 
     await waitFor(() => expect(created).toBeDefined());
-    expect(Object.keys(created!)).not.toContain("permissions");
+    expect(created!.permissions).toEqual([]);
   });
 
-  it("renders no permission selector at all", async () => {
-    server.use(adminsHandler([]));
+  it("renders the selector from the CATALOGUE, using its labels", async () => {
+    server.use(adminsHandler([]), catalogueHandler());
     renderPage();
 
     const dialog = await openCreateForm();
-    expect(within(dialog).queryByLabelText(/permission/i)).not.toBeInTheDocument();
-    expect(within(dialog).queryByRole("listbox")).not.toBeInTheDocument();
+
+    // Labels are shown; names are the payload contract, not the display.
+    expect(await within(dialog).findByLabelText("Access Dashboard")).toBeInTheDocument();
+    expect(within(dialog).getByLabelText("Create Admin")).toBeInTheDocument();
+    expect(within(dialog).getByLabelText("View Agents")).toBeInTheDocument();
+  });
+
+  it("groups the catalogue by its group field", async () => {
+    server.use(adminsHandler([]), catalogueHandler());
+    renderPage();
+
+    const dialog = await openCreateForm();
+
+    expect(await within(dialog).findByText("Admin Management")).toBeInTheDocument();
+    expect(within(dialog).getByText("Agent Management")).toBeInTheDocument();
+    expect(within(dialog).getByText("Dashboard")).toBeInTheDocument();
+  });
+
+  it("does NOT fetch the catalogue until the drawer opens", async () => {
+    // The endpoint is gated create-admin|update-admin while the LIST is gated
+    // access-dashboard, so an unconditional fetch would 403 for read-only operators.
+    let fetched = 0;
+    server.use(
+      adminsHandler([row(1, "Active Admin", "active@example.com", true)]),
+      catalogueHandler(CATALOGUE, () => {
+        fetched += 1;
+      }),
+    );
+    renderPage();
+
+    await screen.findByText("Active Admin");
+    expect(fetched).toBe(0);
+
+    fireEvent.click(screen.getByRole("button", { name: /new admin/i }));
+    await waitFor(() => expect(fetched).toBe(1));
+  });
+
+  it("shows a retryable error when the catalogue fails, without blocking the form", async () => {
+    server.use(
+      adminsHandler([]),
+      http.get(`${API}/admin/permissions`, () =>
+        HttpResponse.json({ message: "boom" }, { status: 500 }),
+      ),
+    );
+    renderPage();
+
+    const dialog = await openCreateForm();
+
+    expect(
+      await within(dialog).findByText(/permission list could not be loaded/i),
+    ).toBeInTheDocument();
+    // The rest of the form stays usable — a failed catalogue is not a failed form.
+    expect(within(dialog).getByLabelText(/name/i)).toBeInTheDocument();
+  });
+
+  it("states plainly when the catalogue is empty", async () => {
+    server.use(adminsHandler([]), catalogueHandler([]));
+    renderPage();
+
+    const dialog = await openCreateForm();
+    expect(
+      await within(dialog).findByText(/no assignable permissions are available/i),
+    ).toBeInTheDocument();
   });
 
   it("rejects a short password client-side", async () => {
@@ -467,12 +555,15 @@ describe("edit", () => {
     expect(within(dialog).queryByLabelText(/password/i)).not.toBeInTheDocument();
   });
 
-  it("sends only name and email — never permissions", async () => {
-    // Sending permissions here would be actively destructive: the backend syncs
-    // whenever the key is present, so an empty array would strip every grant.
+  it("OMITS permissions when the selection was not touched", async () => {
+    // The load-bearing case. `AdminController::update` syncs whenever the key is
+    // present, and sync REPLACES the set — so a rename that sent `permissions`
+    // could strip a grant the catalogue cannot represent. Omitting the key leaves
+    // the backend's permission state untouched.
     let updated: Record<string, unknown> | undefined;
     server.use(
       adminsHandler(rows),
+      catalogueHandler(),
       http.put(`${API}/admin/admins/1`, async ({ request }) => {
         updated = (await request.json()) as Record<string, unknown>;
         return HttpResponse.json(
@@ -497,6 +588,97 @@ describe("edit", () => {
       expect(updated).toEqual({ name: "Renamed", email: "active@example.com" }),
     );
     expect(Object.keys(updated!)).not.toContain("permissions");
+  });
+
+  it("SENDS the full permission set once the selection changes", async () => {
+    let updated: Record<string, unknown> | undefined;
+    server.use(
+      adminsHandler(rows),
+      catalogueHandler(),
+      http.put(`${API}/admin/admins/1`, async ({ request }) => {
+        updated = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json(
+          {
+            message: "Admin updated successfully",
+            admin: row(1, "Active Admin", "active@example.com", true),
+          },
+          { status: 201 },
+        );
+      }),
+    );
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: /edit active admin/i }));
+    const dialog = await screen.findByRole("dialog");
+
+    // Seeded holds access-dashboard; add create-admin.
+    fireEvent.click(await within(dialog).findByLabelText("Create Admin"));
+    fireEvent.click(within(dialog).getByRole("button", { name: /save/i }));
+
+    await waitFor(() => expect(updated).toBeDefined());
+    // Sync semantics: the WHOLE desired set, not a delta.
+    expect(updated!.permissions).toEqual(["access-dashboard", "create-admin"]);
+  });
+
+  it("seeds the checkboxes from the admin's current grants", async () => {
+    server.use(adminsHandler(rows), catalogueHandler());
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: /edit active admin/i }));
+    const dialog = await screen.findByRole("dialog");
+
+    expect(await within(dialog).findByLabelText("Access Dashboard")).toBeChecked();
+    expect(within(dialog).getByLabelText("Create Admin")).not.toBeChecked();
+  });
+
+  it("sends the remaining set when a permission is REMOVED", async () => {
+    let updated: Record<string, unknown> | undefined;
+    server.use(
+      adminsHandler(rows),
+      catalogueHandler(),
+      http.put(`${API}/admin/admins/1`, async ({ request }) => {
+        updated = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json(
+          { admin: row(1, "Active Admin", "active@example.com", true) },
+          { status: 201 },
+        );
+      }),
+    );
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: /edit active admin/i }));
+    const dialog = await screen.findByRole("dialog");
+
+    // Uncheck the only seeded grant — an empty array is a deliberate revocation.
+    fireEvent.click(await within(dialog).findByLabelText("Access Dashboard"));
+    fireEvent.click(within(dialog).getByRole("button", { name: /save/i }));
+
+    await waitFor(() => expect(updated).toBeDefined());
+    expect(updated!.permissions).toEqual([]);
+  });
+
+  it("maps a rejected permission 422 onto the permission field", async () => {
+    server.use(
+      adminsHandler(rows),
+      catalogueHandler(),
+      http.put(`${API}/admin/admins/1`, () =>
+        HttpResponse.json(
+          {
+            message: "The given data was invalid.",
+            errors: { "permissions.0": ["The selected permissions.0 is invalid."] },
+          },
+          { status: 422 },
+        ),
+      ),
+    );
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: /edit active admin/i }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(await within(dialog).findByLabelText("Create Admin"));
+    fireEvent.click(within(dialog).getByRole("button", { name: /save/i }));
+
+    expect(await within(dialog).findByText(/is invalid/i)).toBeInTheDocument();
   });
 });
 

@@ -1,5 +1,5 @@
 import { httpClient } from "@/infrastructure/http";
-import type { Admin } from "../model/admin";
+import type { Admin, AssignablePermission } from "../model/admin";
 
 /**
  * The Admins endpoints and their mappers (FTA §7, D-6).
@@ -16,8 +16,9 @@ import type { Admin } from "../model/admin";
  * status, which is why nothing here branches on it — but it is recorded so the next
  * reader does not assume it is a typo in this file.
  *
- * `roles`, `permissions` and `created_at` arrive on every row and are dropped —
- * see the model for why each one is deliberately unmodelled.
+ * `roles` and `created_at` arrive on every row and are dropped — see the model
+ * for why each is deliberately unmodelled. `permissions` IS mapped: B-6 gave it a
+ * consumer (the edit form seeds from it), so it is modelled now and was not before.
  */
 
 type AdminRow = {
@@ -25,7 +26,9 @@ type AdminRow = {
   name: string;
   email: string;
   is_active: boolean;
-  // created_at, roles[], permissions[] are present on the wire and intentionally unmapped.
+  /** Eager-loaded as `permissions:name`, so each entry carries a name only. */
+  permissions?: { name: string }[];
+  // created_at and roles[] are present on the wire and intentionally unmapped.
 };
 
 function toAdmin(row: AdminRow): Admin {
@@ -36,7 +39,38 @@ function toAdmin(row: AdminRow): Admin {
     // The backend casts is_active to boolean, but a JSON 0/1 would be truthy-wrong,
     // so the domain boundary normalises rather than trusting the shape.
     isActive: Boolean(row.is_active),
+    permissions: (row.permissions ?? []).map((permission) => permission.name),
   };
+}
+
+/** The catalogue's envelope: `{ data: [...] }`, no links/meta — it is not paginated. */
+type PermissionRow = {
+  name: string;
+  label: string;
+  group: string;
+};
+
+/**
+ * The assignable-permission catalogue (backend B-6) — the ONLY source of truth
+ * for what may be granted. It is not derived from any user's own grants: the
+ * backend's own note records that deriving it from the super-admin was both an
+ * implementation detail and lossy, since `create-grattage-sale` is seeded after
+ * the super-admin sync and so never appeared.
+ *
+ * Gated on `create-admin|update-admin`, NOT on `access-dashboard` — a read-only
+ * operator who can see the Admins list gets a 403 here. Callers must only fetch
+ * it where the form is actually reachable.
+ *
+ * Returned in `name ASC`; blank-named rows and the non-assignable deny-list are
+ * excluded server-side, so no client-side filtering is required or performed.
+ */
+export async function fetchAssignablePermissions(): Promise<AssignablePermission[]> {
+  const { data } = await httpClient.get<{ data: PermissionRow[] }>("/admin/permissions");
+  return data.data.map((row) => ({
+    name: row.name,
+    label: row.label,
+    group: row.group,
+  }));
 }
 
 export async function fetchAdmins(): Promise<Admin[]> {
@@ -49,17 +83,16 @@ export type CreateAdminInput = {
   name: string;
   email: string;
   password: string;
+  /** Permission NAMES, exactly as the catalogue supplies them. */
+  permissions: string[];
 };
 
 export async function createAdmin(input: CreateAdminInput): Promise<Admin> {
-  // `permissions` is deliberately NOT sent. The backend accepts the key, but no
-  // endpoint publishes the assignable catalogue (BC-M), so there is nothing
-  // legitimate to put in it. Omitting it leaves the new admin with the `admin`
-  // role's defaults, which is the backend's own behaviour when the key is absent.
   const { data } = await httpClient.post<{ admin: AdminRow }>("/admin/admins", {
     name: input.name,
     email: input.email,
     password: input.password,
+    permissions: input.permissions,
   });
   return toAdmin(data.admin);
 }
@@ -67,16 +100,30 @@ export async function createAdmin(input: CreateAdminInput): Promise<Admin> {
 export type UpdateAdminInput = {
   name: string;
   email: string;
+  /**
+   * OMITTED when the operator did not touch the permission selection.
+   *
+   * This is load-bearing, not an optimisation. `AdminController::update` calls
+   * `syncPermissions` whenever the key is PRESENT, and sync REPLACES the whole
+   * set. Sending the key on every save would mean a rename could silently strip
+   * a grant the selector could not represent — the catalogue is deliberately
+   * narrower than the validator (it excludes the commercial-only grattage
+   * permissions), so "everything the picker shows" is not provably "everything
+   * the admin holds".
+   *
+   * Omitting the key leaves the backend's permission state untouched. It is sent
+   * only when the operator deliberately changed the selection, which is the one
+   * case where replacing the set is what they asked for.
+   */
+  permissions?: string[];
 };
 
 export async function updateAdmin(id: number, input: UpdateAdminInput): Promise<Admin> {
-  // No password: `AdminController::update` does not accept one. No permissions:
-  // see BC-M above. Sending `permissions` here would be worse than omitting it —
-  // the backend syncs whenever the key is PRESENT, so an empty array would strip
-  // every permission the admin holds.
+  // No password: `AdminController::update` does not accept one.
   const { data } = await httpClient.put<{ admin: AdminRow }>(`/admin/admins/${id}`, {
     name: input.name,
     email: input.email,
+    ...(input.permissions !== undefined ? { permissions: input.permissions } : {}),
   });
   return toAdmin(data.admin);
 }

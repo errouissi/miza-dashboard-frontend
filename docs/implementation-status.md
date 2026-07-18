@@ -1,6 +1,25 @@
 # Implementation Status
 
-Single source of truth for *where we are*. Keep it short.
+## Purpose
+
+**The historical implementation record.** This file captures how each milestone was
+delivered — the deliverable checklists, the gate evaluations, the contradictions
+implementation found in the frozen documents and how they were reconciled. It is the
+narrative of *how we got here*, and it is worth reading when you need the reasoning
+behind a milestone's shape.
+
+It is **not** the place to look for current state. For that:
+
+| Question | File |
+| --- | --- |
+| Where is the project *now*? | [`project-status.md`](project-status.md) |
+| Why was something built this way? | [`decisions.md`](decisions.md) |
+| What do I do next session? | [`next-session.md`](next-session.md) |
+
+Sections below reflect the state at the time each milestone closed. They are not
+updated as the project moves on — later milestones append their own record.
+
+---
 
 **M1 — Walking skeleton** · status: **COMPLETE** · **Gate G1: PASSED with reconciliation**
 **Current: M2 — Pattern hardening** · status: **M2a READY to start** · M2c and Gate G2 gated on BC-G
