@@ -6,6 +6,7 @@ import {
 } from "@/app/errors/route-error-boundary";
 import { WelcomePlaceholder } from "@/app/placeholders";
 import { RequirePermission } from "@/app/guards";
+import { adminsRoutes } from "@/domains/network/admins";
 import { productsRoutes } from "@/domains/reference/products";
 import { secteursRoutes } from "@/domains/reference/secteurs";
 import { villesRoutes } from "@/domains/reference/villes";
@@ -92,6 +93,7 @@ const domainRoutes: RouteObject[] = withPermissionGuards([
   ...villesRoutes,
   ...secteursRoutes,
   ...productsRoutes,
+  ...adminsRoutes,
 ]);
 
 /**

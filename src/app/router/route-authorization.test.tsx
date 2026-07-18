@@ -10,6 +10,7 @@ import { PERMISSIONS } from "@/infrastructure/permissions";
 import { VILLES_PATH } from "@/domains/reference/villes";
 import { SECTEURS_PATH } from "@/domains/reference/secteurs";
 import { PRODUCTS_PATH } from "@/domains/reference/products";
+import { ADMINS_PATH } from "@/domains/network/admins";
 import { routes } from "./routes";
 
 /**
@@ -201,7 +202,7 @@ describe("unknown permissions fail safe", () => {
 describe("every contributed domain route is guarded", () => {
   // Parameterised so a new resource inherits the authorization contract by being
   // added to this list — not by someone remembering to write three more tests.
-  const domainPaths = [VILLES_PATH, SECTEURS_PATH, PRODUCTS_PATH];
+  const domainPaths = [VILLES_PATH, SECTEURS_PATH, PRODUCTS_PATH, ADMINS_PATH];
 
   it.each(domainPaths)("refuses %s without the permission", async (path) => {
     sessionManager.start(unpermittedSession);

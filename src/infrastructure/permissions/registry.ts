@@ -27,6 +27,20 @@ export const PERMISSIONS = Object.freeze({
    * when they land, the entries split here and the call sites follow.
    */
   ACCESS_DASHBOARD: "access-dashboard",
+
+  /**
+   * Admin management — the FIRST genuinely granular permission set in the product.
+   *
+   * Unlike the reference resources, these are four distinct server-side checks
+   * (`routes/api.php`: create-admin, update-admin, block-admin, delete-admin),
+   * each guarding one route. So the UI gates each action independently rather than
+   * collapsing them into one "can manage" flag — which is what D-5 was designed
+   * for and what reference data could not exercise.
+   */
+  CREATE_ADMIN: "create-admin",
+  UPDATE_ADMIN: "update-admin",
+  BLOCK_ADMIN: "block-admin",
+  DELETE_ADMIN: "delete-admin",
 } as const satisfies Record<string, string>);
 
 export type PermissionName = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

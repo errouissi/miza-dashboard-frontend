@@ -1,6 +1,7 @@
 import type { LucideIcon } from "lucide-react";
-import { Map, MapPin, CreditCard } from "lucide-react";
+import { Map, MapPin, CreditCard, ShieldCheck } from "lucide-react";
 import { PERMISSIONS, type PermissionResolver } from "@/infrastructure/permissions";
+import { ADMINS_PATH } from "@/domains/network/admins";
 import { PRODUCTS_PATH } from "@/domains/reference/products";
 import { SECTEURS_PATH } from "@/domains/reference/secteurs";
 import { VILLES_PATH } from "@/domains/reference/villes";
@@ -64,6 +65,19 @@ export const NAV_TREE: NavGroup[] = [
         to: PRODUCTS_PATH,
         permission: PERMISSIONS.ACCESS_DASHBOARD,
         icon: CreditCard,
+      },
+    ],
+  },
+  {
+    label: "Réseau",
+    items: [
+      {
+        label: "Admins",
+        to: ADMINS_PATH,
+        // The LIST permission, mirroring the route. The granular admin
+        // permissions gate actions inside the page, not visibility of the page.
+        permission: PERMISSIONS.ACCESS_DASHBOARD,
+        icon: ShieldCheck,
       },
     ],
   },
