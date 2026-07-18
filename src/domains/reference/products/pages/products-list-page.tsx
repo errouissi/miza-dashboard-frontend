@@ -5,7 +5,12 @@ import { PERMISSIONS } from "@/infrastructure/permissions";
 import { usePermission } from "@/shared/hooks";
 import { formatMoney } from "@/shared/formatters";
 import { Button } from "@/shared/components/ui/button";
-import { Skeleton } from "@/shared/components/ui/skeleton";
+import { ListPage } from "@/shared/components/patterns/list-page";
+import {
+  ListEmptyState,
+  ListErrorState,
+  ListLoadingState,
+} from "@/shared/components/patterns/list-states";
 import { ProductFormSheet } from "../components/product-form-sheet";
 import { DeleteProductDialog } from "../components/delete-product-dialog";
 import { useProductsQuery } from "../queries/products-queries";
@@ -81,56 +86,45 @@ export function ProductsListPage() {
   const products = productsQuery.data;
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold">Products</h1>
-        {canManage ? <Button onClick={openCreate}>New product</Button> : null}
-      </div>
-
-      <div className="flex items-center gap-2">
-        <label htmlFor="operatorFilter" className="text-sm font-medium">
-          Operator
-        </label>
-        <select
-          id="operatorFilter"
-          aria-label="Filter by operator"
-          className="border-input focus-visible:border-ring focus-visible:ring-ring/50 h-9 max-w-xs rounded-md border bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-[3px]"
-          value={params.operator ?? ""}
-          onChange={(event) => setOperatorFilter(event.target.value)}
-        >
-          <option value="">All operators</option>
-          {OPERATORS.map((operator) => (
-            <option key={operator} value={operator}>
-              {operator}
-            </option>
-          ))}
-        </select>
-      </div>
-
+    <ListPage
+      title="Products"
+      action={canManage ? <Button onClick={openCreate}>New product</Button> : null}
+      filters={
+        <>
+          <label htmlFor="operatorFilter" className="text-sm font-medium">
+            Operator
+          </label>
+          <select
+            id="operatorFilter"
+            aria-label="Filter by operator"
+            className="border-input focus-visible:border-ring focus-visible:ring-ring/50 h-9 max-w-xs rounded-md border bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-[3px]"
+            value={params.operator ?? ""}
+            onChange={(event) => setOperatorFilter(event.target.value)}
+          >
+            <option value="">All operators</option>
+            {OPERATORS.map((operator) => (
+              <option key={operator} value={operator}>
+                {operator}
+              </option>
+            ))}
+          </select>
+        </>
+      }
+    >
       {productsQuery.isPending ? (
-        <div className="flex flex-col gap-2" aria-busy="true">
-          <Skeleton className="h-9 w-full" />
-          <Skeleton className="h-9 w-full" />
-          <Skeleton className="h-9 w-full" />
-        </div>
+        <ListLoadingState />
       ) : productsQuery.isError ? (
-        <div role="alert" className="flex flex-col items-start gap-3 py-12">
-          <p className="text-sm">The list of products could not be loaded.</p>
-          {listErrorReference ? (
-            <p className="text-muted-foreground font-mono text-xs">
-              Ref. {listErrorReference}
-            </p>
-          ) : null}
-          <Button variant="outline" onClick={() => void productsQuery.refetch()}>
-            Retry
-          </Button>
-        </div>
+        <ListErrorState
+          message="The list of products could not be loaded."
+          reference={listErrorReference}
+          onRetry={() => void productsQuery.refetch()}
+        />
       ) : products && products.length === 0 ? (
-        <p className="text-muted-foreground py-12 text-sm">
+        <ListEmptyState>
           {params.operator !== undefined
             ? "No product for this operator."
             : "No product yet."}
-        </p>
+        </ListEmptyState>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -199,6 +193,6 @@ export function ProductsListPage() {
           if (!open) setDeleting(undefined);
         }}
       />
-    </div>
+    </ListPage>
   );
 }

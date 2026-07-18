@@ -5,7 +5,12 @@ import { PERMISSIONS } from "@/infrastructure/permissions";
 import { usePermission } from "@/shared/hooks";
 import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
-import { Skeleton } from "@/shared/components/ui/skeleton";
+import { ListPage } from "@/shared/components/patterns/list-page";
+import {
+  ListEmptyState,
+  ListErrorState,
+  ListLoadingState,
+} from "@/shared/components/patterns/list-states";
 import { VilleFormSheet } from "../components/ville-form-sheet";
 import { DeleteVilleDialog } from "../components/delete-ville-dialog";
 import { useVillesQuery } from "../queries/villes-queries";
@@ -119,13 +124,10 @@ export function VillesListPage() {
     : undefined;
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold">Cities</h1>
-        {canManage ? <Button onClick={openCreate}>New city</Button> : null}
-      </div>
-
-      <div className="flex items-center gap-2">
+    <ListPage
+      title="Cities"
+      action={canManage ? <Button onClick={openCreate}>New city</Button> : null}
+      filters={
         <Input
           aria-label="Search cities"
           placeholder="Search cities…"
@@ -135,34 +137,49 @@ export function VillesListPage() {
           // number refers to a list that no longer exists.
           onChange={(event) => patchParams({ search: event.target.value, page: 1 })}
         />
-      </div>
-
-      {villesQuery.isPending ? (
-        <div className="flex flex-col gap-2" aria-busy="true">
-          <Skeleton className="h-9 w-full" />
-          <Skeleton className="h-9 w-full" />
-          <Skeleton className="h-9 w-full" />
-        </div>
-      ) : villesQuery.isError ? (
-        <div role="alert" className="flex flex-col items-start gap-3 py-12">
-          <p className="text-sm">The list of cities could not be loaded.</p>
-          {/* The correlation reference, when the failure carries one (FTA §11).
-              Rendered between the message and the action, mirroring the route
-              error boundary's hierarchy. Omitted entirely when absent — a bare
-              "Ref." with nothing after it is worse than no reference at all. */}
-          {listErrorReference ? (
-            <p className="text-muted-foreground font-mono text-xs">
-              Ref. {listErrorReference}
+      }
+      // Pagination is VILLES-ONLY and stays here: it is not part of the shell,
+      // and no shared pager is extracted in M2c (1-of-3 evidence).
+      footer={
+        page && page.lastPage > 1 ? (
+          <div className="flex items-center justify-between gap-4">
+            <p className="text-muted-foreground text-sm">
+              Page {page.page} of {page.lastPage} · {page.total} cities
             </p>
-          ) : null}
-          <Button variant="outline" onClick={() => void villesQuery.refetch()}>
-            Retry
-          </Button>
-        </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page.page <= 1}
+                onClick={() => patchParams({ page: page.page - 1 })}
+              >
+                Previous
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page.page >= page.lastPage}
+                onClick={() => patchParams({ page: page.page + 1 })}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        ) : null
+      }
+    >
+      {villesQuery.isPending ? (
+        <ListLoadingState />
+      ) : villesQuery.isError ? (
+        <ListErrorState
+          message="The list of cities could not be loaded."
+          reference={listErrorReference}
+          onRetry={() => void villesQuery.refetch()}
+        />
       ) : page && page.items.length === 0 ? (
-        <p className="text-muted-foreground py-12 text-sm">
+        <ListEmptyState>
           {params.search ? "No city matches this search." : "No city yet."}
-        </p>
+        </ListEmptyState>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -222,32 +239,6 @@ export function VillesListPage() {
         </div>
       )}
 
-      {page && page.lastPage > 1 ? (
-        <div className="flex items-center justify-between gap-4">
-          <p className="text-muted-foreground text-sm">
-            Page {page.page} of {page.lastPage} · {page.total} cities
-          </p>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page.page <= 1}
-              onClick={() => patchParams({ page: page.page - 1 })}
-            >
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page.page >= page.lastPage}
-              onClick={() => patchParams({ page: page.page + 1 })}
-            >
-              Next
-            </Button>
-          </div>
-        </div>
-      ) : null}
-
       <VilleFormSheet open={formOpen} onOpenChange={setFormOpen} ville={editing} />
       <DeleteVilleDialog
         ville={deleting}
@@ -255,6 +246,6 @@ export function VillesListPage() {
           if (!open) setDeleting(undefined);
         }}
       />
-    </div>
+    </ListPage>
   );
 }

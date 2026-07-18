@@ -6,7 +6,12 @@ import { useVilleOptionsQuery } from "@/domains/reference/villes";
 import { usePermission } from "@/shared/hooks";
 import { ABSENT } from "@/shared/formatters";
 import { Button } from "@/shared/components/ui/button";
-import { Skeleton } from "@/shared/components/ui/skeleton";
+import { ListPage } from "@/shared/components/patterns/list-page";
+import {
+  ListEmptyState,
+  ListErrorState,
+  ListLoadingState,
+} from "@/shared/components/patterns/list-states";
 import { SecteurFormSheet } from "../components/secteur-form-sheet";
 import { DeleteSecteurDialog } from "../components/delete-secteur-dialog";
 import { useSecteursQuery } from "../queries/secteurs-queries";
@@ -84,56 +89,45 @@ export function SecteursListPage() {
   const secteurs = secteursQuery.data;
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold">Sectors</h1>
-        {canManage ? <Button onClick={openCreate}>New sector</Button> : null}
-      </div>
-
-      <div className="flex items-center gap-2">
-        <label htmlFor="villeFilter" className="text-sm font-medium">
-          City
-        </label>
-        <select
-          id="villeFilter"
-          aria-label="Filter by city"
-          className="border-input h-9 max-w-xs rounded-md border bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
-          value={params.villeId ?? ""}
-          onChange={(event) =>
-            setVilleFilter(event.target.value ? Number(event.target.value) : undefined)
-          }
-        >
-          <option value="">All cities</option>
-          {villes.map((ville) => (
-            <option key={ville.id} value={ville.id}>
-              {ville.nomVille}
-            </option>
-          ))}
-        </select>
-      </div>
-
+    <ListPage
+      title="Sectors"
+      action={canManage ? <Button onClick={openCreate}>New sector</Button> : null}
+      filters={
+        <>
+          <label htmlFor="villeFilter" className="text-sm font-medium">
+            City
+          </label>
+          <select
+            id="villeFilter"
+            aria-label="Filter by city"
+            className="border-input focus-visible:border-ring focus-visible:ring-ring/50 h-9 max-w-xs rounded-md border bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-[3px]"
+            value={params.villeId ?? ""}
+            onChange={(event) =>
+              setVilleFilter(event.target.value ? Number(event.target.value) : undefined)
+            }
+          >
+            <option value="">All cities</option>
+            {villes.map((ville) => (
+              <option key={ville.id} value={ville.id}>
+                {ville.nomVille}
+              </option>
+            ))}
+          </select>
+        </>
+      }
+    >
       {secteursQuery.isPending ? (
-        <div className="flex flex-col gap-2" aria-busy="true">
-          <Skeleton className="h-9 w-full" />
-          <Skeleton className="h-9 w-full" />
-          <Skeleton className="h-9 w-full" />
-        </div>
+        <ListLoadingState />
       ) : secteursQuery.isError ? (
-        <div role="alert" className="flex flex-col items-start gap-3 py-12">
-          <p className="text-sm">The list of sectors could not be loaded.</p>
-          {listErrorReference ? (
-            <p className="text-muted-foreground font-mono text-xs">
-              Ref. {listErrorReference}
-            </p>
-          ) : null}
-          <Button variant="outline" onClick={() => void secteursQuery.refetch()}>
-            Retry
-          </Button>
-        </div>
+        <ListErrorState
+          message="The list of sectors could not be loaded."
+          reference={listErrorReference}
+          onRetry={() => void secteursQuery.refetch()}
+        />
       ) : secteurs && secteurs.length === 0 ? (
-        <p className="text-muted-foreground py-12 text-sm">
+        <ListEmptyState>
           {params.villeId !== undefined ? "No sector in this city." : "No sector yet."}
-        </p>
+        </ListEmptyState>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -200,6 +194,6 @@ export function SecteursListPage() {
           if (!open) setDeleting(undefined);
         }}
       />
-    </div>
+    </ListPage>
   );
 }

@@ -3,16 +3,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { isAppError } from "@/infrastructure/errors";
-import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from "@/shared/components/ui/sheet";
+import { FormDrawer } from "@/shared/components/patterns/form-drawer";
 import {
   useCreateVilleMutation,
   useUpdateVilleMutation,
@@ -85,55 +77,32 @@ export function VilleFormSheet({ open, onOpenChange, ville }: VilleFormSheetProp
       : undefined;
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right">
-        <SheetHeader>
-          <SheetTitle>{isEdit ? "Edit city" : "New city"}</SheetTitle>
-          <SheetDescription>
-            {isEdit ? "Rename this city." : "Add a city to the reference data."}
-          </SheetDescription>
-        </SheetHeader>
-
-        <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4 px-4">
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="nomVille" className="text-sm font-medium">
-              Name
-            </label>
-            <Input
-              id="nomVille"
-              autoFocus
-              aria-invalid={!!form.formState.errors.nomVille || !!fieldError}
-              {...form.register("nomVille")}
-            />
-            {form.formState.errors.nomVille ? (
-              <p className="text-destructive text-xs">
-                {form.formState.errors.nomVille.message}
-              </p>
-            ) : null}
-            {fieldError ? <p className="text-destructive text-xs">{fieldError}</p> : null}
-          </div>
-
-          {generalError ? (
-            <p role="alert" className="text-destructive text-sm">
-              {generalError}
-            </p>
-          ) : null}
-
-          <SheetFooter className="px-0">
-            <Button type="submit" disabled={mutation.isPending}>
-              {mutation.isPending ? "Saving…" : "Save"}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={mutation.isPending}
-            >
-              Cancel
-            </Button>
-          </SheetFooter>
-        </form>
-      </SheetContent>
-    </Sheet>
+    <FormDrawer
+      open={open}
+      onOpenChange={onOpenChange}
+      title={isEdit ? "Edit city" : "New city"}
+      description={isEdit ? "Rename this city." : "Add a city to the reference data."}
+      onSubmit={onSubmit}
+      isPending={mutation.isPending}
+      errorMessage={generalError}
+    >
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="nomVille" className="text-sm font-medium">
+          Name
+        </label>
+        <Input
+          id="nomVille"
+          autoFocus
+          aria-invalid={!!form.formState.errors.nomVille || !!fieldError}
+          {...form.register("nomVille")}
+        />
+        {form.formState.errors.nomVille ? (
+          <p className="text-destructive text-xs">
+            {form.formState.errors.nomVille.message}
+          </p>
+        ) : null}
+        {fieldError ? <p className="text-destructive text-xs">{fieldError}</p> : null}
+      </div>
+    </FormDrawer>
   );
 }

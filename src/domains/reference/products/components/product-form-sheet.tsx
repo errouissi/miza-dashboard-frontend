@@ -3,16 +3,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { isAppError } from "@/infrastructure/errors";
-import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from "@/shared/components/ui/sheet";
+import { FormDrawer } from "@/shared/components/patterns/form-drawer";
 import {
   useCreateProductMutation,
   useUpdateProductMutation,
@@ -134,105 +126,82 @@ export function ProductFormSheet({ open, onOpenChange, product }: ProductFormShe
       : undefined;
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right">
-        <SheetHeader>
-          <SheetTitle>{isEdit ? "Edit product" : "New product"}</SheetTitle>
-          <SheetDescription>
-            {isEdit
-              ? "Update this product's details."
-              : "Add a recharge card to the catalogue."}
-          </SheetDescription>
-        </SheetHeader>
+    <FormDrawer
+      open={open}
+      onOpenChange={onOpenChange}
+      title={isEdit ? "Edit product" : "New product"}
+      description={
+        isEdit
+          ? "Update this product's details."
+          : "Add a recharge card to the catalogue."
+      }
+      onSubmit={onSubmit}
+      isPending={mutation.isPending}
+      errorMessage={generalError}
+    >
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="name" className="text-sm font-medium">
+          Name
+        </label>
+        <Input
+          id="name"
+          autoFocus
+          aria-invalid={!!form.formState.errors.name || !!nameError}
+          {...form.register("name")}
+        />
+        {form.formState.errors.name ? (
+          <p className="text-destructive text-xs">{form.formState.errors.name.message}</p>
+        ) : null}
+        {nameError ? <p className="text-destructive text-xs">{nameError}</p> : null}
+      </div>
 
-        <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4 px-4">
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="name" className="text-sm font-medium">
-              Name
-            </label>
-            <Input
-              id="name"
-              autoFocus
-              aria-invalid={!!form.formState.errors.name || !!nameError}
-              {...form.register("name")}
-            />
-            {form.formState.errors.name ? (
-              <p className="text-destructive text-xs">
-                {form.formState.errors.name.message}
-              </p>
-            ) : null}
-            {nameError ? <p className="text-destructive text-xs">{nameError}</p> : null}
-          </div>
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="operator" className="text-sm font-medium">
+          Operator
+        </label>
+        <select
+          id="operator"
+          aria-invalid={!!form.formState.errors.operator || !!operatorError}
+          className="border-input focus-visible:border-ring focus-visible:ring-ring/50 h-9 w-full rounded-md border bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-[3px] disabled:opacity-50"
+          {...form.register("operator")}
+        >
+          <option value="">Select an operator…</option>
+          {OPERATORS.map((operator) => (
+            <option key={operator} value={operator}>
+              {operator}
+            </option>
+          ))}
+        </select>
+        {form.formState.errors.operator ? (
+          <p className="text-destructive text-xs">
+            {form.formState.errors.operator.message}
+          </p>
+        ) : null}
+        {operatorError ? (
+          <p className="text-destructive text-xs">{operatorError}</p>
+        ) : null}
+      </div>
 
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="operator" className="text-sm font-medium">
-              Operator
-            </label>
-            <select
-              id="operator"
-              aria-invalid={!!form.formState.errors.operator || !!operatorError}
-              className="border-input focus-visible:border-ring focus-visible:ring-ring/50 h-9 w-full rounded-md border bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-[3px] disabled:opacity-50"
-              {...form.register("operator")}
-            >
-              <option value="">Select an operator…</option>
-              {OPERATORS.map((operator) => (
-                <option key={operator} value={operator}>
-                  {operator}
-                </option>
-              ))}
-            </select>
-            {form.formState.errors.operator ? (
-              <p className="text-destructive text-xs">
-                {form.formState.errors.operator.message}
-              </p>
-            ) : null}
-            {operatorError ? (
-              <p className="text-destructive text-xs">{operatorError}</p>
-            ) : null}
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="value" className="text-sm font-medium">
-              Value (DH)
-            </label>
-            <Input
-              id="value"
-              type="number"
-              inputMode="numeric"
-              step={1}
-              min={MIN_VALUE}
-              aria-invalid={!!form.formState.errors.value || !!valueError}
-              {...form.register("value")}
-            />
-            {form.formState.errors.value ? (
-              <p className="text-destructive text-xs">
-                {form.formState.errors.value.message}
-              </p>
-            ) : null}
-            {valueError ? <p className="text-destructive text-xs">{valueError}</p> : null}
-          </div>
-
-          {generalError ? (
-            <p role="alert" className="text-destructive text-sm">
-              {generalError}
-            </p>
-          ) : null}
-
-          <SheetFooter className="px-0">
-            <Button type="submit" disabled={mutation.isPending}>
-              {mutation.isPending ? "Saving…" : "Save"}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={mutation.isPending}
-            >
-              Cancel
-            </Button>
-          </SheetFooter>
-        </form>
-      </SheetContent>
-    </Sheet>
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="value" className="text-sm font-medium">
+          Value (DH)
+        </label>
+        <Input
+          id="value"
+          type="number"
+          inputMode="numeric"
+          step={1}
+          min={MIN_VALUE}
+          aria-invalid={!!form.formState.errors.value || !!valueError}
+          {...form.register("value")}
+        />
+        {form.formState.errors.value ? (
+          <p className="text-destructive text-xs">
+            {form.formState.errors.value.message}
+          </p>
+        ) : null}
+        {valueError ? <p className="text-destructive text-xs">{valueError}</p> : null}
+      </div>
+    </FormDrawer>
   );
 }

@@ -1,27 +1,18 @@
 import { isAppError } from "@/infrastructure/errors";
-import { Button } from "@/shared/components/ui/button";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from "@/shared/components/ui/sheet";
+import { ConfirmActionDialog } from "@/shared/components/patterns/confirm-action-dialog";
 import { useDeleteProductMutation } from "../queries/products-queries";
 import type { Product } from "../model/product";
 
 /**
- * Delete confirmation (Design System §19).
+ * Delete confirmation for a product (Design System §19).
  *
- * The product is NAMED — confirming something you cannot verify is how the wrong
- * row gets deleted.
+ * Presentation is `ConfirmActionDialog` (extracted in M2c); what stays here is
+ * everything about PRODUCTS — the mutation, the copy, the named record.
  *
  * `ProductController::destroy()` has no in-use guard, and `Product` carries THREE
  * inbound relations (grattage sales, stocks, stock movements) — more than any
  * other reference resource. A referenced product fails as an unhandled FK
- * violation (a 500), not as a clean refusal, so the copy is hedged rather than
- * claiming a cause the contract cannot confirm.
+ * violation (a 500), not a clean refusal (BC-I), so the copy stays hedged.
  */
 type DeleteProductDialogProps = {
   /** Absent = closed. Present = confirm deleting this one. */
@@ -37,49 +28,24 @@ export function DeleteProductDialog({ product, onOpenChange }: DeleteProductDial
     deleteMutation.mutate(product.id, { onSuccess: () => onOpenChange(false) });
   };
 
-  const failed = isAppError(deleteMutation.error);
-
   return (
-    <Sheet
+    <ConfirmActionDialog
       open={product !== undefined}
       onOpenChange={(open) => {
         if (!open) deleteMutation.reset();
         onOpenChange(open);
       }}
-    >
-      <SheetContent side="right">
-        <SheetHeader>
-          <SheetTitle>Delete product</SheetTitle>
-          <SheetDescription>
-            {product ? `Delete “${product.name}”? This cannot be undone.` : null}
-          </SheetDescription>
-        </SheetHeader>
-
-        {failed ? (
-          <p role="alert" className="text-destructive px-4 text-sm">
-            This product could not be deleted. It may still be in use.
-          </p>
-        ) : null}
-
-        <SheetFooter>
-          <Button
-            type="button"
-            variant="destructive"
-            onClick={onConfirm}
-            disabled={deleteMutation.isPending}
-          >
-            {deleteMutation.isPending ? "Deleting…" : "Delete"}
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            disabled={deleteMutation.isPending}
-          >
-            Cancel
-          </Button>
-        </SheetFooter>
-      </SheetContent>
-    </Sheet>
+      title="Delete product"
+      description={product ? `Delete “${product.name}”? This cannot be undone.` : null}
+      confirmLabel="Delete"
+      pendingLabel="Deleting…"
+      onConfirm={onConfirm}
+      isPending={deleteMutation.isPending}
+      errorMessage={
+        isAppError(deleteMutation.error)
+          ? "This product could not be deleted. It may still be in use."
+          : undefined
+      }
+    />
   );
 }
