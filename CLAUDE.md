@@ -2,6 +2,14 @@
 
 Guidance for Claude Code when working in this repository.
 
+## New session — start here
+
+> **Read `docs/session-bootstrap.md` first.**
+
+It orchestrates the project documentation: what to read, in what order, which file owns
+which answer, the working principles, and the checklists to complete before writing code
+and before ending a session. Everything below is the _rules_ layer it points at.
+
 ## Source of truth
 
 Five approved, **frozen** documents govern this codebase. They are authoritative; this file
@@ -18,25 +26,19 @@ genuine contradiction, in which case **raise it**, do not work around it.
 
 ## Project documentation (living — updated as work proceeds)
 
-Four Markdown files track the project itself. The frozen documents above say what to build;
-these say where we are and what has been decided along the way.
+The frozen documents above say what to build. Four Markdown files say where we are:
+`next-session.md` (handover) · `project-status.md` (current state) ·
+`decisions.md` (append-only decision log) · `implementation-status.md` (history).
 
-- **`docs/next-session.md`** — **start here.** Session handover: current focus, next task,
-  what must not be changed, and the verification steps to run before writing code.
-- `docs/project-status.md` — current live status: milestone, branch, blockers, backend
-  dependencies. Overwritten after each milestone.
-- `docs/decisions.md` — **append-only** architectural decision log (`ADR-0002`+).
-  Never rewrite or delete an entry; supersede it with a new one.
-- `docs/implementation-status.md` — historical implementation record: how each milestone
-  was delivered, and how gates were evaluated.
+**`docs/session-bootstrap.md` explains the read order, ownership and workflow — do not
+duplicate that here.** Two rules are restated because they are the ones broken by accident:
 
-`decisions.md` records decisions made **during implementation**. Decisions inside the frozen
-documents (`D-1 … D-17`) are not repeated there, and `ADR-0001` is the localStorage token
-decision already written into FTA §17.
-
-At the end of every implementation session: update `project-status.md` and
-`next-session.md`, and **append** to `decisions.md` only if a real architectural decision
-was made.
+- `decisions.md` is **append-only**. Never rewrite or delete an entry; supersede it with a
+  new one. It records decisions made _during implementation_ — the frozen documents' own
+  decisions (`D-1 … D-17`) are not repeated there, and `ADR-0001` is the localStorage token
+  decision already written into FTA §17.
+- End every session by updating `project-status.md` and `next-session.md`, appending to
+  `decisions.md` only if a real architectural decision was made.
 
 ## Commands
 

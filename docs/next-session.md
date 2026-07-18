@@ -108,9 +108,5 @@ Then, **before writing any code**:
 
 ## Session workflow
 
-At the end of every implementation session:
-
-- [ ] Update `project-status.md` (current state)
-- [ ] Update `next-session.md` (this file)
-- [ ] **Append** to `decisions.md` only if a real architectural decision was made
-- [ ] Never rewrite or delete a historical decision
+See [`session-bootstrap.md`](session-bootstrap.md) §4 (before writing code) and §5
+(before ending a session). This file is one of the artifacts §5 requires you to update.
