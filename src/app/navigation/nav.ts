@@ -1,6 +1,7 @@
 import type { LucideIcon } from "lucide-react";
-import { Map, MapPin } from "lucide-react";
+import { Map, MapPin, CreditCard } from "lucide-react";
 import { PERMISSIONS, type PermissionResolver } from "@/infrastructure/permissions";
+import { PRODUCTS_PATH } from "@/domains/reference/products";
 import { SECTEURS_PATH } from "@/domains/reference/secteurs";
 import { VILLES_PATH } from "@/domains/reference/villes";
 
@@ -57,6 +58,12 @@ export const NAV_TREE: NavGroup[] = [
         to: SECTEURS_PATH,
         permission: PERMISSIONS.ACCESS_DASHBOARD,
         icon: Map,
+      },
+      {
+        label: "Produits",
+        to: PRODUCTS_PATH,
+        permission: PERMISSIONS.ACCESS_DASHBOARD,
+        icon: CreditCard,
       },
     ],
   },
