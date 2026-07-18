@@ -1,6 +1,11 @@
 import { fromLaravelPage, httpClient } from "@/infrastructure/http";
 import type { LaravelPageEnvelope, Paginated } from "@/infrastructure/http";
-import type { Ville, VilleListParams } from "../model/ville";
+import {
+  MAX_PER_PAGE,
+  VILLE_LIST_DEFAULTS,
+  type Ville,
+  type VilleListParams,
+} from "../model/ville";
 
 /**
  * The Villes endpoints and their mappers (FTA §7, D-6).
@@ -40,6 +45,21 @@ export async function fetchVilles(params: VilleListParams): Promise<Paginated<Vi
   });
 
   return fromLaravelPage(data, toVille);
+}
+
+/**
+ * The full ville set, for relation pickers in other reference domains.
+ *
+ * Requests `per_page` at the backend's documented maximum (`IndexVilleRequest`:
+ * `max:100`) — asking for more is a 422, not a larger page. The endpoint offers
+ * no unpaginated variant, so this returns the first 100 villes ordered by name.
+ */
+export async function fetchVilleOptions(): Promise<Ville[]> {
+  const page = await fetchVilles({
+    ...VILLE_LIST_DEFAULTS,
+    perPage: MAX_PER_PAGE,
+  });
+  return page.items;
 }
 
 export async function createVille(nomVille: string): Promise<Ville> {

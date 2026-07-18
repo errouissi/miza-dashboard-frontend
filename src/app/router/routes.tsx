@@ -6,6 +6,7 @@ import {
 } from "@/app/errors/route-error-boundary";
 import { WelcomePlaceholder } from "@/app/placeholders";
 import { RequirePermission } from "@/app/guards";
+import { secteursRoutes } from "@/domains/reference/secteurs";
 import { villesRoutes } from "@/domains/reference/villes";
 import { LOGIN_PATH } from "./return-path";
 import { LoginRoute } from "./login-route";
@@ -86,7 +87,10 @@ function withPermissionGuards(routes: RouteObject[]): RouteObject[] {
 }
 
 /** Domain route contributions, assembled from each resource's public surface. */
-const domainRoutes: RouteObject[] = withPermissionGuards([...villesRoutes]);
+const domainRoutes: RouteObject[] = withPermissionGuards([
+  ...villesRoutes,
+  ...secteursRoutes,
+]);
 
 /**
  * Test-only seam for the fail-closed case. Exported because the behaviour it

@@ -15,4 +15,10 @@ export const villesKeys = {
   all: ["villes"] as const,
   lists: () => [...villesKeys.all, "list"] as const,
   list: (params: VilleListParams) => [...villesKeys.lists(), params] as const,
+  /**
+   * The relation-picker set. A single key with no parameters, so every consumer
+   * — a form's select, a table resolving a ville name — reads ONE cache entry
+   * and triggers ONE fetch, however many components ask for it.
+   */
+  options: () => [...villesKeys.all, "options"] as const,
 };

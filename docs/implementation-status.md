@@ -2,32 +2,88 @@
 
 Single source of truth for *where we are*. Keep it short.
 
-**Current milestone: M1 — Walking skeleton** · status: **M1-A, M1-B, M1-C complete; Villes (the last
-documented M1 deliverable) in progress**
+**M1 — Walking skeleton** · status: **COMPLETE** · **Gate G1: PASSED with reconciliation**
+**Current: M2 — Pattern hardening** · status: **M2a READY to start** · M2c and Gate G2 gated on BC-G
+(see "M2 readiness — by capability")
 
 M1-A/B/C are this repository's working sub-division of the roadmap's **M1 — Walking skeleton**. The
 frozen roadmap defines milestones at M0/M1/M2 granularity only; the sub-letters exist here and in code
-comments, and nowhere else. There is no "M1-D": what remains of M1 is **Villes end to end**, which
-carries the permission registry entries, the generated route guards, and the first query-key factory
-with it.
+comments, and nowhere else. There was never an "M1-D": the remainder of M1 was **Villes end to end**,
+which carried the permission registry entries, the generated route guards, and the first query-key
+factory with it.
 
-## Remaining M1 work (roadmap §M1 deliverables)
+## M1 deliverables (roadmap §M1) — all complete
 
 | Deliverable | Status |
 | --- | --- |
 | HTTP client + interceptors + AppError normalization | ✅ M1-A |
 | 401 session policy, incl. concurrent-401 collapse | ✅ M1-A |
 | Query client + staleness tiers | ✅ M1-A |
-| Query-key factory for one resource | 🔨 with Villes |
-| Session store + permission registry + evaluator | ⚠️ store/evaluator ✅ M1-A; **registry populated with Villes** |
-| Route-guard generation from declared permissions | 🔨 with Villes |
+| Query-key factory for one resource | ✅ `villesKeys` |
+| Session store + permission registry + evaluator | ✅ registry populated with Villes |
+| Route-guard generation from declared permissions | ✅ generated from `handle.permission`, fails closed |
 | AppShell, sidebar rendering from the registry | ✅ M1-B |
 | Formatters — money, date, phone, identifier | ✅ M1-A |
 | Login / logout / session lifecycle | ✅ M1-C |
-| **Villes: list, filter-in-URL, create/edit drawer, delete confirmation** | 🔨 in progress |
+| Villes: list, filter-in-URL, create/edit drawer, delete confirmation | ✅ |
 
 The registry, the guard generator and the key factory were deliberately deferred until a real domain
-resource existed to shape them (FTA D-11) — Villes is that resource, so they land now and not before.
+resource existed to shape them (FTA D-11) — Villes was that resource.
+
+## M1 exit criteria (roadmap §M1 "Exit criteria")
+
+| Criterion | Verdict | Evidence |
+| --- | --- | --- |
+| A permitted user creates a real ville against the real backend, through the full stack | ✅ | Manual QA — create/update/delete verified against the local backend |
+| A user without the permission sees no nav item, no button, and the calm 403 on direct URL entry | ⚠️ **partial — backend-blocked** | Mechanism complete and covered by automated tests. **No seeded account lacks `access-dashboard`**, so it is unverified against a real unpermitted session. See BC-A. Not a frontend failure |
+| A filtered list URL, pasted into a second browser, reproduces the same view | ✅ | Automated (URL read/write, hostile-param rejection) + manual QA |
+| An expired token mid-session produces one clean redirect to login, return path preserved, verified with concurrent requests in flight | ✅ | Automated — `session-redirect.test.tsx` incl. the 5-concurrent-401 collapse |
+| A forced 500 renders the error state **with a support reference**; a forced 422 maps to its field | ✅ **closed** | 422→field ✅ (duplicate-name test). 500 → retryable error state **now rendering the correlation reference**, derived from the shared `resolveErrorDisplay()` — the same identifier `RouteErrorBoundary` shows. Tests assert it equals the `X-Request-Id` actually sent, that no empty placeholder renders, and that manual retry still recovers |
+
+## Gate G1 — "Did the architecture survive contact with the real backend?"
+
+**Passed.** Auth, pagination envelope, error shape and permission strings all survived; where reality
+contradicted the documents, the documents were corrected rather than the code bent — which is what G1
+exists to force ("Fix the document, then continue. Do not paper over it in code").
+
+Reconciled contradictions found by running against the real backend:
+
+- **Permission strings** — the assumed granular per-resource strings do not exist. Villes/Secteurs/
+  Products are all gated behind one coarse `access-dashboard`. Recorded here and in BC-C; the registry
+  mirrors the server truthfully rather than inventing names.
+- **Envelope divergence** — Villes' four write endpoints return four different shapes. Absorbed by the
+  resource's own mapper (FTA D-6) exactly as designed; recorded in BC (contract consistency).
+- **Error shape** — the documented 403 renderer coverage for villes is contradicted by the backend's
+  own docblock. No frontend impact (normalizer handles both); recorded in BC.
+- **Seed data defect** — an account is seeded with an empty-string permission, which made the route
+  guard's original `permission ?? ""` shape a genuine fail-open. Guard now refuses unconditionally,
+  with a regression test. Recorded in BC.
+
+## Manual QA — passed
+
+Verified against the local backend (PostgreSQL `miza`, `php artisan serve`, Vite dev): login, logout,
+create Ville, update Ville, delete Ville. Automated suite: **136/136 across 17 files**; lint,
+typecheck, format and build clean.
+
+## M2 readiness — by capability
+
+M2 ships **Secteurs → Products → extract the shared patterns from the three working screens**. Both
+`SecteurController::index` and `ProductController::index` return `response()->json($query->get())` —
+an unpaginated raw array with no `search`, `sort` or `direction` (BC-G). That constrains **what the
+screens can honestly do**, and therefore what M2c may extract — but it does **not** stop the screens
+from being built.
+
+| Capability | Status | Reasoning |
+| --- | --- | --- |
+| **M2a — Secteurs** | ✅ **READY** | Full CRUD exists (`apiResource`, `SecteurController`). Build to the *current* contract: list from the raw array, `ville_id` filter in the URL, create/edit drawer, delete confirmation, composite-unique 422 mapping. **No pagination, search or sort controls** — the endpoint offers none, and rendering dead controls would be a lie about the API |
+| **M2b — Products** | ✅ **READY** | Same shape; adds an `operator` enum (`IAM\|INWI\|ORANGE`) and integer `value`. Same current-contract constraints |
+| **M2c — Extraction** | ⛔ **BLOCKED (BC-G)** | The patterns to extract are `DataTable`/`FilterBar`/`ListPage` — pagination, search and sort abstractions. With one paginated resource and two unpaginated ones, the rule of three has one real case, not three. Extracting here fits the pattern to a backend inconsistency |
+| **Gate G2** | ⛔ **NOT YET PASSABLE** | Its exit criteria require Products to ship *"with no new pattern code"* and Villes/Secteurs to refactor onto the extracted pattern *"with no behavior change"*. Neither is satisfiable while the three resources expose different list capabilities |
+
+**G2 becomes passable when** either (a) BC-G lands and Secteurs/Products expose the Villes list
+contract, so the three screens are genuinely comparable; or (b) the roadmap explicitly accepts
+heterogeneous list capabilities and M2c's scope is renegotiated in writing to extract only what all
+three share. Option (b) is a documented decision, not a default.
 
 ## M1-C — Authentication (complete)
 
@@ -146,17 +202,36 @@ extracted in **M2**, from three working screens, not invented from one (FTA §12
 
 ## Next approved task
 
-**Finish M1 — Villes end to end**, then Gate G1.
+**M2 — Pattern hardening: the rule of three, executed** (roadmap §M2). M2a Secteurs → M2b Products →
+M2c extract `DataTable` / `FilterBar` / `ListPage` / `FormDrawer` + the resource-definition module,
+then refactor Villes and Secteurs onto them.
 
-Gate **G1** asks one question: did the architecture survive contact with the real backend?
-PR-1 answered it for errors, auth and correlation. Villes answers it for pagination and permissions.
+**M2a may start now**, built to the current Secteurs contract. M2c and G2 wait on BC-G.
 
-### Open against M1's exit criteria
+## Open frontend items carried into M2
 
-Roadmap M1 requires: *"A user without the permission sees no nav item, no button, and the calm 403
-on direct URL entry."* Villes cannot fully demonstrate this — every villes action is gated behind the
-single coarse `permission:access-dashboard` (`routes/api.php:160-161`,
-`VilleController::middleware()`), so "a user without the permission" is a user who cannot open the
-dashboard at all. The *mechanism* (registry → nav filter → route guard → 403) is built and tested;
-the granular case it exists for is unproven until a resource with per-action permissions lands
-(Agents, M3). Granular ville permissions are recorded as backend consultation, not assumed.
+- ~~Correlation reference missing from inline query-error states.~~ **RESOLVED.** The Villes list
+  error state renders the reference from the shared `resolveErrorDisplay()`, omitting the line
+  entirely when no reference exists. Copy this into Secteurs/Products rather than extracting a shared
+  error component — extraction is M2c's job, from three screens.
+- **Guard generation is shallow.** `withPermissionGuards` wraps only the routes passed to it. No
+  resource contributes `children` yet (FTA D-11); the first nested route must extend it, or a child's
+  own `handle.permission` will be silently ignored in favour of its parent's.
+- **Ville picker capacity.** The Secteurs form needs every ville as an option, but the villes list is
+  paginated at `per_page ≤ 100`. Fine while the dataset is under 100; not a general solution. See BC-H.
+
+## Open backend consultation items
+
+Raised, not assumed. None was worked around in code.
+
+| Ref | Item | Blocks |
+| --- | --- | --- |
+| BC-A | No seeded account lacks `access-dashboard` | M1 exit criterion 2; QA of the 403 path |
+| BC-B | Deleting a ville in use returns 500, not a domain 409 | One capability; frontend message stays hedged |
+| BC-C | No granular ville/secteur/product permissions | Nothing today; granular authz unproven until M3 |
+| BC-D | `AdminUserSeeder` grants an empty-string permission | Mitigated frontend-side; seed defect remains |
+| BC-E | `exposed_headers: []` will hide `X-Request-Id` when B-4 lands | Future correlation only |
+| BC-F | Contradictory docs on the villes 403 envelope | Documentation only |
+| BC-G | **Secteurs + Products `index` are unpaginated raw arrays** | **M2c extraction + Gate G2. Does NOT block M2a/M2b** |
+| BC-H | No bounded "all villes" endpoint for relation pickers | Ville picker completeness beyond 100 villes |
+| BC-I | `secteurs`/`products` delete has no in-use guard (same class as BC-B) | One capability per resource |

@@ -114,6 +114,67 @@ describe("villes list", () => {
     expect(await screen.findByRole("alert")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /retry/i })).toBeInTheDocument();
   });
+
+  it("shows the support reference on a failed list, matching the id actually sent", async () => {
+    // Closes M1's last exit criterion: "a forced 500 renders the error state
+    // WITH A SUPPORT REFERENCE". Asserting it equals the X-Request-Id the
+    // request carried is what makes the reference worth quoting to support —
+    // a reference that does not match the traced request is decoration.
+    let sentRequestId: string | null = null;
+    server.use(
+      http.get(`${API}/admin/villes`, ({ request }) => {
+        sentRequestId = request.headers.get("X-Request-Id");
+        return HttpResponse.json({ message: "boom" }, { status: 500 });
+      }),
+    );
+    renderPage();
+
+    const alert = await screen.findByRole("alert");
+    await waitFor(() => expect(sentRequestId).toBeTruthy());
+
+    expect(within(alert).getByText(`Ref. ${sentRequestId}`)).toBeInTheDocument();
+  });
+
+  it("never renders an empty reference placeholder", async () => {
+    // The guard on the conditional. A bare "Ref." with nothing after it is
+    // worse than omitting the line: it looks like a support handle and is not one.
+    server.use(
+      http.get(`${API}/admin/villes`, () =>
+        HttpResponse.json({ message: "boom" }, { status: 500 }),
+      ),
+    );
+    renderPage();
+
+    const alert = await screen.findByRole("alert");
+    const reference = within(alert).queryByText(/^Ref\./);
+
+    // Either absent entirely, or present with a non-empty identifier after it.
+    if (reference) {
+      expect(reference.textContent?.replace(/^Ref\.\s*/, "")).not.toBe("");
+    }
+  });
+
+  it("keeps retry working after the reference is shown", async () => {
+    // A 5xx is retryable, so the query makes its own attempts (shouldRetryQuery)
+    // before surfacing as an error. Gate on an explicit flag rather than an
+    // attempt count: counting couples the test to the retry policy's arithmetic,
+    // and the thing under test is the MANUAL retry, not the automatic one.
+    let shouldFail = true;
+    server.use(
+      http.get(`${API}/admin/villes`, () =>
+        shouldFail
+          ? HttpResponse.json({ message: "boom" }, { status: 500 })
+          : HttpResponse.json(page([{ id: 1, nom_ville: "Casablanca" }])),
+      ),
+    );
+    renderPage();
+
+    await screen.findByRole("alert");
+    shouldFail = false;
+    fireEvent.click(screen.getByRole("button", { name: /retry/i }));
+
+    expect(await screen.findByText("Casablanca")).toBeInTheDocument();
+  });
 });
 
 describe("filter state lives in the URL", () => {

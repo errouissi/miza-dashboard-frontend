@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { isAppError, resolveErrorDisplay } from "@/infrastructure/errors";
 import { PERMISSIONS } from "@/infrastructure/permissions";
 import { usePermission } from "@/shared/hooks";
 import { Button } from "@/shared/components/ui/button";
@@ -109,6 +110,14 @@ export function VillesListPage() {
 
   const page = villesQuery.data;
 
+  // Derived from the ONE normalized error shape — no second request-id parser.
+  // `resolveErrorDisplay` is the same function the route error boundary uses, so
+  // an operator quoting a reference from an inline failure and from a crashed
+  // page is quoting the same identifier.
+  const listErrorReference = isAppError(villesQuery.error)
+    ? resolveErrorDisplay(villesQuery.error).requestId
+    : undefined;
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between gap-4">
@@ -137,6 +146,15 @@ export function VillesListPage() {
       ) : villesQuery.isError ? (
         <div role="alert" className="flex flex-col items-start gap-3 py-12">
           <p className="text-sm">The list of cities could not be loaded.</p>
+          {/* The correlation reference, when the failure carries one (FTA §11).
+              Rendered between the message and the action, mirroring the route
+              error boundary's hierarchy. Omitted entirely when absent — a bare
+              "Ref." with nothing after it is worse than no reference at all. */}
+          {listErrorReference ? (
+            <p className="text-muted-foreground font-mono text-xs">
+              Ref. {listErrorReference}
+            </p>
+          ) : null}
           <Button variant="outline" onClick={() => void villesQuery.refetch()}>
             Retry
           </Button>

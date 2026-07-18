@@ -1,6 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { STALE_TIMES } from "@/infrastructure/query";
-import { createVille, deleteVille, fetchVilles, updateVille } from "../api/villes-api";
+import {
+  createVille,
+  deleteVille,
+  fetchVilleOptions,
+  fetchVilles,
+  updateVille,
+} from "../api/villes-api";
 import type { VilleListParams } from "../model/ville";
 import { villesKeys } from "./keys";
 
@@ -20,7 +26,23 @@ export function useVillesQuery(params: VilleListParams) {
 }
 
 /**
- * All three mutations invalidate the whole villes list space rather than patching
+ * The ville set for relation pickers, and the ONLY sanctioned way another domain
+ * reads villes (FTA §4 — public surface, documented coupling).
+ *
+ * One parameterless key means one cache entry: a form's select and a table
+ * resolving a ville name share the same fetch rather than each keeping their own
+ * copy. Consumers derive names from this; nothing caches ville names separately.
+ */
+export function useVilleOptionsQuery() {
+  return useQuery({
+    queryKey: villesKeys.options(),
+    queryFn: fetchVilleOptions,
+    staleTime: STALE_TIMES.STATIC,
+  });
+}
+
+/**
+ * All four mutations invalidate the whole villes key space rather than patching
  * the cache. Reference data is small and cached hard; a surgical cache update
  * here would buy nothing and would have to re-derive the server's ordering and
  * pagination to stay honest — which is how a created row appears on the wrong
@@ -28,7 +50,10 @@ export function useVillesQuery(params: VilleListParams) {
  */
 function useInvalidateVilles() {
   const queryClient = useQueryClient();
-  return () => queryClient.invalidateQueries({ queryKey: villesKeys.lists() });
+  // `all`, not `lists()`: the picker set (`options()`) is a sibling and holds the
+  // same rows. Invalidating only the lists would leave a renamed or deleted ville
+  // showing in every relation picker until its staleTime elapsed.
+  return () => queryClient.invalidateQueries({ queryKey: villesKeys.all });
 }
 
 export function useCreateVilleMutation() {

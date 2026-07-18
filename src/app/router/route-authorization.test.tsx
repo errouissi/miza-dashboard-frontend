@@ -8,6 +8,7 @@ import { sessionManager } from "@/infrastructure/auth";
 import { createQueryClient } from "@/infrastructure/query";
 import { PERMISSIONS } from "@/infrastructure/permissions";
 import { VILLES_PATH } from "@/domains/reference/villes";
+import { SECTEURS_PATH } from "@/domains/reference/secteurs";
 import { routes } from "./routes";
 
 /**
@@ -193,6 +194,29 @@ describe("unknown permissions fail safe", () => {
 
     expect(screen.queryByText("secret")).not.toBeInTheDocument();
     expect(screen.getByText(/accès refusé/i)).toBeInTheDocument();
+  });
+});
+
+describe("every contributed domain route is guarded", () => {
+  // Parameterised so a new resource inherits the authorization contract by being
+  // added to this list — not by someone remembering to write three more tests.
+  const domainPaths = [VILLES_PATH, SECTEURS_PATH];
+
+  it.each(domainPaths)("refuses %s without the permission", async (path) => {
+    sessionManager.start(unpermittedSession);
+    const router = renderAt(path);
+
+    expect(await screen.findByText(/accès refusé/i)).toBeInTheDocument();
+    // Not a login redirect, and the session survives.
+    expect(router.state.location.pathname).toBe(path);
+    expect(sessionManager.getSnapshot()).not.toBeNull();
+  });
+
+  it.each(domainPaths)("redirects %s to login when unauthenticated", (path) => {
+    const router = renderAt(path);
+
+    expect(router.state.location.pathname).toBe("/login");
+    expect(router.state.location.search).toBe(`?next=${encodeURIComponent(path)}`);
   });
 });
 
