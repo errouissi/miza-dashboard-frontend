@@ -22,6 +22,26 @@ Object.defineProperty(window, "matchMedia", {
   }),
 });
 
+/**
+ * jsdom does not implement the Pointer Events capture API. Radix's dropdown menu
+ * (and other Radix primitives) call `hasPointerCapture`/`setPointerCapture` on
+ * their trigger internally; without these, the calls throw and the menu never
+ * opens in a test, silently — `aria-expanded` just stays "false". Same category
+ * of gap as the matchMedia stub above, same fix: a minimal jsdom polyfill.
+ */
+if (!Element.prototype.hasPointerCapture) {
+  Element.prototype.hasPointerCapture = () => false;
+}
+if (!Element.prototype.setPointerCapture) {
+  Element.prototype.setPointerCapture = () => {};
+}
+if (!Element.prototype.releasePointerCapture) {
+  Element.prototype.releasePointerCapture = () => {};
+}
+if (!Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = () => {};
+}
+
 // `onUnhandledRequest: "error"` is deliberate: a request with no handler is a
 // test reaching for a real network, and it must fail loudly rather than hang.
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }));

@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { createPermissionResolver } from "@/infrastructure/permissions";
+import { PERMISSIONS, createPermissionResolver } from "@/infrastructure/permissions";
+import { VILLES_PATH } from "@/domains/reference/villes";
 import { NAV_TREE, filterNav, type NavGroup } from "./nav";
 
 /**
- * The real NAV_TREE is empty in M1-B (no domains exist), so permission filtering is
- * verified against a fixture. A fixture is the honest way to test this: inventing
- * real nav entries would mean inventing routes and permission strings no backend
- * has agreed to.
+ * Filtering itself is verified against a FIXTURE rather than the real tree, so
+ * these cases stay stable as domains land. The real tree gets its own assertions
+ * at the bottom — every item points at a registered permission and a real path.
  */
 const fixture: NavGroup[] = [
   {
@@ -57,7 +57,42 @@ describe("filterNav", () => {
     expect(fixture[0].items).toHaveLength(2);
   });
 
-  it("the real nav tree is empty in M1-B — no domains exist yet", () => {
-    expect(NAV_TREE).toEqual([]);
+  it("does not mutate the real tree either", () => {
+    const before = JSON.stringify(NAV_TREE);
+    filterNav(NAV_TREE, createPermissionResolver([]));
+    expect(JSON.stringify(NAV_TREE)).toBe(before);
+  });
+});
+
+describe("the real nav tree", () => {
+  const registered = new Set<string>(Object.values(PERMISSIONS));
+
+  it("contains the Villes entry, pointing at the resource's own path", () => {
+    const items = NAV_TREE.flatMap((group) => group.items);
+    const villes = items.find((item) => item.to === VILLES_PATH);
+
+    expect(villes).toBeDefined();
+    expect(villes?.permission).toBe(PERMISSIONS.ACCESS_DASHBOARD);
+  });
+
+  it("every item's permission comes from the central registry", () => {
+    // The anti-drift assertion. A hand-typed permission string here would light
+    // up a nav item leading to a route the guard refuses — the exact legacy
+    // defect this registry exists to prevent.
+    for (const item of NAV_TREE.flatMap((group) => group.items)) {
+      expect(registered.has(item.permission)).toBe(true);
+    }
+  });
+
+  it("is hidden entirely from a session holding no permissions", () => {
+    expect(filterNav(NAV_TREE, createPermissionResolver([]))).toEqual([]);
+  });
+
+  it("is visible to a session holding access-dashboard", () => {
+    const groups = filterNav(
+      NAV_TREE,
+      createPermissionResolver([PERMISSIONS.ACCESS_DASHBOARD]),
+    );
+    expect(groups.length).toBeGreaterThan(0);
   });
 });

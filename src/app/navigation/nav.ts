@@ -1,5 +1,7 @@
 import type { LucideIcon } from "lucide-react";
-import type { PermissionResolver } from "@/infrastructure/permissions";
+import { MapPin } from "lucide-react";
+import { PERMISSIONS, type PermissionResolver } from "@/infrastructure/permissions";
+import { VILLES_PATH } from "@/domains/reference/villes";
 
 /**
  * The navigation model (Architecture §3, FTA §6).
@@ -30,15 +32,28 @@ export type NavGroup = {
 /**
  * The navigation tree.
  *
- * EMPTY IN M1-B, and correctly so: no domain exists yet, and the permission
- * registry is empty too. Entries are contributed as each resource lands
- * (resource recipe). Inventing nav items now would mean inventing routes and
- * permission strings that no backend has agreed to.
+ * Entries are contributed as each resource lands (resource recipe) — never ahead
+ * of one, which would mean inventing routes and permission strings no backend has
+ * agreed to. Reference/Villes is the first.
  *
- * The consequence is deliberate and worth stating: the sidebar renders no groups
- * at runtime in M1-B. `filterNav` is verified against fixtures instead.
+ * The path and the permission both come from their owners (the resource's public
+ * surface, the central registry) rather than being retyped here. That is what
+ * makes it structurally impossible for a nav item to point at a route the guard
+ * would refuse — the drift Discovery found in the legacy build.
  */
-export const NAV_TREE: NavGroup[] = [];
+export const NAV_TREE: NavGroup[] = [
+  {
+    label: "Référentiel",
+    items: [
+      {
+        label: "Villes",
+        to: VILLES_PATH,
+        permission: PERMISSIONS.ACCESS_DASHBOARD,
+        icon: MapPin,
+      },
+    ],
+  },
+];
 
 /**
  * Filters the tree to what this session may actually see.

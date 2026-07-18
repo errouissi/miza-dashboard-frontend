@@ -2,7 +2,60 @@
 
 Single source of truth for *where we are*. Keep it short.
 
-**Current milestone: M1-A — Infrastructure Foundation (PR-1)** · status: **code complete, awaiting review**
+**Current milestone: M1 — Walking skeleton** · status: **M1-A, M1-B, M1-C complete; Villes (the last
+documented M1 deliverable) in progress**
+
+M1-A/B/C are this repository's working sub-division of the roadmap's **M1 — Walking skeleton**. The
+frozen roadmap defines milestones at M0/M1/M2 granularity only; the sub-letters exist here and in code
+comments, and nowhere else. There is no "M1-D": what remains of M1 is **Villes end to end**, which
+carries the permission registry entries, the generated route guards, and the first query-key factory
+with it.
+
+## Remaining M1 work (roadmap §M1 deliverables)
+
+| Deliverable | Status |
+| --- | --- |
+| HTTP client + interceptors + AppError normalization | ✅ M1-A |
+| 401 session policy, incl. concurrent-401 collapse | ✅ M1-A |
+| Query client + staleness tiers | ✅ M1-A |
+| Query-key factory for one resource | 🔨 with Villes |
+| Session store + permission registry + evaluator | ⚠️ store/evaluator ✅ M1-A; **registry populated with Villes** |
+| Route-guard generation from declared permissions | 🔨 with Villes |
+| AppShell, sidebar rendering from the registry | ✅ M1-B |
+| Formatters — money, date, phone, identifier | ✅ M1-A |
+| Login / logout / session lifecycle | ✅ M1-C |
+| **Villes: list, filter-in-URL, create/edit drawer, delete confirmation** | 🔨 in progress |
+
+The registry, the guard generator and the key factory were deliberately deferred until a real domain
+resource existed to shape them (FTA D-11) — Villes is that resource, so they land now and not before.
+
+## M1-C — Authentication (complete)
+
+| Item | Status |
+| --- | --- |
+| `POST /auth/login` via a domain `api/` module, sending `app: "admin"` (never `"dashboard"`) | ✅ |
+| Login page: RHF + zod, invalid-credentials and blocked-account handled distinctly | ✅ |
+| Session established through `sessionManager.start()` — no duplicated session state | ✅ |
+| Logout: backend revocation first, `terminate()` on settle (success **or** failure) | ✅ |
+| Navigation after logout stays with `wireSessionTermination` — one navigation authority | ✅ |
+| Validated `?next=` return path preserved, read in the app router layer | ✅ |
+| Session restoration remains lazy/optimistic — no boot-time `/me` call (approved) | ✅ |
+| Temporary English copy pending O-1 | ✅ |
+
+Approved and deliberately **not** built: boot-time `/me` validation, cross-tab session sync
+(`storage`/`BroadcastChannel`), any refresh-token flow. The `useSyncExternalStore` session mechanism
+is ratified as the official architecture; no ADR required at this stage.
+
+## M1-B — Application shell (complete)
+
+| Item | Status |
+| --- | --- |
+| AppShell: sidebar + header + outlet, content-region-only scroll | ✅ |
+| Data router (`createBrowserRouter`) so a 401 can navigate from outside React | ✅ |
+| `ProtectedShell` — every route below `/` is structurally guarded | ✅ |
+| Safe return-path handling (`?next=`), open-redirect proof | ✅ |
+| Route error boundary on a pathless child route — a crashed page keeps the shell usable | ✅ |
+| Nav model as data (`NAV_TREE` + `filterNav`), permission-filtered | ✅ |
 
 ## M1-A — PR-1 items
 
@@ -87,19 +140,23 @@ mapper (FTA D-6) — this is what the anti-corruption layer is for. Not a blocke
 
 ## Not yet built (deliberately)
 
-No business feature exists. No Villes. No domain folders. No pages, layout, sidebar or login.
-`src/domains/` is still empty by design.
+No business domain beyond Reference/Villes. `domains/auth` (M1-C) and `domains/reference/villes`
+are the only domain folders. No shared `DataTable`/`ListPage`/`FormDrawer` patterns — those are
+extracted in **M2**, from three working screens, not invented from one (FTA §12, roadmap M2).
 
 ## Next approved task
 
-**M1-B — Walking skeleton (PR-2).** Login → AppShell (sidebar/header/outlet) → router with
-generated guards → **Villes** end to end against the real backend, with URL filter state.
-
-**Unblocked** — B-5 is resolved; the Villes list contract is above.
-
-Also feeds M1-B: login must send the `app` input the backend expects (`check.app:admin`), and
-the session is established via `sessionManager.start()` — the login *call* belongs to a domain
-api/ module, not to `infrastructure/auth`.
+**Finish M1 — Villes end to end**, then Gate G1.
 
 Gate **G1** asks one question: did the architecture survive contact with the real backend?
-PR-1 answered it for errors, auth and correlation. PR-2 answers it for pagination and permissions.
+PR-1 answered it for errors, auth and correlation. Villes answers it for pagination and permissions.
+
+### Open against M1's exit criteria
+
+Roadmap M1 requires: *"A user without the permission sees no nav item, no button, and the calm 403
+on direct URL entry."* Villes cannot fully demonstrate this — every villes action is gated behind the
+single coarse `permission:access-dashboard` (`routes/api.php:160-161`,
+`VilleController::middleware()`), so "a user without the permission" is a user who cannot open the
+dashboard at all. The *mechanism* (registry → nav filter → route guard → 403) is built and tested;
+the granular case it exists for is unproven until a resource with per-action permissions lands
+(Agents, M3). Granular ville permissions are recorded as backend consultation, not assumed.

@@ -10,11 +10,26 @@
  * same string the server checks is what makes it impossible for the UI and the API
  * to disagree about what is allowed.
  *
- * ENTRIES ARE ADDED PER RESOURCE (resource recipe, step 1). Empty in PR-1 is
- * correct: no resource exists yet, and inventing permission names ahead of the
- * domains that use them would be guessing at a backend contract.
+ * ENTRIES ARE ADDED PER RESOURCE (resource recipe, step 1) — never ahead of the
+ * domain that uses them, which would be guessing at a backend contract.
  */
-export const PERMISSIONS: Readonly<Record<string, string>> = Object.freeze({});
+export const PERMISSIONS = Object.freeze({
+  /**
+   * The only permission guarding reference data. Villes, Secteurs and Products
+   * are ALL gated behind this single coarse string server-side
+   * (`routes/api.php:160-165`, `VilleController::middleware()`) — there is no
+   * `view-villes` / `create-ville` / `update-ville` / `delete-ville`.
+   *
+   * So every ville action resolves to the same check, including the ones the UI
+   * renders separately (create, edit, delete). That is not a modelling shortcut
+   * here; it mirrors what the server actually enforces, which is the whole point
+   * of this registry. Granular ville permissions are an open backend question —
+   * when they land, the entries split here and the call sites follow.
+   */
+  ACCESS_DASHBOARD: "access-dashboard",
+} as const satisfies Record<string, string>);
+
+export type PermissionName = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
 
 /**
  * Roles are NOT an authorization primitive here (FTA D-5). They exist on the

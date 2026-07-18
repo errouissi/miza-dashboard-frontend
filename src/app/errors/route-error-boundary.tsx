@@ -49,6 +49,30 @@ export function RouteErrorBoundary() {
   return <ErrorState title="Une erreur est survenue" />;
 }
 
+/**
+ * The calm 403 (Design System §23, FTA §11).
+ *
+ * IT IS NOT A REDIRECT TO LOGIN, and that distinction is the whole point: a 403
+ * means "we know exactly who you are, and you may not do this". Treating it as
+ * expiry would log an operator out of a working session for clicking one thing
+ * they lacked a permission for. The session continues, untouched.
+ *
+ * Rendered inside the shell, so the sidebar stays usable and there is a way out.
+ */
+export function Forbidden() {
+  return (
+    <ErrorState
+      title="Accès refusé"
+      detail="Vous n'avez pas la permission d'accéder à cette page."
+      action={
+        <Link to="/" className="text-primary text-sm underline underline-offset-4">
+          Retour à l'accueil
+        </Link>
+      }
+    />
+  );
+}
+
 /** The in-shell 404 — never a bare error page, always a path back (Design System §23). */
 export function NotFound() {
   return (

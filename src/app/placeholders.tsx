@@ -1,32 +1,9 @@
 /**
- * Temporary placeholders. Both are deleted by the milestone that replaces them —
- * they live in one file precisely so that deletion is trivial.
+ * Temporary placeholder. Deleted by the milestone that replaces it — it lives in
+ * its own file precisely so that deletion is trivial.
  *
- * They are NOT domain pages and they contain no business logic.
+ * It is NOT a domain page and it contains no business logic.
  */
-
-/**
- * The /login route SLOT.
- *
- * The route must exist because RequireAuth redirects here — without it an
- * unauthenticated visitor would be redirected into a 404. The login PAGE (form,
- * credentials, session establishment) is the auth flow and is explicitly out of
- * M1-B's scope.
- *
- * There is deliberately NO development authentication bypass: a dev-only session
- * seed is an auth bypass, and it would outlive the convenience that justified it.
- * Authenticated flows are verified by seeding the session store in tests.
- */
-export function LoginPlaceholder() {
-  return (
-    <main className="flex min-h-svh flex-col items-center justify-center gap-2 p-8 text-center">
-      <h1 className="text-xl font-semibold">Miza Dashboard</h1>
-      <p className="text-muted-foreground text-sm">
-        Connexion — à implémenter (flux d'authentification).
-      </p>
-    </main>
-  );
-}
 
 /**
  * The authenticated landing placeholder, rendered INSIDE the shell at `/`.
