@@ -1,10 +1,16 @@
 export { MANAGERS_PATH, managersRoutes } from "./routes";
 
-// api/, model/, queries/, components/ and the page stay internal. The app layer
-// needs the route contributions and the path (for the nav entry) — nothing else
-// (FTA §4).
-//
-// Nothing is exported for siblings yet. M3.3 (Commercials) will need a MANAGER
-// PICKER, and that is where a public options query belongs — added then, against
-// the real caller, rather than guessed at now (FTA D-11). Note BC-H when it lands:
-// the agents list is bounded at per_page=100 like every other picker source.
+/**
+ * The manager set, for relation pickers in sibling Network domains (FTA §4 —
+ * a domain may read another's public surface with a documented coupling).
+ *
+ * Added now, against the real caller (M3.3's Commercials manager filter),
+ * exactly as flagged when Managers shipped (FTA D-11 — no picker was exported
+ * ahead of a caller that needed one). BC-H applies: bounded at `per_page=100`,
+ * like every other picker source in this product.
+ */
+export { useManagerOptionsQuery } from "./queries/managers-queries";
+export type { ManagerOption } from "./model/manager";
+
+// api/, the list query, mutations, components, the page and the full Manager
+// type stay internal. Siblings get the picker surface above — nothing else.

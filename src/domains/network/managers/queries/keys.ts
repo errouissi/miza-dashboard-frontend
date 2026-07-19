@@ -15,4 +15,10 @@ export const managersKeys = {
   all: ["managers"] as const,
   lists: () => [...managersKeys.all, "list"] as const,
   list: (params: ManagerListParams) => [...managersKeys.lists(), params] as const,
+  /**
+   * The relation-picker set (M3.3's Commercials manager filter). One
+   * parameterless key, mirroring `villesKeys.options()` — every consumer reads
+   * the same cache entry and triggers one fetch, however many components ask.
+   */
+  options: () => [...managersKeys.all, "options"] as const,
 };

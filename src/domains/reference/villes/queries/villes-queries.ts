@@ -32,12 +32,23 @@ export function useVillesQuery(params: VilleListParams) {
  * One parameterless key means one cache entry: a form's select and a table
  * resolving a ville name share the same fetch rather than each keeping their own
  * copy. Consumers derive names from this; nothing caches ville names separately.
+ *
+ * `enabled` (default `true`) exists for callers that are always mounted
+ * regardless of permission — a form drawer's `children` render whether or not
+ * the drawer is open (FTA's `FormDrawer` owns only the shell), unlike a filter
+ * component that a list page mounts conditionally on `access-dashboard`. Those
+ * conditionally-mounted callers (`ManagerVilleFilter`, `CommercialVilleFilter`)
+ * need nothing new and keep calling this with no arguments; an always-mounted
+ * edit form passes `{ enabled: canReadVilles }` so it never fires the request
+ * for an operator who would 403 on it (mirrors ADR-0010's guidance for the B-6
+ * catalogue query).
  */
-export function useVilleOptionsQuery() {
+export function useVilleOptionsQuery(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: villesKeys.options(),
     queryFn: fetchVilleOptions,
     staleTime: STALE_TIMES.STATIC,
+    enabled: options?.enabled ?? true,
   });
 }
 

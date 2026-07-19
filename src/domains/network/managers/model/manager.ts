@@ -57,7 +57,12 @@ export type Manager = {
    * unmodelled the first time.
    */
   ville: string | null;
-  /** Nullable on the wire — a manager may have no assigned area of responsibility. */
+  /**
+   * Nullable on the wire — a manager may have no assigned area of
+   * responsibility. A manager may be responsible for MULTIPLE cities; see the
+   * parse/serialize functions below for how that is encoded into this single
+   * backend string column without changing the backend contract.
+   */
   villeSousResponsabilite: string | null;
   /** `withCount('commercials')`. Always an integer, never null. */
   nombreCommerciaux: number;
@@ -138,3 +143,94 @@ export const MANAGER_LIST_DEFAULTS: ManagerListParams = {
 
 /** `per_page` is capped server-side (`integer|min:1|max:100`). */
 export const MAX_PER_PAGE = 100;
+
+/**
+ * A manager, reduced to what a relation picker needs — nothing this narrow
+ * exists on the wire; it is sliced from the same `indexManagers` row a full
+ * `Manager` is built from (FTA §4 — a domain may read another's public surface;
+ * ADR-0008 — map only consumed fields, applied to a picker's consumer instead
+ * of a screen).
+ *
+ * M3.3's first consumer: the Commercials manager filter. Both endpoints share
+ * the `view-agents` gate, so unlike `useVilleOptionsQuery` (gated
+ * `access-dashboard`, separate from Managers' own `view-agents`), no caller
+ * needs a conditional mount here — anyone who can reach the Commercials list
+ * can always resolve this query too.
+ */
+export type ManagerOption = {
+  id: number;
+  nom: string;
+  prenom: string;
+};
+
+/**
+ * `villeSousResponsabilite` MULTI-CITY ENCODING — a FRONTEND-ONLY convention,
+ * not a backend contract change.
+ *
+ * Verified from source before choosing a delimiter, not guessed:
+ *   - `agents.ville_sous_responsabilite` is a plain `string`, `nullable()`
+ *     column (`create_agent_table.php:41`) — no cast in `Agent::$casts`, no
+ *     accessor/mutator, so Eloquent reads/writes it as a bare string.
+ *   - Every validator that touches it — `store()` (`nullable|string|max:255`),
+ *     `update()` (`sometimes|nullable|string|max:255`) and the list filter
+ *     (`sometimes|string|max:255`) — is `string`, never `array`.
+ *   - The list filter does `where('ville_sous_responsabilite', 'like',
+ *     "%{$ville}%")` — a substring match over that one string.
+ *   - The only sample value anywhere in the codebase
+ *     (`DevAgentSeeder.php:75`) is a single bare name, `'Casablanca'`. No
+ *     delimiter convention exists anywhere in the backend.
+ *
+ * So the backend has no multi-value convention of its own to preserve — this
+ * is where one is introduced, entirely on the frontend, as `", "`-joined city
+ * names within the same single string the backend has always accepted. The
+ * backend does not know or care that the string it stores now often holds
+ * several names; it is still exactly one `string|nullable|max:255` value in
+ * every request and response, unchanged.
+ *
+ * Comma was picked because the instructions offered it as the first example
+ * and no Villes name contains one. `max:255` is unchanged and unenforced
+ * beyond what zod already does for the field — picking enough cities to
+ * exceed it fails the existing "This value is too long" validation exactly as
+ * before, not a new behaviour.
+ */
+const AREA_DELIMITER = ", ";
+
+/**
+ * Splits the backend string into the selected city names, trimmed and
+ * de-duplicated (first occurrence wins), preserving the order they appear in.
+ * `null` or an all-whitespace string is "no cities" — `[]`.
+ */
+export function parseVilleSousResponsabiliteAreas(raw: string | null): string[] {
+  if (!raw) return [];
+
+  const seen = new Set<string>();
+  const areas: string[] = [];
+  for (const piece of raw.split(",")) {
+    const trimmed = piece.trim();
+    if (trimmed && !seen.has(trimmed)) {
+      seen.add(trimmed);
+      areas.push(trimmed);
+    }
+  }
+  return areas;
+}
+
+/**
+ * The inverse: joins selected city names back into the one backend string,
+ * trimmed and de-duplicated the same way, so a value that round-trips through
+ * parse then serialize without being touched comes back byte-for-byte
+ * identical. An empty array serializes to `""` — the existing "no area of
+ * responsibility" convention, unchanged.
+ */
+export function serializeVilleSousResponsabiliteAreas(areas: readonly string[]): string {
+  const seen = new Set<string>();
+  const serialized: string[] = [];
+  for (const area of areas) {
+    const trimmed = area.trim();
+    if (trimmed && !seen.has(trimmed)) {
+      seen.add(trimmed);
+      serialized.push(trimmed);
+    }
+  }
+  return serialized.join(AREA_DELIMITER);
+}

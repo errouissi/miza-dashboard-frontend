@@ -3,10 +3,18 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { isAppError } from "@/infrastructure/errors";
+import { PERMISSIONS } from "@/infrastructure/permissions";
+import { usePermission } from "@/shared/hooks";
+import { useVilleOptionsQuery } from "@/domains/reference/villes";
 import { Input } from "@/shared/components/ui/input";
 import { FormDrawer } from "@/shared/components/patterns/form-drawer";
 import { useUpdateManagerMutation } from "../queries/managers-queries";
-import type { Manager } from "../model/manager";
+import { ManagerAreaMultiSelect } from "./manager-area-multiselect";
+import {
+  parseVilleSousResponsabiliteAreas,
+  serializeVilleSousResponsabiliteAreas,
+  type Manager,
+} from "../model/manager";
 
 /**
  * Edit drawer for a manager.
@@ -29,8 +37,47 @@ import type { Manager } from "../model/manager";
  * `status` is absent too: block and activate own it, on their own endpoints and
  * their own permissions.
  *
+ * `ville` IS A SELECT, SOURCED FROM VILLES — not a free-text input. The
+ * backend filters and stores it as an exact string (`where('ville', …)` on the
+ * list, `agents.ville` a plain column, no foreign key), and the payload
+ * contract is unchanged by this: it is still the city's NAME, not a numeric
+ * Villes id, exactly as `ManagerVilleFilter` already sends for the list
+ * filter. Gated the same way as that filter (`access-dashboard`, since that is
+ * what guards `GET /admin/villes`) via `enabled` on the shared query, because
+ * — unlike the filter, which the list page mounts conditionally — this
+ * drawer's `children` render whenever the list page does (`FormDrawer` owns
+ * only the shell), so the query would otherwise fire for every operator
+ * regardless of permission.
+ *
+ * A CURRENT VALUE ABSENT FROM THE OPTIONS IS NEVER SILENTLY DROPPED (BC-S: a
+ * manager's `ville` may have been typed differently from the reference list,
+ * or set before some entries existed). It is rendered as an extra, clearly
+ * labelled option so it stays selected and stays in the payload if the
+ * operator does not touch the field — never replaced with the first option or
+ * a blank by a `<select>` failing to match its seeded value.
+ *
+ * `villeSousResponsabilite` IS A VILLES-BACKED MULTI-SELECT (a manager may be
+ * responsible for several cities), NOT free text and NOT a single select
+ * either. THE BACKEND CONTRACT IS UNCHANGED: `ville_sous_responsabilite` is
+ * still exactly one `nullable|string|max:255` column, filtered server-side by
+ * partial match (`like %…%`) — verified from source, not guessed (see
+ * `model/manager.ts`'s docblock on `parseVilleSousResponsabiliteAreas`). There
+ * is no backend array, no delimiter convention of the backend's own, and no
+ * migration here. The multiple-cities encoding is a FRONTEND-ONLY convention
+ * (`", "`-joined names) applied to the same single string the backend has
+ * always accepted; `ManagerFormSheet` still submits one string under the same
+ * field name, exactly as `form.register` used to.
+ *
+ * The existing test fixture value "Grand Casablanca" — not a literal Villes
+ * entry — is precisely the LEGACY-VALUE case this multi-select must handle
+ * honestly: it stays checked and visible, labelled as absent from the
+ * reference list, until the operator explicitly unchecks it. It is not
+ * silently dropped by switching to a controlled widget.
+ *
  * Copy is temporary English pending O-1.
  */
+const SELECT_CLASS =
+  "border-input focus-visible:border-ring focus-visible:ring-ring/50 h-9 rounded-md border bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-[3px]";
 const editSchema = z.object({
   nom: z
     .string()
@@ -76,6 +123,26 @@ export function ManagerFormSheet({ open, onOpenChange, manager }: ManagerFormShe
 
   const updateMutation = useUpdateManagerMutation();
 
+  const { has } = usePermission();
+  const canReadVilles = has(PERMISSIONS.ACCESS_DASHBOARD);
+  const villesQuery = useVilleOptionsQuery({ enabled: canReadVilles });
+  const villes = villesQuery.data ?? [];
+
+  // The field currently registered, so a value the fetched options don't
+  // contain can still be rendered rather than silently dropped by a <select>
+  // that fails to match it to any <option>.
+  const currentVille = form.watch("ville");
+  const currentVilleIsKnown = villes.some((ville) => ville.nomVille === currentVille);
+  // Only asserted "not in the list" once the list has actually resolved —
+  // while it is loading or disabled (no access-dashboard), the value is
+  // preserved without claiming to know whether it is legacy or not.
+  const villeFallbackLabel =
+    currentVille && !currentVilleIsKnown
+      ? villesQuery.isSuccess
+        ? `${currentVille} (not in the reference list)`
+        : currentVille
+      : undefined;
+
   // Re-seed on open, or editing one manager straight after another shows the
   // previous row's values.
   useEffect(() => {
@@ -88,7 +155,16 @@ export function ManagerFormSheet({ open, onOpenChange, manager }: ManagerFormShe
         // uncontrolled input's DOM value cannot legally be null, so a null here
         // becomes an empty string — never passed through raw.
         ville: manager.ville ?? "",
-        villeSousResponsabilite: manager.villeSousResponsabilite ?? "",
+        // Normalised through the same parse/serialize pair the multi-select
+        // itself uses (trim, dedupe, preserve order) THE MOMENT the form
+        // opens — not only once the operator touches a checkbox. Duplicate
+        // cities must never be submitted, including when the operator saves
+        // without touching this field at all; a distinct legacy value (one
+        // that simply isn't in the Villes options) is untouched by this,
+        // since there is nothing to dedupe or trim away from it.
+        villeSousResponsabilite: serializeVilleSousResponsabiliteAreas(
+          parseVilleSousResponsabiliteAreas(manager.villeSousResponsabilite),
+        ),
         numAbonnement: manager.numAbonnement ?? "",
       });
       updateMutation.reset();
@@ -196,11 +272,22 @@ export function ManagerFormSheet({ open, onOpenChange, manager }: ManagerFormShe
         <label htmlFor="ville" className="text-sm font-medium">
           City
         </label>
-        <Input
+        <select
           id="ville"
+          className={SELECT_CLASS}
           aria-invalid={!!form.formState.errors.ville || !!villeError}
           {...form.register("ville")}
-        />
+        >
+          <option value="">Select a city</option>
+          {villeFallbackLabel ? (
+            <option value={currentVille}>{villeFallbackLabel}</option>
+          ) : null}
+          {villes.map((ville) => (
+            <option key={ville.id} value={ville.nomVille}>
+              {ville.nomVille}
+            </option>
+          ))}
+        </select>
         {form.formState.errors.ville ? (
           <p className="text-destructive text-xs">
             {form.formState.errors.ville.message}
@@ -213,13 +300,21 @@ export function ManagerFormSheet({ open, onOpenChange, manager }: ManagerFormShe
         <label htmlFor="villeSousResponsabilite" className="text-sm font-medium">
           Area of responsibility
         </label>
-        <Input
+        <ManagerAreaMultiSelect
           id="villeSousResponsabilite"
+          value={form.watch("villeSousResponsabilite")}
+          onChange={(next) =>
+            form.setValue("villeSousResponsabilite", next, {
+              shouldValidate: true,
+              shouldDirty: true,
+            })
+          }
+          villes={villes}
+          villesResolved={villesQuery.isSuccess}
           aria-invalid={
             !!form.formState.errors.villeSousResponsabilite ||
             !!villeSousResponsabiliteError
           }
-          {...form.register("villeSousResponsabilite")}
         />
         {form.formState.errors.villeSousResponsabilite ? (
           <p className="text-destructive text-xs">

@@ -1,8 +1,9 @@
 import type { LucideIcon } from "lucide-react";
-import { Map, MapPin, CreditCard, ShieldCheck, UserCog } from "lucide-react";
+import { Map, MapPin, CreditCard, ShieldCheck, UserCog, Users } from "lucide-react";
 import { PERMISSIONS, type PermissionResolver } from "@/infrastructure/permissions";
 import { ADMINS_PATH } from "@/domains/network/admins";
 import { MANAGERS_PATH } from "@/domains/network/managers";
+import { COMMERCIALS_PATH } from "@/domains/network/commercials";
 import { PRODUCTS_PATH } from "@/domains/reference/products";
 import { SECTEURS_PATH } from "@/domains/reference/secteurs";
 import { VILLES_PATH } from "@/domains/reference/villes";
@@ -88,6 +89,14 @@ export const NAV_TREE: NavGroup[] = [
         // the page, not visibility of the page.
         permission: PERMISSIONS.VIEW_AGENTS,
         icon: UserCog,
+      },
+      {
+        label: "Commercials",
+        to: COMMERCIALS_PATH,
+        // `view-agents` — the same string as Managers, since both endpoints
+        // sit behind one controller and one permission set.
+        permission: PERMISSIONS.VIEW_AGENTS,
+        icon: Users,
       },
     ],
   },

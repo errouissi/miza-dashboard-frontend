@@ -1,6 +1,13 @@
 import { httpClient } from "@/infrastructure/http";
 import type { Paginated } from "@/infrastructure/http";
-import type { Manager, ManagerListParams, ManagerStatus } from "../model/manager";
+import {
+  MANAGER_LIST_DEFAULTS,
+  MAX_PER_PAGE,
+  type Manager,
+  type ManagerListParams,
+  type ManagerOption,
+  type ManagerStatus,
+} from "../model/manager";
 
 /**
  * The Managers endpoints and their mappers (FTA §7, D-6).
@@ -105,6 +112,26 @@ export async function fetchManagers(
     total: page.total,
     lastPage: page.last_page,
   };
+}
+
+/**
+ * The manager set, for relation pickers in sibling Network domains (FTA §4).
+ *
+ * Bounded at the backend's documented maximum (`indexManagers`: `max:100`,
+ * BC-H) — asking for more is a 500 by way of BC-N, not a larger page. There is
+ * no unbounded variant. Only 1 manager exists in the dev database at the time
+ * of writing, so this limit is real but currently invisible; it will bite the
+ * day a 101st manager is created; not fixed here.
+ *
+ * No filters, no search: this is the full picker set, ordered however
+ * `indexManagers` orders it (`date_ajout DESC`, BC-L — not alphabetical).
+ */
+export async function fetchManagerOptions(): Promise<ManagerOption[]> {
+  const page = await fetchManagers({
+    ...MANAGER_LIST_DEFAULTS,
+    perPage: MAX_PER_PAGE,
+  });
+  return page.items.map(({ id, nom, prenom }) => ({ id, nom, prenom }));
 }
 
 /**

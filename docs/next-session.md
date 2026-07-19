@@ -9,198 +9,268 @@ _Last updated: 2026-07-19_
 
 ## Current focus
 
-**M3.2 — Managers is COMPLETE, live-validated, and committed.** The next milestone is
-**M3.3 — Commercials**.
+**M3.3 — Commercials, plus two follow-up UI fixes, are COMPLETE and COMMITTED**
+(not yet pushed — see the commit hash in this session's own summary). The next
+milestone is **M3.4 — Clients**.
 
 ## Last completed work
 
 - **M3.1 Admins** — committed as `1240118`
 - **Admin permission selector** (B-6 catalogue) — committed as `97905a3`
 - **Documentation system** (`session-bootstrap.md`, CLAUDE.md rules) — committed as `05a514a`
-- **M3.2 Managers** — implementation, tests, live manual validation, and a defect found
-  and fixed during that validation, all committed this session
+- **M3.2 Managers**, plus its live-validation nullability fix — committed as
+  `d91d9a2` and `3b84d51`
+- **M3.3 Commercials**, plus city-select and multi-city-selector follow-ups —
+  implemented, tested and **committed this session** (see the commit hash
+  above `## Current focus`)
 
 ## Before anything else
 
 ```bash
 cd C:\Miza\frontend-v2
-git status                 # expect: clean, or only this doc's own reconciliation
-pnpm test:ci               # expect: 279/279 across 21 files
+git status                 # expect: clean — everything through the follow-ups is committed
+git log --oneline -3        # expect the M3.3 commit at HEAD, not yet pushed
+pnpm test:ci               # expect: 343/343 across 22 files
 pnpm lint && pnpm typecheck && pnpm format:check && pnpm build
 ```
 
-## What M3.2 shipped
+## What M3.3 shipped
 
-List with server pagination, search, five filters (`status`, `ville`, `ville_sous_
-responsabilite`, `date_from`, `date_to`), edit, block/activate, permission gating, and
-loading/empty/error states. **No sorting** (BC-L), **no detail page** (ADR-0014), **no
-create form** (M3.6).
+List with server pagination, search, four filters (`status`, `ville_actuelle`,
+`manager_id`, `date_from`/`date_to`), edit (four fields: `nom`, `prenom`,
+`ville_actuelle`, `num_abonnement`), block/activate, permission gating, and
+loading/empty/error states. **No sorting** (BC-L), **no detail page**
+(ADR-0014), **no create form** (M3.6), **no secteur filter** (BC-V, deferred —
+no options source exists), **no manager-reassignment field** (Agent Transfers'
+job, not this form's).
 
-**Verified live against the running backend** (`superadmin@test.com`, one dev-seeded
-manager, `id 635`): envelope shape, pagination params, all five filters, search
-case-sensitivity (BC-O), block → activate → block round-trip including the 400 no-op
-guard, and the `view-agents`/`access-dashboard` permission gates. Loading/empty/error
-states and the exact edit-drawer render were **not** visually confirmed — no browser
-automation tool exists in this environment; those are covered only by the jsdom+MSW
-suite.
+Its contract was verified independently from `AgentController::indexCommercials`
+— not inherited from Managers by resemblance. `numAbonnement` and
+`villeActuelle` were typed `string | null` from the first draft (both confirmed
+nullable against the live dev fixture), closing the exact defect class M3.2
+shipped and then had to fix live. A dedicated test pins the null-render/null-hydration
+path this time, rather than relying on it being caught after the fact.
 
-## A real frontend defect was found live, and fixed, before commit
+**Managers' public surface was extended**, not modified in behavior: a
+`useManagerOptionsQuery`/`ManagerOption` export was added (mirroring Villes'
+existing picker export) to back Commercials' manager filter, which reads the
+real `GET /admin/agents/managers` endpoint. This was the anticipated next step
+Managers' own `index.ts` had already flagged when it shipped in M3.2.
 
-Not a backend-mirroring decision — an actual contract-verification miss. `numAbonnement`
-and `ville` were modelled and handled as non-nullable strings throughout the domain, but
-both are `nullable()` columns (`create_agent_table.php:15,34`), and the one manager
-seeded in dev proved it: `num_abonnement: null` on a real record. The existing test
-fixtures never seeded null in either field, which is exactly how this went unnoticed
-through implementation and the automated suite.
+**M3.3's own implementation was not verified live** in the session it shipped
+in — confirmed by source reading (`AgentController`, the `agents` migration,
+the `Secteur` model) and the automated jsdom+MSW suite only. A **later
+session did run a live manual-validation pass** (real backend calls, the
+seeded admin test accounts) but that pass was investigating the two follow-ups
+below, not re-validating M3.3's original list/filter/edit/block/activate
+behaviour end to end. If the same live rigor M3.2 received is wanted for
+Commercials specifically, that is still outstanding.
 
-**Mechanism, confirmed by testing both candidate outcomes directly against the live
-update endpoint** (no browser tool to observe the DOM directly): `manager-form-sheet.tsx`
-fed the null straight into `form.reset()`, which react-hook-form writes onto the
-uncontrolled input's DOM `ref.value`. Assigning `null` there is either read back as the
-empty string or the four-character string `"null"` depending on the engine — jsdom
-(atypically) does the former; documented real-browser behaviour is the latter. Testing
-both possible resulting payloads against the live backend:
+## Follow-up 1 — city fields now use the Villes reference select
 
-| Payload | Live result |
-| --- | --- |
-| `num_d_abonnement: ""` | **500** — Laravel's empty-string-to-null middleware plus a validator with no `nullable` on this field (BC-U, below) |
-| `num_d_abonnement: "null"` | **200 — silently persisted.** Proven by actually submitting it, then restoring the fixture via `php82 artisan tinker` since the HTTP API itself cannot null the field back (BC-U) |
+Manual UI validation found `ville` (Managers) and `ville_actuelle`
+(Commercials) as free-text inputs in the edit forms, despite both being
+exact-match filters over real city names server-side. Every city-shaped field
+across Network was audited before touching anything (`ville`, `ville_actuelle`,
+`ville_sous_responsabilite`, and the two list filters that already used
+selects). Fixed: both are now `<select>`s sourced from `useVilleOptionsQuery`
+(reused, unchanged), sending the city's **name**, verified from source to be
+what the backend has always expected — no id, no contract change.
+`useVilleOptionsQuery` gained an optional `enabled` param (backward
+compatible) so the always-mounted edit forms can gate the query on
+`access-dashboard` the same way the list filters already do. A value absent
+from the fetched options is never dropped — rendered as an extra, honestly
+labelled option, asserted "not in the reference list" only once the options
+have actually resolved.
 
-Either way: editing the one manager this environment has, without touching the
-subscription field at all, either corrupts it or hard-fails the save.
+`ville_sous_responsabilite` was deliberately left as free text in this first
+pass — see Follow-up 2, which superseded that decision.
 
-**Fixed.** `Manager.numAbonnement` and `Manager.ville` (and their `ManagerRow` wire
-counterparts) are now typed `string | null`. The list cells fall back to `ABSENT`. The
-edit form seeds both as `?? ""`, exactly matching how `villeSousResponsabilite` was
-already guarded. All five gates re-run clean afterward; **no test needed changing** —
-existing fixtures always populate both fields, so nothing in the suite exercised the null
-path either way.
+## Follow-up 2 — Area of responsibility is a multi-city selector
 
-Files touched by this fix: `model/manager.ts`, `api/managers-api.ts`,
-`components/manager-form-sheet.tsx`, `pages/managers-list-page.tsx`.
+The business rule was clarified: a manager may be responsible for **multiple**
+cities. **The backend contract is unchanged** — verified from source before
+writing anything (see **ADR-0015**): `ville_sous_responsabilite` is a plain
+`string`, `nullable()` column, no cast, validated `nullable|string|max:255`
+everywhere, filtered by substring `LIKE`, and the only sample value anywhere
+in the codebase is a single bare name. **The backend has no multi-value
+convention of its own** — ADR-0015 introduces one, entirely frontend-side:
+`", "`-joined city names inside that same single string.
 
-## Next task — M3.3 Commercials
+UI: a trigger button ("N cities selected") discloses a checkbox panel
+(`ManagerAreaMultiSelect`, `manager-area-multiselect.tsx`) built from plain
+native `<input type="checkbox">` — not Radix's `DropdownMenuCheckboxItem`,
+which portals outside `within(dialog)`'s scope and would fight every test.
+Selected cities show as removable chips with their own sibling `<button>`
+(never nested inside the trigger). Legacy values absent from Villes stay
+selected and visible until explicitly unchecked.
 
-The third Network domain. **Its contract has NOT been verified — verify it before
-implementing.** Do not assume it mirrors Managers.
+**A real bug was found and fixed mid-implementation**: normalisation
+(trim/dedupe/order) only ran when the operator touched a checkbox, so an
+untouched malformed legacy value (e.g. an accidental duplicate) would have
+been resubmitted unchanged — a new test caught this. Fixed by normalising the
+moment the form opens, not only on interaction.
 
-What is already known, and what it implies:
+## Follow-up investigation — Block/Activate visibility, no code defect found
 
-- **Same controller, same permission set.** `AgentController` serves both;
-  `VIEW_AGENTS`, `UPDATE_AGENT`, `BLOCK_AGENT`, `ACTIVATE_AGENT` are **already
-  registered** and need no registry change.
-- **The index method is different** (`indexCommercials`, not `indexManagers`). Its
-  transform, filters and envelope must be **read from source** — Managers' contract was
-  found wrong in three material ways when it was first verified, and a fourth
-  nullability gap slipped through even that verification pass. Inheriting Commercials'
-  shape by assumption from Managers repeats a mistake already made twice.
-- **Re-check nullability against the migration for every field, not just the ones that
-  look nullable.** That is exactly what M3.2 missed: `ville` and `num_abonnement` didn't
-  read as optional from their names or from any fixture, but the schema said otherwise.
-  Cross-check `create_agent_table.php` column-by-column against whatever
-  `indexCommercials`' transform emits, before assuming a type.
-- **Commercials carry fields managers do not** — `manager_id`, `ville_actuelle`,
-  `secteur` are nulled out for managers by `store()` but are real for commercials. Expect
-  a manager relation and therefore a **manager picker**.
-- 🔴 **BC-H bites here.** A manager picker needs a bounded options source, and the agents
-  list is capped at `per_page=100`. If there are more than 100 managers, the picker is
-  silently wrong. **Raise it before building the picker** — do not paginate a `<select>`
-  and do not invent an unbounded endpoint.
-- **BC-L applies again** — no `sort` parameter on agent lists. Ship without sortable headers.
+Manual UI validation reported Edit-only visibility (no Block/Activate) for
+`superadmin@test.com` on both Managers and Commercials. Investigated fully:
+backend confirmed live to return `block-agent`/`activate-agent` correctly
+(both `/auth/login` and `/me`); the frontend's permission check is
+structurally identical to the working `update-agent` check; the automated
+suite already asserts both actions render correctly for a session holding
+these permissions. **No frontend defect found or fixed.**
 
-Copy the structure of `src/domains/network/managers/` — it is the newest comparable
-resource and the closest possible match.
+Most likely explanation: a **stale cached session** in the browser's
+`localStorage`, predating when `block-agent` was seeded server-side.
+**Per ADR-0003, the app never refreshes permissions after login** — this is
+deliberate, not a bug, and was not touched. **Operationally important going
+forward: whenever a permission is newly seeded or corrected on the backend,
+any operator already logged in will not see the effect until they log out and
+back in.** This applies to any future permission change, not just this one.
 
-## Backend findings from M3.2
+## Next task — M3.4 Clients
 
-- **BC-T** ✅ **resolved.** `block-agent` was never seeded, making Block uninvokable by
-  anyone. The backend now creates it — verified live, block/activate round-tripped
-  successfully including the no-op guard.
-- **BC-U** 🟡 **limitation, still open.** `AgentController::update`'s validator has no
-  `nullable` on `num_d_abonnement` or `ville`, though both columns allow null — so
-  neither field can ever be explicitly cleared via the API. Discovered while restoring
-  the dev fixture after the nullability testing above; the fixture had to be repaired via
-  `artisan tinker`, bypassing the HTTP API entirely, because the API itself refused both
-  `""` and `null` for the field. **Not a frontend defect** — the zod schema's `min(1)`
-  requirement happens to route around it by coincidence, not by design. Worth a backend
-  consultation item; not fixed here.
-- **BC-S** 🟡 **limitation, still open.** `agents.ville` is a free-text column, not a
-  foreign key to `villes`. The Managers city filter is a select over the reference set
-  (backend filters `ville` on exact equality, so free text would silently fail), but a
-  manager whose ville was typed differently from the reference list cannot be selected.
-  Honest fix is a backend distinct-values endpoint. **Do not invent it.**
+The fourth Network domain. **Its contract has not been verified in this
+session — verify it before implementing**, per the same discipline that caught
+M3.2's and M3.3's own contract surprises.
 
-BC-N/O/P/Q/R all survived implementation unchanged — see `project-status.md` for how each
-was handled. None required a workaround.
+What is already known from this session's discovery, and what it implies:
+
+- `AgentController::getAgentSubData` (already read from source) returns a
+  commercial's clients when called on a commercial id — but that is a
+  **sub-resource of an agent**, not necessarily the same shape or scope as a
+  standalone Clients domain. Do not assume `GET /admin/agents/{id}/sub-data` is
+  the Clients list endpoint without checking whether a dedicated
+  `/admin/clients` (or similar) route exists.
+- Client-management permissions already exist and are seeded
+  (`view-clients`, `view-client-stats`, `create-client`, `update-client`,
+  `delete-client`, `manage-client-status`, `assign-client`,
+  `reset-client-password`) — none of them registered in the frontend registry
+  yet. Confirm which ones a Clients list actually needs before registering any.
+- Client bulk-assign is its own later milestone (M3.5) — do not pull it forward.
+- Re-run the same nullability discipline as M3.2/M3.3: check the `clients`
+  migration column-by-column before typing anything, rather than trusting a
+  field's name or a fixture's completeness.
+
+Copy the structure of `src/domains/network/commercials/` as the newest
+comparable resource, but re-verify the contract independently — the same
+warning given (and honored) for M3.3 applies again.
+
+## Backend findings from M3.3
+
+- **BC-V** 🟡 **limitation, new.** `agents.secteur` has no foreign key to
+  `secteurs` and is filtered by exact match; the dev database has zero seeded
+  secteurs and no options source exists. No secteur filter was built. **Do not
+  invent a distinct-values endpoint.**
+- **BC-S** 🟡 **limitation, now a two-instance class.** Managers' `ville` and
+  Commercials' `ville_actuelle` share the identical free-text-column-behind-an-
+  exact-match-filter trap.
+- **BC-H** 🟡 **limitation, now exercised twice.** Both Managers' city filter
+  and Commercials' manager filter read picker sources bounded at
+  `per_page=100`. Only 1 manager and 1 commercial exist in the dev database, so
+  this stays invisible until scale.
+- BC-N/O/P/L were independently re-confirmed against `indexCommercials` (not
+  assumed from Managers) — all four apply identically. See `project-status.md`.
 
 ## Known follow-ups
 
-- [ ] **FE-1 — test flake, top priority.** Five older test files call
-      `findByRole("alert")` on the 1000 ms default while those assertions run
-      951–1240 ms. In isolation the suite is green (repeated clean 279/279 runs); under
-      CPU contention (e.g. `pnpm build` finishing just before `pnpm test:ci` starts) it
-      collapsed to 22 failures across 8 files, reproduced twice this session. CI will hit
-      this before a developer does. Fix is mechanical — `{timeout: 3000}` as `findByRole`'s
-      third argument:
-
-  | File | Lines |
-  | --- | --- |
-  | `src/domains/reference/villes/pages/villes-list-page.test.tsx` | 114, 132, 148, 172, 437 |
-  | `src/domains/network/admins/pages/admins-list-page.test.tsx` | 184, 202, 740, 795 |
-  | `src/domains/reference/secteurs/pages/secteurs-list-page.test.tsx` | 153, 172, 512 |
-  | `src/domains/reference/products/pages/products-list-page.test.tsx` | 171, 189, 501 |
-  | `src/domains/auth/pages/login-page.test.tsx` | 77, 96 |
-
-  `managers-list-page.test.tsx` already carries it (467, 486, 795) — copy that form. Left
-  undone again this session: it spans five other domains' test files, outside M3.2's
-  scope, and this file forbids modifying existing tests without raising it first — raised
-  twice now.
-
-- [ ] **FE-2 — nested-route guard.** `withPermissionGuards` is shallow; a child route's
-      own `handle.permission` is **silently ignored** in favour of its parent's. Still
-      non-blocking — no nested route exists yet — but must be fixed before the first one
-      does (the deferred detail-page milestone, ADR-0014).
-- [ ] **BC-U — raise with the backend.** `nullable` missing from two `update()` validator
-      rules. See above.
-- [ ] **BC-S — raise with the backend.** Distinct-values endpoint for `ville`, or a real
-      foreign key. See above.
-- [ ] **BC-H before the M3.3 manager picker** — see the M3.3 section.
-- [ ] **Two M3.2 test coverage gaps**, found during the commit-readiness pass and
-      deliberately left (out of scope for that pass): no loading-state assertion, and no
-      assertion that the list renders no detail-page links. ~10 lines, touching no
-      existing test. Worth adding when M3.3 next opens that file. A third gap now exists
-      too: no test pins the null-`numAbonnement`/null-`ville` render or edit path, since
-      it was fixed by inspection and live testing rather than by a failing test.
-- [ ] **Gate G2 formal closure** — amendments G2-A/E/F need adoption; R7 estimate needs
-      team agreement. All evidence criteria already pass. _Governance, not a blocker._
+- [ ] **FE-1 — test flake, not touched this session.** Five older test files'
+      `findByRole("alert")` calls still run against the 1000 ms default while
+      taking 951–1240 ms. Recommended before the suite grows further — it now
+      has 45 more tests in it than when this was last raised.
+- [ ] **FE-2 — nested-route guard.** Unchanged; still non-blocking, M3.3 ships
+      no nested route either.
+- [ ] **BC-U — raise with the backend.** `nullable` missing from the `update()`
+      validator for `num_d_abonnement`/`ville`. Unaffected by M3.3 (Commercials
+      never sends `ville`, and its own three commercial-specific fields are
+      all correctly nullable in the validator).
+- [ ] **BC-V — raise with the backend, or seed secteurs first.** See above.
+- [ ] **BC-S — raise with the backend.** Now spans two columns (`ville`,
+      `ville_actuelle`).
+- [ ] **The ADR-0006 wording question, still unresolved.** ADR-0006 phrases the
+      URL-filter hook's threshold as "a resource with **3+ filters**" — a
+      per-resource bar Managers already met at M3.2 — while its five sibling
+      thresholds are all cross-resource "3 [resources]" counts. Flagged during
+      M3.3 planning, not resolved. The decision given for M3.3 was to defer
+      **all** shared extractions together until after Commercials, which this
+      milestone now is — so this question is due for a decision, not further
+      deferral, the next time shared extraction comes up.
+- [ ] **Rule-of-Three tally after M3.3** (see `project-status.md` for the full
+      table): `DataTable`/`FilterBar` now read as satisfied under the
+      cross-resource-count interpretation (3 paginated/filtered resources:
+      Villes, Managers, Commercials). `StatusBadge` needs Clients for its
+      third enum. `MoneyAmount`'s evidence is muddied, not accumulating — see
+      the note in `project-status.md`. Nothing was extracted this session;
+      this is a recorded tally, not a decision.
+- [ ] **M3.3's own list/filter/edit/block/activate behaviour has not had a
+      full live manual-validation pass**, unlike M3.2. A later session did run
+      live checks, but for the two follow-ups below, not this. If the same
+      end-to-end rigor M3.2 received is wanted for Commercials, it is still
+      outstanding.
+- [ ] **Gate G2 formal closure** — unchanged, governance only.
 - [ ] Backend: `view-permissions` permission (B-6 deferred the OR-gate cleanup).
-- [x] **Money representation — settled and shipped.** `avance_total` is consumed as the
-      backend-owned preformatted string: never parsed, never converted to a float, no
-      shared money abstraction.
-- [x] **BC-T — resolved this session.** See above.
+- [x] **Money representation — unchanged, still correct.** Commercials'
+      `avanceTotal` follows the identical verbatim-string rule as Managers'.
+- [x] **M3.3 nullability — modelled correctly from the first draft.** See above.
+- [x] **City fields now use Villes-backed selects** (Follow-up 1) — `ville`
+      (Managers), `ville_actuelle` (Commercials). Payload is still the city
+      name, not an id; verified from source.
+- [x] **Area of responsibility is a Villes-backed multi-city selector**
+      (Follow-up 2, ADR-0015) — backend contract unchanged, `", "`-joined
+      encoding is frontend-only.
+- [x] **Block/Activate visibility investigated — no frontend defect.**
+      Session-permission caching (ADR-0003) is the likely cause of what was
+      observed; a fresh login is the fix, not a code change. See above.
 
 ## Things that MUST NOT be changed
 
-- 🚫 **`src/shared/components/patterns/`** — six components, unmodified across **five**
-  resources. `ListPage` must **never** own table rendering.
+- 🚫 **`src/shared/components/patterns/`** — six components, unmodified across
+  **six** resources now. `ListPage` must **never** own table rendering.
 - 🚫 **Do not extract** `DataTable`, `FilterBar`, `StatusBadge`, `MoneyAmount`,
-  `EntityChip`, the resource-definition module, or a URL-filter hook. Managers is
-  **evidence #1** for `StatusBadge` and only the **second** paginated resource — ADR-0006
-  needs three genuinely comparable cases, and BC-G prevents a third from existing yet.
-- 🚫 **Do not add sorting to Managers or Commercials.** The endpoints accept no sort
-  parameter of any kind (BC-L). Adding one invents a capability the API lacks (ADR-0009).
-- 🚫 **Do not "fix" the case-sensitive search placeholder or the "Joined before" label.**
-  Both describe real backend behaviour (BC-O, BC-P). They change when the backend does.
-- 🚫 **Do not parse `avanceTotal`.** It is a `bcadd` string, deliberately.
-- 🚫 **Do not modify existing tests** to accommodate an implementation. If a test needs a
-  behavioural change, stop and explain first.
+  `EntityChip`, the resource-definition module, or a URL-filter hook **without
+  revisiting the tally in `project-status.md` first** — some of these now read
+  as evidenced under one plausible reading of ADR-0006, and that reading has
+  not been decided.
+- 🚫 **Do not add sorting to Managers or Commercials.** Neither endpoint
+  accepts a sort parameter of any kind (BC-L).
+- 🚫 **Do not "fix" the case-sensitive search placeholder or the "Joined
+  before" label**, on either Managers or Commercials. Both describe real
+  backend behaviour (BC-O, BC-P).
+- 🚫 **Do not parse `avanceTotal`** on either domain. It is a `bcadd` string,
+  deliberately, on both.
+- 🚫 **Do not add a secteur filter to Commercials** without first seeding real
+  secteurs and building an options source (BC-V). A control with nothing to
+  select misrepresents the system.
+- 🚫 **Do not add a manager field to the Commercials edit form.** Reassignment
+  is the Agent Transfers feature (existing backend infrastructure, zero
+  frontend footprint), guarded by `COMMERCIAL_HAS_STOCK_CANNOT_REASSIGN`, not a
+  plain field edit.
+- 🚫 **Do not revert `ville`/`ville_actuelle` to free-text inputs, and do not
+  add a new one for any other city field.** Verified from source: both are
+  exact-match filters over a real Villes name; a select is what the contract
+  supports (Follow-up 1).
+- 🚫 **Do not send `ville_sous_responsabilite` as an array, or assume the
+  backend accepts one.** ADR-0015: it is still a single `string`, validated
+  `nullable|string|max:255` everywhere. The `", "`-joined multi-city encoding
+  is a **frontend-only** convention layered on an unchanged contract — reuse
+  it for any future field with the same shape rather than inventing a second
+  convention.
+- 🚫 **Do not add a boot-time `/me` permission refresh** to "fix" stale
+  session permissions. ADR-0003 forbids this deliberately; the Block/Activate
+  investigation confirmed the code is correct and the fix (if the symptom
+  recurs) is a fresh login, not a new refresh mechanism.
+- 🚫 **Do not modify existing tests** to accommodate an implementation. If a
+  test needs a behavioural change, stop and explain first.
 - 🚫 **Do not authorize on roles** — permission strings only (FTA D-5).
-- 🚫 **Do not invent backend contracts.** If an endpoint is missing, stop and raise a
-  backend consultation item. BC-S, BC-H and BC-U are three standing examples.
-- 🚫 **Do not merge mappers or key factories** across domains (ADR-0012). Managers' flat
-  paginator is a fifth distinct envelope; `fromLaravelPage` was **not** bent to fit it.
-- 🚫 **Do not assume a field is non-nullable because every fixture so far has had one.**
-  This is precisely how `numAbonnement`/`ville` went unmodelled. Check the migration.
+- 🚫 **Do not invent backend contracts.** BC-S, BC-H, BC-U and BC-V are four
+  standing examples of disclosed limitations, not problems to route around.
+- 🚫 **Do not merge mappers or key factories** across domains (ADR-0012).
+  Commercials has its own mapper and key factory, not shared with Managers,
+  despite both reading the identical envelope shape.
+- 🚫 **Do not assume a field is non-nullable because every fixture so far has
+  had one.** Check the migration column-by-column, every time — this is now
+  the second domain where it mattered.
 
 ## Session workflow
 

@@ -211,3 +211,45 @@ decisions made *during implementation*.
     hole, not a cosmetic defect.
   - M3.2 (Managers) therefore ships with no detail page, no nested route and no
     detail-page link.
+
+## ADR-0015 — `villeSousResponsabilite` multi-city encoding is a frontend-only convention
+
+- **Date:** 2026-07-19
+- **Status:** Accepted
+- **Context:** The business rule was clarified: a manager may be responsible for
+  multiple cities, not one. `agents.ville_sous_responsabilite` was verified from
+  source before choosing anything — `create_agent_table.php:41` is a plain
+  `string`, `nullable()` column with no cast in `Agent::$casts` and no
+  accessor/mutator; every validator that touches it (`store()`, `update()`, the
+  list filter) is `nullable|string|max:255`, never `array`; the list filter does
+  a substring `LIKE` match over that one string; and the only sample value
+  anywhere in the codebase (`DevAgentSeeder.php:75`) is a single bare name. The
+  backend has no multi-value convention of its own — there was nothing existing
+  to preserve.
+- **Decision:** Multiple cities are encoded as `", "`-joined names within the
+  same single string the backend has always accepted and validated
+  (`parseVilleSousResponsabiliteAreas`/`serializeVilleSousResponsabiliteAreas`,
+  `model/manager.ts`). This is a **frontend-only** convention layered over an
+  **unchanged backend contract** — same endpoint, same field name, same
+  payload type (a string), no migration, no new validation rule. The backend
+  does not know its string now often holds several names.
+- **Rationale:** The instructions offered comma-delimiting as the example
+  convention when no existing one is found, and no Villes name contains a
+  comma. Any other in-band delimiter would carry the same property; comma was
+  not derived from evidence, it was picked because nothing ruled it out and it
+  matches what was suggested. This is recorded so a future session does not
+  mistake the delimiter for a backend fact and does not "fix" the field into
+  an array without knowing the wire contract already forbids one.
+- **Consequences:**
+  - The multi-select UI (`ManagerAreaMultiSelect`) parses on read and
+    serializes on write; it never sends an array, and the value submitted is
+    byte-for-byte what `form.register` used to send for an untouched field.
+  - Parsing trims and de-duplicates (first occurrence wins), and — critically
+    — **normalisation runs the moment the form opens**, not only once the
+    operator touches a checkbox, so a malformed legacy value (e.g. accidental
+    duplicate names) is never resubmitted unchanged. A distinct legacy value
+    (a real, singular name simply absent from the Villes options) is
+    untouched by this and stays selected until explicitly unchecked.
+  - Any other field encoding multiple values into one backend string in the
+    future should default to reusing this same `", "` convention rather than
+    inventing a second one, unless a real reason argues otherwise.

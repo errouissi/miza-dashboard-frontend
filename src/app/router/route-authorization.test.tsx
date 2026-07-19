@@ -12,6 +12,7 @@ import { SECTEURS_PATH } from "@/domains/reference/secteurs";
 import { PRODUCTS_PATH } from "@/domains/reference/products";
 import { ADMINS_PATH } from "@/domains/network/admins";
 import { MANAGERS_PATH } from "@/domains/network/managers";
+import { COMMERCIALS_PATH } from "@/domains/network/commercials";
 import { routes } from "./routes";
 
 /**
@@ -203,15 +204,17 @@ describe("unknown permissions fail safe", () => {
 describe("every contributed domain route is guarded", () => {
   // Parameterised so a new resource inherits the authorization contract by being
   // added to this list — not by someone remembering to write three more tests.
-  // MANAGERS_PATH is guarded by `view-agents`, not `access-dashboard` — the first
-  // domain route in the product that is. `unpermittedSession` holds nothing at all,
-  // so it exercises both gates identically.
+  // MANAGERS_PATH and COMMERCIALS_PATH are both guarded by `view-agents`, not
+  // `access-dashboard` — the same string, since both endpoints sit behind one
+  // controller and one permission set. `unpermittedSession` holds nothing at
+  // all, so it exercises every gate identically.
   const domainPaths = [
     VILLES_PATH,
     SECTEURS_PATH,
     PRODUCTS_PATH,
     ADMINS_PATH,
     MANAGERS_PATH,
+    COMMERCIALS_PATH,
   ];
 
   it.each(domainPaths)("refuses %s without the permission", async (path) => {

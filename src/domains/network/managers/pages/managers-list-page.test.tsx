@@ -46,10 +46,10 @@ function row(
   nom: string,
   overrides: Partial<{
     status: "active" | "blocked" | "inactive";
-    num_abonnement: string;
+    num_abonnement: string | null;
     num_de_compte: string;
     avance_total: string;
-    ville: string;
+    ville: string | null;
     ville_sous_responsabilite: string | null;
     nombre_commerciaux: number;
     date_debut: string | null;
@@ -645,10 +645,349 @@ describe("edit", () => {
     expect(within(dialog).getByLabelText(/first name/i)).toHaveValue("Sara");
     expect(within(dialog).getByLabelText(/last name/i)).toHaveValue("Alaoui");
     expect(within(dialog).getByLabelText(/^city$/i)).toHaveValue("Casablanca");
-    expect(within(dialog).getByLabelText(/area of responsibility/i)).toHaveValue(
-      "Grand Casablanca",
-    );
+    // "Grand Casablanca" is not a literal Villes entry — the multi-select
+    // shows it as a chip regardless (legacy-value handling, exercised for
+    // real by this very fixture, not a contrived case).
+    expect(within(dialog).getByText("Grand Casablanca")).toBeInTheDocument();
     expect(within(dialog).getByLabelText(/subscription number/i)).toHaveValue("AB-1");
+  });
+
+  it("renders the area-of-responsibility field as a multi-select trigger, not free text or a single select", async () => {
+    server.use(managersHandler(rows), villesHandler());
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: /edit sara alaoui/i }));
+    const dialog = await screen.findByRole("dialog");
+
+    expect(within(dialog).getByLabelText(/^city$/i).tagName).toBe("SELECT");
+    // The area trigger is a <button> that discloses a checkbox panel — a
+    // manager may be responsible for multiple cities, so neither free text
+    // nor a single select can represent it honestly any more.
+    const areaTrigger = within(dialog).getByLabelText(/area of responsibility/i);
+    expect(areaTrigger.tagName).toBe("BUTTON");
+    expect(within(dialog).queryByRole("checkbox")).not.toBeInTheDocument();
+
+    fireEvent.click(areaTrigger);
+    expect(await within(dialog).findAllByRole("checkbox")).not.toHaveLength(0);
+  });
+
+  describe("area of responsibility — multi-city selection", () => {
+    it("checks existing assigned cities on open", async () => {
+      server.use(
+        managersHandler([
+          row(1, "Sara", "Alaoui", { ville_sous_responsabilite: "Casablanca, Rabat" }),
+        ]),
+        villesHandler(),
+      );
+      renderPage();
+
+      fireEvent.click(await screen.findByRole("button", { name: /edit sara alaoui/i }));
+      const dialog = await screen.findByRole("dialog");
+
+      const areaTrigger = within(dialog).getByLabelText(/area of responsibility/i);
+      fireEvent.click(areaTrigger);
+      expect(
+        await within(dialog).findByRole("checkbox", { name: "Casablanca" }),
+      ).toBeChecked();
+      expect(within(dialog).getByRole("checkbox", { name: "Rabat" })).toBeChecked();
+
+      // And clearly summarised, closed or open — the trigger itself, not
+      // just the panel. (Individual chip text is not queried directly here:
+      // the City field's own <select> renders "Casablanca"/"Rabat" as
+      // <option> text too, which would make an unscoped getByText ambiguous.)
+      fireEvent.click(areaTrigger);
+      expect(areaTrigger).toHaveTextContent("2 cities selected");
+      expect(
+        within(dialog).getByRole("button", { name: "Remove Casablanca" }),
+      ).toBeInTheDocument();
+      expect(
+        within(dialog).getByRole("button", { name: "Remove Rabat" }),
+      ).toBeInTheDocument();
+    });
+
+    it("starts with no cities selected for a null value", async () => {
+      server.use(
+        managersHandler([row(1, "Sara", "Alaoui", { ville_sous_responsabilite: null })]),
+        villesHandler(),
+      );
+      renderPage();
+
+      fireEvent.click(await screen.findByRole("button", { name: /edit sara alaoui/i }));
+      const dialog = await screen.findByRole("dialog");
+
+      expect(within(dialog).getByText(/select cities/i)).toBeInTheDocument();
+      fireEvent.click(within(dialog).getByLabelText(/area of responsibility/i));
+      const checkboxes = await within(dialog).findAllByRole("checkbox");
+      for (const checkbox of checkboxes) expect(checkbox).not.toBeChecked();
+    });
+
+    it("checking a city adds it to the serialized payload", async () => {
+      let body: Record<string, unknown> | undefined;
+      server.use(
+        managersHandler([row(1, "Sara", "Alaoui", { ville_sous_responsabilite: null })]),
+        villesHandler(),
+        http.post(`${API}/admin/agents/1`, async ({ request }) => {
+          body = (await request.json()) as Record<string, unknown>;
+          return HttpResponse.json({ success: true, data: {} });
+        }),
+      );
+      renderPage();
+
+      fireEvent.click(await screen.findByRole("button", { name: /edit sara alaoui/i }));
+      const dialog = await screen.findByRole("dialog");
+      fireEvent.click(within(dialog).getByLabelText(/area of responsibility/i));
+      fireEvent.click(
+        await within(dialog).findByRole("checkbox", { name: "Casablanca" }),
+      );
+      fireEvent.click(within(dialog).getByRole("button", { name: /save/i }));
+
+      await waitFor(() => expect(body?.ville_sous_responsabilite).toBe("Casablanca"));
+    });
+
+    it("unchecking a city removes it from the serialized payload", async () => {
+      let body: Record<string, unknown> | undefined;
+      server.use(
+        managersHandler([
+          row(1, "Sara", "Alaoui", { ville_sous_responsabilite: "Casablanca, Rabat" }),
+        ]),
+        villesHandler(),
+        http.post(`${API}/admin/agents/1`, async ({ request }) => {
+          body = (await request.json()) as Record<string, unknown>;
+          return HttpResponse.json({ success: true, data: {} });
+        }),
+      );
+      renderPage();
+
+      fireEvent.click(await screen.findByRole("button", { name: /edit sara alaoui/i }));
+      const dialog = await screen.findByRole("dialog");
+      fireEvent.click(within(dialog).getByLabelText(/area of responsibility/i));
+      fireEvent.click(
+        await within(dialog).findByRole("checkbox", { name: "Casablanca" }),
+      );
+      fireEvent.click(within(dialog).getByRole("button", { name: /save/i }));
+
+      await waitFor(() => expect(body?.ville_sous_responsabilite).toBe("Rabat"));
+    });
+
+    it("removing a chip via its own button has the same effect as unchecking", async () => {
+      let body: Record<string, unknown> | undefined;
+      server.use(
+        managersHandler([
+          row(1, "Sara", "Alaoui", { ville_sous_responsabilite: "Casablanca, Rabat" }),
+        ]),
+        villesHandler(),
+        http.post(`${API}/admin/agents/1`, async ({ request }) => {
+          body = (await request.json()) as Record<string, unknown>;
+          return HttpResponse.json({ success: true, data: {} });
+        }),
+      );
+      renderPage();
+
+      fireEvent.click(await screen.findByRole("button", { name: /edit sara alaoui/i }));
+      const dialog = await screen.findByRole("dialog");
+      fireEvent.click(within(dialog).getByRole("button", { name: "Remove Rabat" }));
+      fireEvent.click(within(dialog).getByRole("button", { name: /save/i }));
+
+      await waitFor(() => expect(body?.ville_sous_responsabilite).toBe("Casablanca"));
+    });
+
+    it("serializes multiple cities using the exact existing backend format (comma + space)", async () => {
+      let body: Record<string, unknown> | undefined;
+      server.use(
+        managersHandler([row(1, "Sara", "Alaoui", { ville_sous_responsabilite: null })]),
+        villesHandler(),
+        http.post(`${API}/admin/agents/1`, async ({ request }) => {
+          body = (await request.json()) as Record<string, unknown>;
+          return HttpResponse.json({ success: true, data: {} });
+        }),
+      );
+      renderPage();
+
+      fireEvent.click(await screen.findByRole("button", { name: /edit sara alaoui/i }));
+      const dialog = await screen.findByRole("dialog");
+      fireEvent.click(within(dialog).getByLabelText(/area of responsibility/i));
+      fireEvent.click(
+        await within(dialog).findByRole("checkbox", { name: "Casablanca" }),
+      );
+      fireEvent.click(within(dialog).getByRole("checkbox", { name: "Rabat" }));
+      fireEvent.click(within(dialog).getByRole("button", { name: /save/i }));
+
+      await waitFor(() =>
+        expect(body?.ville_sous_responsabilite).toBe("Casablanca, Rabat"),
+      );
+      // The field name and type are exactly what form.register used to send.
+      expect(typeof body?.ville_sous_responsabilite).toBe("string");
+      expect(Array.isArray(body?.ville_sous_responsabilite)).toBe(false);
+    });
+
+    it("does not submit duplicate cities from a malformed legacy value", async () => {
+      let body: Record<string, unknown> | undefined;
+      server.use(
+        managersHandler([
+          row(1, "Sara", "Alaoui", {
+            ville_sous_responsabilite: "Casablanca, Casablanca",
+          }),
+        ]),
+        villesHandler(),
+        http.post(`${API}/admin/agents/1`, async ({ request }) => {
+          body = (await request.json()) as Record<string, unknown>;
+          return HttpResponse.json({ success: true, data: {} });
+        }),
+      );
+      renderPage();
+
+      fireEvent.click(await screen.findByRole("button", { name: /edit sara alaoui/i }));
+      const dialog = await screen.findByRole("dialog");
+      fireEvent.click(within(dialog).getByLabelText(/area of responsibility/i));
+      // Parsed to one selection, not two — a checkbox cannot be "checked twice".
+      expect(
+        await within(dialog).findAllByRole("checkbox", { name: "Casablanca" }),
+      ).toHaveLength(1);
+      fireEvent.click(within(dialog).getByRole("button", { name: /save/i }));
+
+      await waitFor(() => expect(body?.ville_sous_responsabilite).toBe("Casablanca"));
+    });
+
+    it("preserves a legacy area value absent from the Villes options, without silently dropping it", async () => {
+      let body: Record<string, unknown> | undefined;
+      server.use(
+        managersHandler([
+          row(1, "Sara", "Alaoui", { ville_sous_responsabilite: "Marrakech" }),
+        ]),
+        villesHandler(),
+        http.post(`${API}/admin/agents/1`, async ({ request }) => {
+          body = (await request.json()) as Record<string, unknown>;
+          return HttpResponse.json({ success: true, data: {} });
+        }),
+      );
+      renderPage();
+
+      fireEvent.click(await screen.findByRole("button", { name: /edit sara alaoui/i }));
+      const dialog = await screen.findByRole("dialog");
+
+      // Visible and selected as a chip even before the panel is opened.
+      expect(within(dialog).getByText("Marrakech")).toBeInTheDocument();
+
+      fireEvent.click(within(dialog).getByLabelText(/area of responsibility/i));
+      const legacyCheckbox = await within(dialog).findByRole("checkbox", {
+        name: /Marrakech.*not in the reference list/i,
+      });
+      expect(legacyCheckbox).toBeChecked();
+
+      // Untouched, it round-trips byte-for-byte.
+      fireEvent.click(within(dialog).getByRole("button", { name: /save/i }));
+      await waitFor(() => expect(body?.ville_sous_responsabilite).toBe("Marrakech"));
+    });
+  });
+
+  it("shows the placeholder for a null city and lets it be submitted unset", async () => {
+    let body: Record<string, unknown> | undefined;
+    server.use(
+      managersHandler([
+        row(1, "Sara", "Alaoui", { ville: null, num_abonnement: "AB-1" }),
+      ]),
+      villesHandler(),
+      http.post(`${API}/admin/agents/1`, async ({ request }) => {
+        body = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ success: true, data: {} });
+      }),
+    );
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: /edit sara alaoui/i }));
+    const dialog = await screen.findByRole("dialog");
+
+    expect(within(dialog).getByLabelText(/^city$/i)).toHaveValue("");
+    expect(
+      within(dialog).getByRole("option", { name: "Select a city" }),
+    ).toBeInTheDocument();
+
+    // ville is a required field (matches the pre-existing schema rule), so
+    // submitting with no city chosen must fail client-side, not silently pass
+    // an empty string through.
+    fireEvent.click(within(dialog).getByRole("button", { name: /save/i }));
+    expect(await within(dialog).findByText(/city is required/i)).toBeInTheDocument();
+    expect(body).toBeUndefined();
+
+    // Choosing a real option now succeeds.
+    fireEvent.change(within(dialog).getByLabelText(/^city$/i), {
+      target: { value: "Rabat" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: /save/i }));
+    await waitFor(() => expect(body?.ville).toBe("Rabat"));
+  });
+
+  it("selects the current city automatically from the Villes options", async () => {
+    server.use(managersHandler(rows), villesHandler());
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: /edit sara alaoui/i }));
+    const dialog = await screen.findByRole("dialog");
+
+    const citySelect = within(dialog).getByLabelText(/^city$/i);
+    // toHaveValue on a <select> asserts exactly this: the selected option's
+    // value, which is what "auto-selected from the options" means here.
+    expect(citySelect).toHaveValue("Casablanca");
+  });
+
+  it("selecting another city sends its name, not an id, as the payload", async () => {
+    let body: Record<string, unknown> | undefined;
+    server.use(
+      managersHandler(rows),
+      villesHandler(),
+      http.post(`${API}/admin/agents/1`, async ({ request }) => {
+        body = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ success: true, data: {} });
+      }),
+    );
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: /edit sara alaoui/i }));
+    const dialog = await screen.findByRole("dialog");
+
+    const citySelect = await within(dialog).findByLabelText(/^city$/i);
+    await within(citySelect).findByRole("option", { name: "Rabat" });
+    fireEvent.change(citySelect, { target: { value: "Rabat" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: /save/i }));
+
+    // The city's NAME, matching the backend column (agents.ville, a plain
+    // string) and the list filter's existing contract — never a numeric id.
+    await waitFor(() => expect(body?.ville).toBe("Rabat"));
+  });
+
+  it("preserves a legacy city value absent from the Villes options, without silently dropping it", async () => {
+    // The manager's ville was typed as "Marrakech" before it left the
+    // reference list (or was never in it) — villesHandler() only offers
+    // Casablanca and Rabat (BC-S). The value must stay selected and stay in
+    // the payload if the operator does not touch the field.
+    let body: Record<string, unknown> | undefined;
+    server.use(
+      managersHandler([
+        row(1, "Sara", "Alaoui", { ville: "Marrakech", num_abonnement: "AB-1" }),
+      ]),
+      villesHandler(),
+      http.post(`${API}/admin/agents/1`, async ({ request }) => {
+        body = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ success: true, data: {} });
+      }),
+    );
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: /edit sara alaoui/i }));
+    const dialog = await screen.findByRole("dialog");
+
+    const citySelect = await within(dialog).findByLabelText(/^city$/i);
+    // Present, selected, and honestly labelled — not blank, not snapped to
+    // the first real option, not silently replaced.
+    expect(citySelect).toHaveValue("Marrakech");
+    expect(
+      within(citySelect).getByRole("option", {
+        name: /Marrakech.*not in the reference list/i,
+      }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: /save/i }));
+    await waitFor(() => expect(body?.ville).toBe("Marrakech"));
   });
 
   it("POSTs the update with the API's field spellings", async () => {

@@ -5,6 +5,7 @@ import {
   blockManager,
   updateManager,
   fetchManagers,
+  fetchManagerOptions,
   type UpdateManagerInput,
 } from "../api/managers-api";
 import type { ManagerListParams } from "../model/manager";
@@ -28,16 +29,31 @@ export function useManagersQuery(params: ManagerListParams) {
 }
 
 /**
- * Every mutation reshapes the list, so all of them invalidate the LIST space.
- *
- * `lists()` rather than `all` — there is no sibling key space in this domain today,
- * but scoping the invalidation to what actually changed keeps it correct when there
- * is one. No optimistic updates and no automatic retries (FTA D-7, §11): a status
- * change that appears to succeed and then silently reverts is worse than a slow one.
+ * The manager set for relation pickers (M3.3). Same SLOW tier as the list
+ * itself — a manager's name is part of the identity record the tier already
+ * covers, not reference data.
+ */
+export function useManagerOptionsQuery() {
+  return useQuery({
+    queryKey: managersKeys.options(),
+    queryFn: fetchManagerOptions,
+    staleTime: STALE_TIMES.SLOW,
+  });
+}
+
+/**
+ * Every mutation reshapes the list, so all of them invalidate the WHOLE key
+ * space — `all`, not just `lists()`. The picker set (`options()`) holds the
+ * same rows under a different shape; invalidating only the list would leave a
+ * renamed or re-blocked manager showing stale in Commercials' manager filter
+ * until SLOW's staleTime elapsed (mirrors `useInvalidateVilles`' identical
+ * reasoning, now that a sibling key space actually exists here too). No
+ * optimistic updates and no automatic retries (FTA D-7, §11): a status change
+ * that appears to succeed and then silently reverts is worse than a slow one.
  */
 function useInvalidateManagers() {
   const queryClient = useQueryClient();
-  return () => queryClient.invalidateQueries({ queryKey: managersKeys.lists() });
+  return () => queryClient.invalidateQueries({ queryKey: managersKeys.all });
 }
 
 export function useUpdateManagerMutation() {
