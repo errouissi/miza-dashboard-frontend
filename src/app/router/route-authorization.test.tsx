@@ -13,6 +13,7 @@ import { PRODUCTS_PATH } from "@/domains/reference/products";
 import { ADMINS_PATH } from "@/domains/network/admins";
 import { MANAGERS_PATH } from "@/domains/network/managers";
 import { COMMERCIALS_PATH } from "@/domains/network/commercials";
+import { CLIENTS_PATH } from "@/domains/network/clients";
 import { routes } from "./routes";
 
 /**
@@ -206,8 +207,10 @@ describe("every contributed domain route is guarded", () => {
   // added to this list — not by someone remembering to write three more tests.
   // MANAGERS_PATH and COMMERCIALS_PATH are both guarded by `view-agents`, not
   // `access-dashboard` — the same string, since both endpoints sit behind one
-  // controller and one permission set. `unpermittedSession` holds nothing at
-  // all, so it exercises every gate identically.
+  // controller and one permission set. CLIENTS_PATH is guarded by
+  // `view-clients` — its own permission, a separate controller entirely.
+  // `unpermittedSession` holds nothing at all, so it exercises every gate
+  // identically.
   const domainPaths = [
     VILLES_PATH,
     SECTEURS_PATH,
@@ -215,6 +218,7 @@ describe("every contributed domain route is guarded", () => {
     ADMINS_PATH,
     MANAGERS_PATH,
     COMMERCIALS_PATH,
+    CLIENTS_PATH,
   ];
 
   it.each(domainPaths)("refuses %s without the permission", async (path) => {

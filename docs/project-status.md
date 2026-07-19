@@ -9,16 +9,21 @@ _Last updated: 2026-07-19_
 
 ## Current milestone
 
-**M3 — Network / identity graph.** M3.1 (Admins), M3.2 (Managers) and **M3.3
-(Commercials) complete**; **M3.4 (Clients) is next.**
+**M3 — Network / identity graph.** M3.1 (Admins), M3.2 (Managers), M3.3
+(Commercials) and **M3.4 (Clients) complete**; **M3.5 (Client bulk-assign) is
+next — not started.**
 
 ## Current branch
 
-`main` at `3b84d51` — **level with `origin/main`**. M3.2's implementation
-(`d91d9a2`) and its live-validation nullability fix (`3b84d51`) are both committed
-and pushed. **M3.3 and its two follow-up UI fixes are approved and about to be
-committed together**: 13 new files under `src/domains/network/commercials/` and
-`manager-area-multiselect.tsx`, plus the modified files listed below.
+`main` at `700d99f` — **level with `origin/main`**. M3.3's implementation and
+its two follow-up UI fixes are committed and pushed. **M3.4 (Clients) —
+list, server pagination, search, three filters, edit, a single status
+toggle, permission gating, loading/empty/error states, and its 43-test
+suite — has passed manual UI validation and is approved and about to be
+committed and pushed together**, alongside the four supporting app-level
+edits (permission registry, routes, nav, route-authorization test) and a
+backend-only dev fixture (`DevClientSeeder`, committed separately in
+`C:\Miza\backend`).
 
 ## Last completed implementation
 
@@ -175,6 +180,98 @@ Block/Activate for `superadmin@test.com`. Investigated end to end:
   not specific to `block-agent` — it applies to any permission change made
   while operators have an open session.
 
+## M3.4 — Clients (complete)
+
+The fourth Network domain, and the last of M3's agent/identity list screens
+before M3.5's bulk-assign work. Scope was given explicitly, not derived:
+list, server pagination, search, three filters (`status`, `assigned`,
+`ville_comercial`), edit (`phone` and `ville` only), a single status toggle,
+permission gating, and loading/empty/error states. **Explicitly deferred by
+decision, not by contract necessity**: Create Client, Delete Client,
+Assign/Reassign/Unassign, Bulk Assign (named as its own M3.5 deliverable),
+Reset Password, Statistics, a detail page (ADR-0014), and map/location
+editing.
+
+**Contract-verified independently from `ClientController`, not inherited
+from the Agent domains by resemblance** — the planning pass found `index()`
+performs **no `transform()`** (unlike every Agent domain), so the row is the
+raw Eloquent serialization riding with many more fields than the screen
+consumes (`agent_id`, `secteur_comercial`, `dept_to_commercial`, lat/long,
+`otp_*`, `last_login_at`, `updated_at` — all confirmed present on the wire,
+deliberately left unmapped per ADR-0008).
+
+**Clients' status model is a different shape than Managers'/Commercials',
+and the UI was built to match it, not to reuse their pattern by default**: a
+single `PATCH /{id}/status` **toggle** endpoint, not a block/activate pair,
+and a **third real status value** (`pending`, not `inactive`) that only ever
+originates from the public OTP signup flow — never created by this
+milestone. `ClientStatusDialog` computes its single available action's
+label and copy from `client.status !== "active"` rather than force-fitting
+the two-dialog Agent pattern; a `pending` client's only transition is
+"Activate", exercised by its own dedicated test.
+
+**The nested `agent` relation (present because of `index()`'s
+`with(['agent:id,nom,prenom,num_compte'])` eager load) is reduced to a
+single `agentName: string | null` display string at the mapper boundary** —
+consistent with how Commercials already reduces its `manager` relation, and
+with ADR-0012 (no shared/merged mapper across domains).
+
+**No new shared abstraction was introduced.** The city filter, the
+Villes-backed edit-select with legacy-value fallback, and the single-dialog
+confirm pattern are each a resource-specific copy, matching Managers'/
+Commercials' precedent — Rule-of-Three reads closer for several shared
+components now (see the updated tally below), but nothing was extracted
+this session, by the same explicit decision M3.3 recorded.
+
+**Manual UI validation passed.** Before it could run, the dev database held
+**zero clients** — Create Client is out of scope, so there was no in-product
+way to populate one. A dev-only, idempotent fixture seeder,
+`DevClientSeeder` (backend, `database/seeders/DevClientSeeder.php`), was
+added to unblock this — modelled directly on the existing `DevAgentSeeder`
+precedent: environment-guarded to local/development/testing, not registered
+in `DatabaseSeeder`, run explicitly (`php artisan db:seed
+--class=DevClientSeeder`). It resolves its commercial **dynamically**
+(`Agent::isCommercials()->active()->first()`), never assumes `agent_id = 2`
+— confirmed wrong in this environment, where the only commercial is id
+`636` (`DEV-CPT-COMMERCIAL-001`) — and seeds 4 clients spanning all three
+statuses and both assignment states, keyed idempotently on a dedicated
+`phone` block (`0600100001`–`0600100004`) via `firstOrCreate`, so reseeding
+never duplicates and never stomps a tester's in-progress state (e.g. a
+manually toggled status). Verified end-to-end against the real running
+backend: `GET /admin/clients` and its `status`/`assigned` filters all
+return the expected rows. The existing general-purpose `ClientSeeder` was
+deliberately left untouched — it hardcodes `agent_id = 2` and is not
+idempotent against clients' unique `phone` column; fixing a seeder of
+unclear ownership was out of scope for a fixture-only task.
+
+**New backend finding, registered this milestone:**
+
+- **BC-W** — `ClientController`'s single-record methods use `findOrFail`,
+  which is not caught specifically, so a nonexistent client id 500s rather
+  than 404s. Live-confirmed. Not reachable through this UI (no detail page,
+  no direct id navigation), so non-blocking for M3.4, but worth backend
+  attention.
+
+**Two known limitation classes gained a third instance, not a new one:**
+
+- **BC-N** (validation exceptions swallowed by a bare `catch`, returning 500
+  instead of 422) — confirmed for `ClientController::update()` too. A
+  duplicate-phone update shows a generic error banner, not a field message.
+- **BC-U** (update validators missing `nullable`, so a nullable column can
+  never be cleared back to null through the UI) — confirmed for
+  `ville_comercial` too.
+
+**Tests:** 43 new tests in `clients-list-page.test.tsx`, covering the
+envelope contract, row mapping (including all-three-null fields), the
+three-value status enum, search, all three real filters, pagination,
+error/retry, permission gating (incl. fail-closed and explicit
+never-offers-create/delete/assign assertions), edit-form validation and
+payload shape, legacy-ville preservation, 422 field mapping, and the status
+action across all three status values. `route-authorization.test.tsx`
+gained 2 more parameterized cases (`CLIENTS_PATH`, refuse + redirect).
+**388/388 across 23 files**, run twice standalone to rule out FE-1's known
+flake — stable both times.
+
 ## Overall progress
 
 | Milestone | Status |
@@ -190,26 +287,23 @@ Block/Activate for `superadmin@test.com`. Investigated end to end:
 | **Gate G2** | ⚠️ **conditional pass** — see blockers |
 | M3.1 — Admins (incl. permission selector) | ✅ complete |
 | M3.2 — Managers | ✅ **complete** |
-| **M3.3 — Commercials, plus city-select and multi-select follow-ups** | ✅ **complete** |
-| M3.4 — Clients | ⬜ next |
-| M3.5 — Client bulk-assign | ⬜ pending |
+| M3.3 — Commercials, plus city-select and multi-select follow-ups | ✅ complete |
+| **M3.4 — Clients** | ✅ **complete** |
+| M3.5 — Client bulk-assign | ⬜ next — not started |
 | M3.6 — Agent onboarding wizard | ⬜ pending |
 | M3.x — Admin + Manager + Commercial detail pages (ADR-0014) | ⬜ pending — **blocked by FE-2** |
 | M4+ — Money, Stock, Grattage, Overview | ⬜ not started |
 
-**Tests: 343/343 across 22 files** (was 279/21 before M3.3 — Commercials added 45
-domain tests and 1 route-authorization case; the two follow-ups added 17 more to
-Managers' suite: city-select coverage and the multi-city selector's 8 dedicated
-tests). Lint · typecheck · format · build all clean; the full suite was run
-standalone multiple times across all three sessions to confirm no flake — the
-one contention-triggered failure seen (immediately after a `pnpm build`, before
-`pnpm test:ci`) reproduces the already-documented FE-1 pattern, not a
-regression from this work.
+**Tests: 388/388 across 23 files** (was 343/22 before M3.4 — Clients added 43
+domain tests in a new `clients-list-page.test.tsx`, and `route-authorization.test.tsx`
+gained 2 more parameterized cases for `CLIENTS_PATH`). Lint · typecheck ·
+format · build all clean; the full suite was run standalone twice this
+session to confirm no flake — stable both times.
 
 ## Shared pattern layer
 
-Six components, **unmodified since extraction** — have now absorbed a **sixth**
-resource (Commercials) with zero changes:
+Six components, **unmodified since extraction** — have now absorbed a **seventh**
+resource (Clients) with zero changes:
 
 - `ConfirmActionDialog` · `ListPage` · `FormDrawer`
 - `ListLoadingState` · `ListErrorState` · `ListEmptyState`
@@ -218,23 +312,24 @@ resource (Commercials) with zero changes:
 `DataTable` · `FilterBar` · `StatusBadge` · `MoneyAmount` · `EntityChip` ·
 Resource-definition module · URL-filter hook
 
-**Rule-of-Three evidence tally after M3.3, recorded factually, not acted on:**
+**Rule-of-Three evidence tally after M3.4, recorded factually, not acted on:**
 
-| Component | Evidence after M3.3 | At ADR-0006's stated threshold? |
+| Component | Evidence after M3.4 | At ADR-0006's stated threshold? |
 | --- | --- | --- |
-| `DataTable` | 3 paginated resources (Villes, Managers, Commercials) | Reaches "3" |
-| `FilterBar` | 3 resources with server-supported search/multi-filter | Reaches "3" |
-| `StatusBadge` | 2 real three-value enums (Managers, Commercials) | Not yet — needs Clients |
-| `MoneyAmount` | Still 2 of one shape (Managers, Commercials: raw `bcadd` passthrough) vs. 1 of a different shape (Products: `formatMoney`) — arguably anti-evidence for one shared component, not accumulating evidence for it | Unclear even at "3" |
+| `DataTable` | 4 paginated resources (Villes, Managers, Commercials, Clients) | Reaches "3" |
+| `FilterBar` | 4 resources with server-supported search/multi-filter | Reaches "3" |
+| `StatusBadge` | 3 resources with a real status enum, but only **2 distinct vocabularies**: Managers and Commercials share one (`active`/`blocked`/`inactive`); Clients introduces a second (`active`/`blocked`/`pending`) | Reaches the stated count of "3", though the vocabularies aren't uniform |
+| `MoneyAmount` | 3 distinct serialization shapes, not 3 callers of *one* shape: Managers/Commercials (`avanceTotal`, a `bcadd`-computed accessor), Clients (`solde`, a plain `decimal:2`-cast column, no computation), Products (`formatMoney`-formatted) — arguably strengthens the case *against* one shared component, since none of the three match | Still unclear even at "3" |
 | `EntityChip` | 0 — filter `<select>`s are not the roadmap's sanctioned infinite-query autocomplete | Not reached |
 | Resource-definition module | 0 — Network is not reference-shaped | Not reached |
-| URL-filter hook | ADR-0006's own wording ("a resource with 3+ filters") reads as a **per-resource**, not cross-resource, threshold — unlike its five siblings. Managers already had 5 filters at M3.2. Flagged during M3.3 planning, **not resolved** | Ambiguous, unresolved |
+| URL-filter hook | ADR-0006's own wording ("a resource with 3+ filters") reads as a **per-resource**, not cross-resource, threshold — unlike its five siblings. Managers already had 5 filters at M3.2; Clients has 4 (`search`, `status`, `assigned`, `ville`). Flagged during M3.3 planning, **still not resolved** | Ambiguous, unresolved |
 
-**Explicit decision this session: do not extract anything yet.** The URL-filter
-hook and every other shared extraction stay deferred, matching M3.2's approach,
-until Managers, Commercials and Clients are all built and can be revisited
-together as one decision. This is a scope decision already given, not a new
-architectural determination — no ADR was written for it.
+**Explicit decision this session: still do not extract anything.** M3.2, M3.3
+and M3.4 are now all built — the condition M3.3's own deferral named ("until
+Managers, Commercials and Clients are all built") is met, so this tally is
+due for an actual decision the next time shared extraction comes up, not
+further deferral by default. No extraction happened this session and no ADR
+was written; the decision itself is a `next-session.md` follow-up.
 
 ## Current blockers
 
@@ -256,7 +351,7 @@ Managers and Commercials (same permission, same endpoints).
 Five older test files' `findByRole("alert")` calls still run against the 1000 ms
 default timeout while taking 951–1240 ms. Not touched in this session — no new
 evidence gathered, no fix applied. Still recommended before the suite grows
-further; M3.3 adds 45 more tests to the pile the flake can surface in.
+further; the suite is now at 388 tests, 43 more than when this was last raised.
 
 **Governance follow-ups — not blockers** (unchanged):
 
@@ -267,8 +362,9 @@ further; M3.3 adds 45 more tests to the pile the flake can surface in.
 
 ## M3 detail pages — deferred by ADR-0014
 
-Unchanged. M3.3 ships list-only, contributes no nested route, so FE-2 remains
-non-blocking for it exactly as it did for M3.1 and M3.2.
+Unchanged. M3.4 ships list-only, contributes no nested route, so FE-2 remains
+non-blocking for it exactly as it did for M3.1, M3.2 and M3.3. All four
+list-management resources are now built with no detail page among them.
 
 ## Backend dependencies
 
@@ -291,6 +387,15 @@ independently re-confirmed rather than assumed from Managers:**
 | ID | Class | Item | Status |
 | --- | --- | --- | --- |
 | BC-V | **limitation** | `agents.secteur` has no foreign key to `secteurs` (confirmed: `Secteur` model has no relation back to `Agent`), is filtered by exact match, and the dev database has **zero** seeded secteurs. No options source exists to build a select from | 🟡 open — **no secteur filter or column was built** (ADR-0009: a control with nothing to select would misrepresent the system). Do not invent a distinct-values endpoint |
+
+**From the M3.4 contract verification, against `ClientController`, independently
+re-confirmed rather than assumed from the Agent domains:**
+
+| ID | Class | Item | Status |
+| --- | --- | --- | --- |
+| BC-N | **defect** | Third confirmed instance — `ClientController::update()` validates inside a bare `catch (\Exception)`, so e.g. a duplicate-phone update returns 500, not 422 | 🔴 open — the form shows a generic error banner, not a field message |
+| BC-U | **limitation** | Third confirmed instance — the `update()` validator has no `nullable` for `ville_comercial`, though the column allows null | 🟡 open — a client's city can never be explicitly cleared through the UI |
+| BC-W | **defect, new** | `ClientController`'s single-record methods use `findOrFail`, not caught specifically, so a nonexistent client id 500s instead of 404ing | 🟡 open — live-confirmed, unreachable through this UI (no detail page, no direct id navigation) |
 
 Carried, unchanged from M3.2:
 
@@ -328,9 +433,20 @@ src/domains/
     │                            responsibility is a Villes-backed multi-city
     │                            checkbox selector, ", "-joined into the same
     │                            single backend string, ADR-0015)
-    └── commercials/        M3.3 (paginated · search · 4 filters · status enum ·
-                                  backend-formatted money · NO sort, NO create,
-                                  NO detail page, NO secteur filter, NO manager
-                                  reassignment; city field is a Villes-backed
-                                  select, same as Managers')
+    ├── commercials/        M3.3 (paginated · search · 4 filters · status enum ·
+    │                             backend-formatted money · NO sort, NO create,
+    │                             NO detail page, NO secteur filter, NO manager
+    │                             reassignment; city field is a Villes-backed
+    │                             select, same as Managers')
+    └── clients/            M3.4 (paginated · search · 3 filters (status,
+                                   assigned, ville) · a THIRD status enum
+                                   (active/blocked/pending — distinct from
+                                   Managers'/Commercials' active/blocked/inactive)
+                                   · a single status TOGGLE, not block/activate ·
+                                   raw decimal-cast money (solde), a distinct
+                                   shape from Managers'/Commercials' bcadd
+                                   accessor · NO sort, NO create, NO delete, NO
+                                   assign/reassign, NO detail page; city field
+                                   is a Villes-backed select, same pattern as
+                                   Managers'/Commercials')
 ```

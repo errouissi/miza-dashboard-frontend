@@ -1,9 +1,18 @@
 import type { LucideIcon } from "lucide-react";
-import { Map, MapPin, CreditCard, ShieldCheck, UserCog, Users } from "lucide-react";
+import {
+  Map,
+  MapPin,
+  CreditCard,
+  ShieldCheck,
+  UserCog,
+  Users,
+  Contact,
+} from "lucide-react";
 import { PERMISSIONS, type PermissionResolver } from "@/infrastructure/permissions";
 import { ADMINS_PATH } from "@/domains/network/admins";
 import { MANAGERS_PATH } from "@/domains/network/managers";
 import { COMMERCIALS_PATH } from "@/domains/network/commercials";
+import { CLIENTS_PATH } from "@/domains/network/clients";
 import { PRODUCTS_PATH } from "@/domains/reference/products";
 import { SECTEURS_PATH } from "@/domains/reference/secteurs";
 import { VILLES_PATH } from "@/domains/reference/villes";
@@ -97,6 +106,14 @@ export const NAV_TREE: NavGroup[] = [
         // sit behind one controller and one permission set.
         permission: PERMISSIONS.VIEW_AGENTS,
         icon: Users,
+      },
+      {
+        label: "Clients",
+        to: CLIENTS_PATH,
+        // `view-clients` — its OWN permission, not `view-agents`. Clients
+        // sits behind a separate ClientController with its own permission set.
+        permission: PERMISSIONS.VIEW_CLIENTS,
+        icon: Contact,
       },
     ],
   },

@@ -73,6 +73,28 @@ export const PERMISSIONS = Object.freeze({
   UPDATE_AGENT: "update-agent",
   BLOCK_AGENT: "block-agent",
   ACTIVATE_AGENT: "activate-agent",
+
+  /**
+   * Client management — its OWN permission set, gated by `ClientController`,
+   * entirely separate from the Agent domains' `view-agents`/`update-agent`.
+   * `routes/api.php`'s `/admin/clients` group carries eight permissions in
+   * total; only the three this milestone (M3.4) actually uses are
+   * registered here — `create-client`, `delete-client`, `assign-client`,
+   * `view-client-stats` and `reset-client-password` all gate real endpoints
+   * (create, delete, assign/reassign/bulk-assign, statistics, password
+   * reset) that are explicitly OUT OF SCOPE for this milestone by decision,
+   * not deferred for a contract reason. Registering them now would be
+   * guessing at UI that does not exist (this file's own rule).
+   *
+   * `MANAGE_CLIENT_STATUS` gates the ONLY status-changing endpoint for
+   * clients (`PATCH /{id}/status`) — there is no separate block/activate
+   * pair the way the Agent domains have, so this permission is used
+   * directly, unlike `manage-agent-status`, which Managers/Commercials
+   * deliberately avoid.
+   */
+  VIEW_CLIENTS: "view-clients",
+  UPDATE_CLIENT: "update-client",
+  MANAGE_CLIENT_STATUS: "manage-client-status",
 } as const satisfies Record<string, string>);
 
 export type PermissionName = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

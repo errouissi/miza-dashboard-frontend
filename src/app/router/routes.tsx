@@ -9,6 +9,7 @@ import { RequirePermission } from "@/app/guards";
 import { adminsRoutes } from "@/domains/network/admins";
 import { managersRoutes } from "@/domains/network/managers";
 import { commercialsRoutes } from "@/domains/network/commercials";
+import { clientsRoutes } from "@/domains/network/clients";
 import { productsRoutes } from "@/domains/reference/products";
 import { secteursRoutes } from "@/domains/reference/secteurs";
 import { villesRoutes } from "@/domains/reference/villes";
@@ -98,6 +99,7 @@ const domainRoutes: RouteObject[] = withPermissionGuards([
   ...adminsRoutes,
   ...managersRoutes,
   ...commercialsRoutes,
+  ...clientsRoutes,
 ]);
 
 /**
