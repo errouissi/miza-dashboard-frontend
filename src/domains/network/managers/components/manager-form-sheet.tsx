@@ -83,9 +83,13 @@ export function ManagerFormSheet({ open, onOpenChange, manager }: ManagerFormShe
       form.reset({
         nom: manager.nom,
         prenom: manager.prenom,
-        ville: manager.ville,
+        // Both nullable server-side, despite neither name suggesting it (confirmed
+        // against a live record with no ville and no subscription number). An
+        // uncontrolled input's DOM value cannot legally be null, so a null here
+        // becomes an empty string — never passed through raw.
+        ville: manager.ville ?? "",
         villeSousResponsabilite: manager.villeSousResponsabilite ?? "",
-        numAbonnement: manager.numAbonnement,
+        numAbonnement: manager.numAbonnement ?? "",
       });
       updateMutation.reset();
     }

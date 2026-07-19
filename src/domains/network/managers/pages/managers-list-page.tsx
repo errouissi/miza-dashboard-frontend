@@ -387,7 +387,9 @@ export function ManagersListPage() {
                         </div>
                       </div>
                     </td>
-                    <td className="text-muted-foreground p-2">{manager.numAbonnement}</td>
+                    <td className="text-muted-foreground p-2">
+                      {manager.numAbonnement ?? ABSENT}
+                    </td>
                     <td className="p-2">
                       {/* A three-value enum, labelled locally. First StatusBadge
                           evidence, but only the first — no shared badge (ADR-0006). */}
@@ -401,7 +403,7 @@ export function ManagersListPage() {
                         {MANAGER_STATUS_LABELS[manager.status]}
                       </span>
                     </td>
-                    <td className="p-2">{manager.ville}</td>
+                    <td className="p-2">{manager.ville ?? ABSENT}</td>
                     <td className="p-2">{manager.villeSousResponsabilite ?? ABSENT}</td>
                     <td className="p-2 text-right tabular-nums">
                       {manager.nombreCommerciaux}

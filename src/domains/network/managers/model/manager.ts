@@ -38,13 +38,25 @@ export type Manager = {
   nom: string;
   prenom: string;
   status: ManagerStatus;
-  /** The subscription identifier (`num_abonnement` on the wire). */
-  numAbonnement: string;
+  /**
+   * The subscription identifier (`num_abonnement` on the wire).
+   *
+   * NULLABLE, though nothing about the name suggests it — confirmed against
+   * `agents.num_abonnement` (`nullable()` in the schema) and against a live record
+   * with no subscription set. The edit form must seed a null as `""`, not pass it
+   * through: an uncontrolled input's DOM value cannot legally be `null`.
+   */
+  numAbonnement: string | null;
   /** The account number (`num_de_compte` on the wire, `num_compte` in the DB). */
   numDeCompte: string;
   /** Backend-preformatted decimal string, 2dp. NEVER parsed. See above. */
   avanceTotal: string;
-  ville: string;
+  /**
+   * NULLABLE, same trap as `numAbonnement` — `agents.ville` is `nullable()` in the
+   * schema. Every seeded record so far has had one, which is exactly how this went
+   * unmodelled the first time.
+   */
+  ville: string | null;
   /** Nullable on the wire — a manager may have no assigned area of responsibility. */
   villeSousResponsabilite: string | null;
   /** `withCount('commercials')`. Always an integer, never null. */

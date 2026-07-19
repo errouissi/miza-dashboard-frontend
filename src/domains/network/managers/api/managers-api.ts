@@ -27,11 +27,13 @@ type ManagerRow = {
   nom: string;
   prenom: string;
   status: ManagerStatus;
-  num_abonnement: string;
+  /** Nullable (`agents.num_abonnement` is `nullable()`) — confirmed against live data. */
+  num_abonnement: string | null;
   num_de_compte: string;
   /** `bcadd` output: a preformatted 2dp decimal STRING, never a number. */
   avance_total: string;
-  ville: string;
+  /** Nullable (`agents.ville` is `nullable()`), same trap as `num_abonnement`. */
+  ville: string | null;
   ville_sous_responsabilite: string | null;
   nombre_commerciaux: number;
   /** `Y-M-D` or null. */

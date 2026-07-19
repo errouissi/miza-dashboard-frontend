@@ -29,8 +29,26 @@ pagination, search, five filters, edit, block/activate, permission gating, and l
 empty / error states. **No sorting** (BC-L), **no detail page** (ADR-0014), **no create
 form** (M3.6) — each an absence the API or the roadmap requires, not an omission.
 
-⚠️ **The Block action is correct but currently uninvokable** — the backend never creates
-the `block-agent` permission it gates on (**BC-T**, below). Activate is unaffected.
+✅ **BC-T is resolved.** The backend now creates `block-agent`; block and activate were
+both exercised live against the running backend and the dev fixture (round-tripped
+active → blocked → active, including the 400 no-op guard on a repeat block) and both
+work end to end. See "Backend dependencies" below.
+
+🔧 **A real frontend defect was found and fixed during this pass, before commit** — not a
+backend issue, and not something the frontend correctly declined to route around. Two
+fields, `numAbonnement` and `ville`, were modelled and handled as non-nullable strings
+throughout the domain (type, mapper, list rendering, and — critically — the edit form's
+`form.reset()`), but both are `nullable()` columns and a live fixture proved it: the one
+manager seeded in the dev database has `num_abonnement: null`. Opening its Edit drawer
+fed that `null` straight into an uncontrolled input via `form.reset()`, which either
+persists the four-character string `"null"` or hard-fails the save, depending on how the
+DOM stringifies it — both confirmed by testing the two candidate payloads directly
+against the live update endpoint (see BC-U below for what that testing also turned up on
+the backend side). **Fixed**: both fields are now typed `string | null`, the list cells
+fall back to `ABSENT`, and the edit form seeds `?? ""` exactly as `villeSousResponsabilite`
+already did. All gates re-run clean after the fix; no test needed changing, because the
+existing fixtures never seeded a null in either field — which is exactly how this went
+unmodelled the first time.
 
 Four backend traps were handled explicitly rather than papered over:
 
@@ -95,42 +113,44 @@ Managers moves two of these to **evidence #1 of the required three**, no further
 
 | ID | Blocker | Blocks |
 | --- | --- | --- |
-| **BC-T** | 🔴 **`block-agent` permission is never created**, so the shipped Block action is uninvokable by anyone — see below | The Managers **Block** action, in production. Backend-side one-line fix |
 | **FE-1** | Test-suite flake, **severity raised by M3.2** — see below | Recommended **before M3.3** |
 | **FE-2** | `withPermissionGuards` is shallow — a nested route's own `handle.permission` is silently ignored | The **deferred detail-page milestone** (ADR-0014). Did not block M3.2 — no nested route shipped in it |
 | **BC-G** | Secteurs/Products/Admins index endpoints unpaginated | `DataTable`/`FilterBar` extraction |
+| **BC-U** | 🟡 The agent **update** endpoint cannot clear or accept null for `num_d_abonnement` or `ville`, though both columns allow null — see below | Nobody can un-set either field via the UI, ever, until the backend validator changes |
 
-### BC-T — the Block action ships dead, and the frontend is not at fault
+### BC-T — resolved
 
-Found by live verification during the M3.2 commit-readiness pass, against the running
-backend at `http://127.0.0.1:8000`.
+Was: `PUT /admin/agents/{id}/block` gated on `permission:block-agent`, which
+`RolePermissionSeeder` never created, making Block uninvokable by anyone. **The backend
+now creates it.** Verified live this pass: block and activate were both round-tripped
+against the one seeded manager (active → blocked → active), including the 400 no-op
+guard on a repeat block. No frontend change was needed or made — it was correct
+throughout and started working the moment the permission existed.
 
-`PUT /admin/agents/{id}/block` is gated on `permission:block-agent`
-(`routes/api.php:220`), but **`block-agent` is never created**.
-`RolePermissionSeeder.php:43-48` creates `create-agent`, `update-agent`,
-`delete-agent`, `view-agents`, `activate-agent` and `manage-agent-status` — and stops.
+### BC-U — the update endpoint cannot null `num_d_abonnement` or `ville`
 
-Evidence, all from one session against one super-admin token:
+Found while investigating the frontend nullability defect above: after confirming the
+literal string `"null"` could be written through the update endpoint, restoring the dev
+fixture's true `NULL` **could not be done through the API at all**.
 
-| Probe | Result |
-| --- | --- |
-| `POST /auth/login` as `superadmin@test.com` | 40+ permissions returned; **`block-agent` absent** |
-| `PUT /admin/agents/1/block` | **403** `Spatie\Permission\Exceptions\UnauthorizedException` |
-| `PUT /admin/agents/1/activate` | **Passed the gate**, reached the controller (500 — agent 1 does not exist) |
+`AgentController::update`'s validator has no `nullable` for either field:
+```
+'ville'            => 'sometimes|string|max:255',   // line 757 (760 in some copies)
+'num_d_abonnement' => 'sometimes|string|max:255',   // line 763
+```
+Both `""` and JSON `null` for `num_d_abonnement` were tried directly against the live
+endpoint; both returned **500** — `"The num d abonnement field must be a string."` Most
+likely Laravel's `ConvertEmptyStringsToNull` middleware turns `""` into `null` before
+validation runs, and `sometimes|string` then rejects the null it never expected. The
+fixture had to be repaired directly via `php82 artisan tinker` (`Agent::find(635)->update(['num_abonnement' => null])`), bypassing the HTTP API entirely, and is confirmed
+restored.
 
-The paired block/activate calls are what isolate it: identical token, identical request
-shape, one refused at the permission layer and one not. The permission is unholdable, so
-**no user — not even a super admin — can block an agent**, and `has('block-agent')` is
-false for everyone, meaning the Block button never renders in production.
-
-**The frontend is correct and must not be changed.** It mirrors the server's actual route
-gating exactly, which is the rule. Re-gating Block onto `manage-agent-status` or
-`delete-agent` would offer a control the server refuses — the precise failure mode the
-working agreement forbids. The fix is one line in the backend seeder; when it lands, the
-button starts working with **no frontend change at all**.
-
-The M3.2 Block implementation is therefore **complete and committed deliberately in a
-dead state**. This is recorded so nobody later "fixes" the frontend for it.
+**Consequence for the frontend, now that the type fix above is in:** a manager whose
+`numAbonnement` or `ville` is null can be **displayed** correctly (`ABSENT`, blank input)
+but **cannot have that field explicitly cleared and saved as null again** — the zod
+schema requires a non-empty value to submit at all, which happens to route around this
+gap rather than expose it, but only by coincidence. Worth a line in a future backend
+consultation; not a frontend defect and not fixed here.
 
 ### FE-1 — severity raised, now the top follow-up
 
@@ -213,7 +233,8 @@ Carried from earlier milestones:
 | ID | Class | Item | Status |
 | --- | --- | --- | --- |
 | BC-S | **limitation** | `agents.ville` is a free-text **column**, not a foreign key to `villes`. The city filter is a select over the reference set, but a manager whose ville was typed differently from that list **cannot be selected**. The honest fix is a backend distinct-values endpoint | 🟡 open — documented in `manager-ville-filter.tsx` rather than worked around. **Do not invent the endpoint** |
-| BC-T | **defect** | `PUT /agents/{id}/block` is gated on `permission:block-agent` (`routes/api.php:220`), but `RolePermissionSeeder.php:43-48` **never creates that permission**. Verified live: super-admin 403s on block and passes on activate. One-line seeder fix | 🔴 open — **the shipped Block action is uninvokable by anyone**. Frontend is correct and must not compensate. See the dedicated section above |
+| BC-T | **defect** | `PUT /agents/{id}/block` was gated on `permission:block-agent`, which the seeder never created | ✅ **resolved** — verified live, block/activate round-tripped successfully |
+| BC-U | **limitation** | `AgentController::update`'s validator has no `nullable` on `num_d_abonnement` or `ville`, though both columns allow null. Neither field can be cleared via the API | 🟡 open — see the dedicated section above. Frontend cannot work around a backend validator gap |
 
 ## Domain inventory
 
