@@ -176,3 +176,38 @@ decisions made *during implementation*.
 - **Consequences:** Each resource keeps the same internal shape
   (`api/ model/ queries/ components/ pages/ routes.tsx index.ts`) and exports only its
   path and route contributions.
+
+## ADR-0014 — M3 ships list management first; detail pages are a later milestone
+
+- **Date:** 2026-07-19
+- **Status:** Accepted
+- **Context:** Two frozen documents specify a detail page for every Network resource:
+  `phase8-architecture.html:650` — _"Admins, Managers, Commercials, Clients — full
+  ListPage + DetailPage + forms"_ — and the roadmap's M3 deliverables (`:476`). M3.1
+  nevertheless shipped Admins **list-only**, and nothing recorded that. The deviation was
+  found during M3.2's contract verification, when FE-2 ("fix before shipping any detail
+  page") had to be evaluated and no document said whether a detail page was in scope. An
+  undocumented gap between the frozen specification and the code is the class of drift
+  Gate G1 exists to catch, so it is recorded here rather than left implicit.
+- **Decision:** M3 delivers **list management first** across its resources — list,
+  pagination, search, filters, forms, status actions, permission gating. Admin and
+  Manager **detail pages are deferred to a dedicated later M3 milestone**, not cancelled.
+  The frozen documents remain authoritative about _what_ is built; this ADR records only
+  _when_.
+- **Rationale:** Sequencing, not scope reduction. The list resources share one shape, and
+  building them consecutively is what makes ADR-0006's Rule-of-Three evidence accumulate
+  on genuinely comparable cases. Detail pages are a different pattern, with a different
+  blocker (FE-2) and a different backend surface
+  (`GET /admin/agents/{identifier}`); batching them lets the nested-guard fix be made
+  once, against a real nested route, rather than speculatively.
+- **Consequences:**
+  - Admin and Manager detail pages are **owed work**, tracked as a named later M3
+    milestone. This ADR is not permission to drop them.
+  - **FE-2 blocks those future nested detail routes, not the current list domains.**
+    `withPermissionGuards` is shallow, so a child route's own `handle.permission` is
+    silently ignored in favour of its parent's.
+  - **FE-2 MUST be fixed before the first nested detail page is introduced.** A detail
+    route added before that fix inherits its parent's guard — a silent authorization
+    hole, not a cosmetic defect.
+  - M3.2 (Managers) therefore ships with no detail page, no nested route and no
+    detail-page link.

@@ -1,7 +1,8 @@
 import type { LucideIcon } from "lucide-react";
-import { Map, MapPin, CreditCard, ShieldCheck } from "lucide-react";
+import { Map, MapPin, CreditCard, ShieldCheck, UserCog } from "lucide-react";
 import { PERMISSIONS, type PermissionResolver } from "@/infrastructure/permissions";
 import { ADMINS_PATH } from "@/domains/network/admins";
+import { MANAGERS_PATH } from "@/domains/network/managers";
 import { PRODUCTS_PATH } from "@/domains/reference/products";
 import { SECTEURS_PATH } from "@/domains/reference/secteurs";
 import { VILLES_PATH } from "@/domains/reference/villes";
@@ -78,6 +79,15 @@ export const NAV_TREE: NavGroup[] = [
         // permissions gate actions inside the page, not visibility of the page.
         permission: PERMISSIONS.ACCESS_DASHBOARD,
         icon: ShieldCheck,
+      },
+      {
+        label: "Managers",
+        to: MANAGERS_PATH,
+        // `view-agents`, mirroring the route and the backend — NOT
+        // access-dashboard. The granular agent permissions gate actions inside
+        // the page, not visibility of the page.
+        permission: PERMISSIONS.VIEW_AGENTS,
+        icon: UserCog,
       },
     ],
   },

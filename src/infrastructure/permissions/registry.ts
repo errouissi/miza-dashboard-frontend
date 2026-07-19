@@ -41,6 +41,38 @@ export const PERMISSIONS = Object.freeze({
   UPDATE_ADMIN: "update-admin",
   BLOCK_ADMIN: "block-admin",
   DELETE_ADMIN: "delete-admin",
+
+  /**
+   * Agent management — managers and commercials share one permission set, because
+   * the backend gives them one controller and one set of routes
+   * (`routes/api.php:193-232`).
+   *
+   * `VIEW_AGENTS` is the first LIST permission in the product that is not
+   * `access-dashboard`: reference data and Admins are both behind that coarse
+   * string, agents are not. It gates the managers list, the commercials list and
+   * the single-agent read.
+   *
+   * BLOCK and ACTIVATE are SEPARATE server-side checks on separate routes, so they
+   * are separate entries here. An operator can hold one and not the other, and
+   * collapsing them into one "can change status" flag would show a control the API
+   * would refuse.
+   *
+   * DELIBERATELY ABSENT until they have a caller (this file's own rule — entries
+   * are added per resource, never ahead of the domain that uses them):
+   *   `create-agent`         — agent onboarding is the M3.6 wizard, not M3.2.
+   *   `manage-agent-status`  — guards `toggle-status`, which this domain does not
+   *                            use: it flips active↔blocked only and so cannot
+   *                            express the third status. Block and activate are
+   *                            precise; the toggle is not.
+   *   `delete-agent`         — guards `destroy`, which sets `status = 'blocked'`
+   *                            and is therefore the same outcome as `block`
+   *                            (BC-R). Registering it would imply the UI offers a
+   *                            deletion it cannot honestly perform.
+   */
+  VIEW_AGENTS: "view-agents",
+  UPDATE_AGENT: "update-agent",
+  BLOCK_AGENT: "block-agent",
+  ACTIVATE_AGENT: "activate-agent",
 } as const satisfies Record<string, string>);
 
 export type PermissionName = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
