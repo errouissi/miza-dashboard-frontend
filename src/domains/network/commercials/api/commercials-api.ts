@@ -1,9 +1,12 @@
 import { httpClient } from "@/infrastructure/http";
 import type { Paginated } from "@/infrastructure/http";
-import type {
-  Commercial,
-  CommercialListParams,
-  CommercialStatus,
+import {
+  COMMERCIAL_LIST_DEFAULTS,
+  MAX_PER_PAGE,
+  type Commercial,
+  type CommercialListParams,
+  type CommercialOption,
+  type CommercialStatus,
 } from "../model/commercial";
 
 /**
@@ -105,6 +108,26 @@ export async function fetchCommercials(
     total: page.total,
     lastPage: page.last_page,
   };
+}
+
+/**
+ * The active-commercial set, for M3.5's Clients bulk-assign picker (FTA §4).
+ * See `CommercialOption`'s own docblock for why this is filtered
+ * `status=active` — unlike `fetchManagerOptions`, which fetches every
+ * manager regardless of status because Commercials' manager filter has no
+ * such downstream constraint.
+ *
+ * Bounded at the backend's documented maximum (`per_page=100`, BC-H) — the
+ * same real-but-currently-invisible limit every picker source in this
+ * product carries.
+ */
+export async function fetchCommercialOptions(): Promise<CommercialOption[]> {
+  const page = await fetchCommercials({
+    ...COMMERCIAL_LIST_DEFAULTS,
+    status: "active",
+    perPage: MAX_PER_PAGE,
+  });
+  return page.items.map(({ id, nom, prenom }) => ({ id, nom, prenom }));
 }
 
 /**

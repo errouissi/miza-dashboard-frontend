@@ -25,7 +25,17 @@ const ALL_CLIENT_PERMISSIONS = [
   PERMISSIONS.VIEW_CLIENTS,
   PERMISSIONS.UPDATE_CLIENT,
   PERMISSIONS.MANAGE_CLIENT_STATUS,
+  PERMISSIONS.ASSIGN_CLIENT,
 ];
+
+/**
+ * `view-agents` is a DIFFERENT permission from `assign-client` (see the
+ * bulk-assign sheet's own docblock) — only tests that actually open the sheet
+ * grant it, so `useCommercialOptionsQuery` stays disabled (and silent, no
+ * unhandled-request warning) everywhere else, exactly like the ville
+ * picker's own `access-dashboard` gate.
+ */
+const WITH_VIEW_AGENTS = [...ALL_CLIENT_PERMISSIONS, PERMISSIONS.VIEW_AGENTS];
 
 function signInWith(permissions: string[]) {
   sessionManager.__resetForTests();
@@ -116,6 +126,42 @@ function villesHandler() {
       meta: { current_page: 1, per_page: 100, total: 2, last_page: 1 },
     }),
   );
+}
+
+/**
+ * The Commercials endpoint, backing the bulk-assign sheet's commercial
+ * picker (`useCommercialOptionsQuery`) — the same flat-paginator envelope as
+ * `/admin/clients`. Records the request so a test can assert the picker
+ * requests `status=active` at `per_page=100`.
+ */
+function commercialsHandler(onRequest?: (url: URL) => void) {
+  return http.get(`${API}/admin/agents/commercials`, ({ request }) => {
+    onRequest?.(new URL(request.url));
+    return HttpResponse.json({
+      success: true,
+      data: {
+        data: [
+          {
+            id: 636,
+            nom: "Alaoui",
+            prenom: "Salma",
+            status: "active",
+            num_abonnement: null,
+            num_de_compte: "DEV-CPT-COMMERCIAL-001",
+            avance_total: "0.00",
+            ville_actuelle: null,
+            manager: null,
+            date_debut: null,
+            photo_path: null,
+          },
+        ],
+        current_page: 1,
+        per_page: 100,
+        total: 1,
+        last_page: 1,
+      },
+    });
+  });
 }
 
 function renderPage(initialPath: string = PATH) {
@@ -584,8 +630,13 @@ describe("permission gating — each action on its own permission", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("never offers create, delete, assign or bulk-assign — all explicitly out of scope", async () => {
-    server.use(clientsHandler(rows), villesHandler());
+  it("never offers create, delete, or single-client assign/reassign/unassign — bulk-assign (M3.5) is the only assignment action", async () => {
+    // Superseded by M3.5: bulk-assign is now an explicit, approved deliverable,
+    // so a page-level "Assign to commercial" button legitimately exists. What
+    // must still never appear is a PER-ROW assign/reassign/unassign action —
+    // named after a phone number, exactly like the real row actions
+    // (`edit 0612345678`, `block 0612345678`) — which remains out of scope.
+    server.use(clientsHandler(rows), villesHandler(), commercialsHandler());
     renderPage();
 
     await screen.findByText("06 12 34 56 78");
@@ -596,7 +647,12 @@ describe("permission gating — each action on its own permission", () => {
       screen.queryByRole("button", { name: /delete 0612345678/i }),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: /assign|reassign|unassign/i }),
+      screen.queryByRole("button", {
+        name: /assign 0612345678|reassign 0612345678|unassign 0612345678/i,
+      }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /reset password|statistics/i }),
     ).not.toBeInTheDocument();
   });
 
@@ -830,5 +886,483 @@ describe("status action", () => {
     expect(
       await within(dialog).findByRole("alert", {}, { timeout: 3000 }),
     ).toHaveTextContent(/could not be changed/i);
+  });
+});
+
+describe("bulk-assign (M3.5) — permission gating and fail-closed behavior", () => {
+  it("shows the selection checkboxes and select-all to an operator with assign-client", async () => {
+    server.use(
+      clientsHandler([row(1, "0612345678")]),
+      villesHandler(),
+      commercialsHandler(),
+    );
+    renderPage();
+
+    await screen.findByText("06 12 34 56 78");
+    expect(screen.getByLabelText("Select all clients on this page")).toBeInTheDocument();
+    expect(screen.getByLabelText("Select 0612345678")).toBeInTheDocument();
+  });
+
+  it("FAILS CLOSED — hides checkboxes, select-all and the action bar without assign-client", async () => {
+    signInWith([
+      PERMISSIONS.ACCESS_DASHBOARD,
+      PERMISSIONS.VIEW_CLIENTS,
+      PERMISSIONS.UPDATE_CLIENT,
+      PERMISSIONS.MANAGE_CLIENT_STATUS,
+    ]);
+    server.use(clientsHandler([row(1, "0612345678")]), villesHandler());
+    renderPage();
+
+    await screen.findByText("06 12 34 56 78");
+    expect(
+      screen.queryByLabelText("Select all clients on this page"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Select 0612345678")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /assign to commercial/i }),
+    ).not.toBeInTheDocument();
+  });
+});
+
+describe("bulk-assign (M3.5) — row selection and current-page select-all", () => {
+  it("selects and deselects an individual row, showing the running count", async () => {
+    server.use(
+      clientsHandler([row(1, "0611111111"), row(2, "0622222222")]),
+      villesHandler(),
+      commercialsHandler(),
+    );
+    renderPage();
+
+    await screen.findByText("06 11 11 11 11");
+    fireEvent.click(screen.getByLabelText("Select 0611111111"));
+    expect(
+      await screen.findByText(/1 client selected on this page/i),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText("Select 0611111111"));
+    expect(screen.queryByText(/selected on this page/i)).not.toBeInTheDocument();
+  });
+
+  it("select-all-on-page selects every row on the page, and only the page", async () => {
+    server.use(
+      clientsHandler([row(1, "0611111111"), row(2, "0622222222")]),
+      villesHandler(),
+      commercialsHandler(),
+    );
+    renderPage();
+
+    await screen.findByText("06 11 11 11 11");
+    fireEvent.click(screen.getByLabelText("Select all clients on this page"));
+
+    expect(
+      await screen.findByText(/2 clients selected on this page/i),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Select 0611111111")).toBeChecked();
+    expect(screen.getByLabelText("Select 0622222222")).toBeChecked();
+  });
+
+  it("unchecking select-all clears every row's selection", async () => {
+    server.use(
+      clientsHandler([row(1, "0611111111"), row(2, "0622222222")]),
+      villesHandler(),
+      commercialsHandler(),
+    );
+    renderPage();
+
+    await screen.findByText("06 11 11 11 11");
+    const selectAll = screen.getByLabelText("Select all clients on this page");
+    fireEvent.click(selectAll);
+    fireEvent.click(selectAll);
+
+    expect(screen.queryByText(/selected on this page/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Select 0611111111")).not.toBeChecked();
+  });
+});
+
+describe("bulk-assign (M3.5) — selection is current-page-only, never persisted", () => {
+  it("clears selection when the page changes", async () => {
+    server.use(
+      clientsHandler([row(1, "0611111111")], undefined, {
+        current_page: 1,
+        total: 30,
+        last_page: 2,
+      }),
+      villesHandler(),
+      commercialsHandler(),
+    );
+    renderPage();
+
+    await screen.findByText("06 11 11 11 11");
+    fireEvent.click(screen.getByLabelText("Select 0611111111"));
+    expect(await screen.findByText(/1 client selected/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /next/i }));
+    await waitFor(() =>
+      expect(screen.queryByText(/selected on this page/i)).not.toBeInTheDocument(),
+    );
+  });
+
+  it("does not restore selection when navigating back to a previously selected page", async () => {
+    let url: URL | undefined;
+    server.use(
+      http.get(`${API}/admin/clients`, ({ request }) => {
+        url = new URL(request.url);
+        const currentPage = Number(url.searchParams.get("page")) || 1;
+        return HttpResponse.json(
+          pageEnvelope([row(1, "0611111111")], {
+            current_page: currentPage,
+            total: 30,
+            last_page: 2,
+          }),
+        );
+      }),
+      villesHandler(),
+      commercialsHandler(),
+    );
+    renderPage();
+
+    await screen.findByText("06 11 11 11 11");
+    fireEvent.click(screen.getByLabelText("Select 0611111111"));
+    fireEvent.click(screen.getByRole("button", { name: /next/i }));
+    await waitFor(() => expect(url?.searchParams.get("page")).toBe("2"));
+
+    // Page 1's response is already SLOW-cached from the initial load, so
+    // clicking "Previous" may serve it without a new network round-trip —
+    // asserted on the resulting DOM (the Previous button disables again on
+    // page 1), not on `url`, which would otherwise wait on a request that
+    // never has to happen.
+    fireEvent.click(screen.getByRole("button", { name: /previous/i }));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /previous/i })).toBeDisabled(),
+    );
+
+    expect(screen.getByLabelText("Select 0611111111")).not.toBeChecked();
+  });
+
+  it("clears selection when the search term changes", async () => {
+    server.use(
+      clientsHandler([row(1, "0611111111")]),
+      villesHandler(),
+      commercialsHandler(),
+    );
+    renderPage();
+
+    await screen.findByText("06 11 11 11 11");
+    fireEvent.click(screen.getByLabelText("Select 0611111111"));
+    expect(await screen.findByText(/1 client selected/i)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(/search clients/i), {
+      target: { value: "0698" },
+    });
+    await waitFor(() =>
+      expect(screen.queryByText(/selected on this page/i)).not.toBeInTheDocument(),
+    );
+  });
+
+  it("clears selection when the status filter changes", async () => {
+    server.use(
+      clientsHandler([row(1, "0611111111")]),
+      villesHandler(),
+      commercialsHandler(),
+    );
+    renderPage();
+
+    await screen.findByText("06 11 11 11 11");
+    fireEvent.click(screen.getByLabelText("Select 0611111111"));
+    expect(await screen.findByText(/1 client selected/i)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(/filter by status/i), {
+      target: { value: "blocked" },
+    });
+    await waitFor(() =>
+      expect(screen.queryByText(/selected on this page/i)).not.toBeInTheDocument(),
+    );
+  });
+
+  it("clears selection when the assigned filter changes", async () => {
+    server.use(
+      clientsHandler([row(1, "0611111111")]),
+      villesHandler(),
+      commercialsHandler(),
+    );
+    renderPage();
+
+    await screen.findByText("06 11 11 11 11");
+    fireEvent.click(screen.getByLabelText("Select 0611111111"));
+    expect(await screen.findByText(/1 client selected/i)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(/filter by assignment/i), {
+      target: { value: "false" },
+    });
+    await waitFor(() =>
+      expect(screen.queryByText(/selected on this page/i)).not.toBeInTheDocument(),
+    );
+  });
+
+  it("clears selection when the city filter changes", async () => {
+    server.use(
+      clientsHandler([row(1, "0611111111")]),
+      villesHandler(),
+      commercialsHandler(),
+    );
+    renderPage();
+
+    await screen.findByText("06 11 11 11 11");
+    fireEvent.click(screen.getByLabelText("Select 0611111111"));
+    expect(await screen.findByText(/1 client selected/i)).toBeInTheDocument();
+
+    const citySelect = await screen.findByLabelText(/filter by city/i);
+    await within(citySelect).findByRole("option", { name: "Rabat" });
+    fireEvent.change(citySelect, { target: { value: "Rabat" } });
+
+    await waitFor(() =>
+      expect(screen.queryByText(/selected on this page/i)).not.toBeInTheDocument(),
+    );
+  });
+
+  it("never sends more than 100 ids, even selecting all on a full 100-row page", async () => {
+    signInWith(WITH_VIEW_AGENTS);
+    const hundredRows = Array.from({ length: 100 }, (_, i) =>
+      row(i + 1, `06${String(i).padStart(8, "0")}`),
+    );
+    let body: Record<string, unknown> | undefined;
+    server.use(
+      clientsHandler(hundredRows, undefined, { per_page: 100, total: 100, last_page: 1 }),
+      villesHandler(),
+      commercialsHandler(),
+      http.patch(`${API}/admin/clients/assign-bulk`, async ({ request }) => {
+        body = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({
+          success: true,
+          message: "ok",
+          data: { agent_id: 636, assigned_count: 100, client_ids: [] },
+        });
+      }),
+    );
+    renderPage(`${PATH}?per_page=100`);
+
+    await screen.findByLabelText("Select all clients on this page");
+    fireEvent.click(screen.getByLabelText("Select all clients on this page"));
+    expect(await screen.findByText(/100 clients selected/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /assign to commercial/i }));
+    const dialog = await screen.findByRole("dialog");
+    const commercialSelect = await within(dialog).findByLabelText(/commercial/i);
+    await within(commercialSelect).findByRole("option", { name: "Salma Alaoui" });
+    fireEvent.change(commercialSelect, { target: { value: "636" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: /^assign$/i }));
+
+    await waitFor(() => expect(body).toBeDefined());
+    const clientIds = body?.client_ids as number[];
+    expect(clientIds).toHaveLength(100);
+  });
+});
+
+describe("bulk-assign (M3.5) — assignment flow", () => {
+  it("sends agent_id and client_ids as the payload, nothing else", async () => {
+    signInWith(WITH_VIEW_AGENTS);
+    let body: Record<string, unknown> | undefined;
+    server.use(
+      clientsHandler([row(1, "0611111111"), row(2, "0622222222")]),
+      villesHandler(),
+      commercialsHandler(),
+      http.patch(`${API}/admin/clients/assign-bulk`, async ({ request }) => {
+        body = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({
+          success: true,
+          message: "ok",
+          data: { agent_id: 636, assigned_count: 2, client_ids: [1, 2] },
+        });
+      }),
+    );
+    renderPage();
+
+    await screen.findByText("06 11 11 11 11");
+    fireEvent.click(screen.getByLabelText("Select 0611111111"));
+    fireEvent.click(screen.getByLabelText("Select 0622222222"));
+    fireEvent.click(screen.getByRole("button", { name: /assign to commercial/i }));
+
+    const dialog = await screen.findByRole("dialog");
+    const commercialSelect = await within(dialog).findByLabelText(/commercial/i);
+    await within(commercialSelect).findByRole("option", { name: "Salma Alaoui" });
+    fireEvent.change(commercialSelect, { target: { value: "636" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: /^assign$/i }));
+
+    await waitFor(() => expect(body).toEqual({ agent_id: 636, client_ids: [1, 2] }));
+    expect(Object.keys(body!).sort()).toEqual(["agent_id", "client_ids"]);
+  });
+
+  it("invalidates the list and clears selection after a successful assignment", async () => {
+    signInWith(WITH_VIEW_AGENTS);
+    let getCount = 0;
+    server.use(
+      http.get(`${API}/admin/clients`, () => {
+        getCount += 1;
+        return HttpResponse.json(pageEnvelope([row(1, "0611111111")]));
+      }),
+      villesHandler(),
+      commercialsHandler(),
+      http.patch(`${API}/admin/clients/assign-bulk`, () =>
+        HttpResponse.json({
+          success: true,
+          message: "ok",
+          data: { agent_id: 636, assigned_count: 1, client_ids: [1] },
+        }),
+      ),
+    );
+    renderPage();
+
+    await screen.findByText("06 11 11 11 11");
+    fireEvent.click(screen.getByLabelText("Select 0611111111"));
+    fireEvent.click(screen.getByRole("button", { name: /assign to commercial/i }));
+
+    const dialog = await screen.findByRole("dialog");
+    const commercialSelect = await within(dialog).findByLabelText(/commercial/i);
+    await within(commercialSelect).findByRole("option", { name: "Salma Alaoui" });
+    fireEvent.change(commercialSelect, { target: { value: "636" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: /^assign$/i }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(screen.queryByText(/selected on this page/i)).not.toBeInTheDocument();
+    await waitFor(() => expect(getCount).toBeGreaterThan(1));
+  });
+
+  it("maps a field-level 422 (validation envelope) onto the commercial field", async () => {
+    signInWith(WITH_VIEW_AGENTS);
+    server.use(
+      clientsHandler([row(1, "0611111111")]),
+      villesHandler(),
+      commercialsHandler(),
+      http.patch(`${API}/admin/clients/assign-bulk`, () =>
+        HttpResponse.json(
+          {
+            success: false,
+            message: "Validation failed",
+            errors: { agent_id: ["The selected agent id is invalid."] },
+          },
+          { status: 422 },
+        ),
+      ),
+    );
+    renderPage();
+
+    await screen.findByText("06 11 11 11 11");
+    fireEvent.click(screen.getByLabelText("Select 0611111111"));
+    fireEvent.click(screen.getByRole("button", { name: /assign to commercial/i }));
+
+    const dialog = await screen.findByRole("dialog");
+    const commercialSelect = await within(dialog).findByLabelText(/commercial/i);
+    await within(commercialSelect).findByRole("option", { name: "Salma Alaoui" });
+    fireEvent.change(commercialSelect, { target: { value: "636" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: /^assign$/i }));
+
+    expect(
+      await within(dialog).findByText(/selected agent id is invalid/i),
+    ).toBeInTheDocument();
+  });
+
+  it("shows a generic error for a code-less business-rule 422, not the backend's message", async () => {
+    signInWith(WITH_VIEW_AGENTS);
+    server.use(
+      clientsHandler([row(1, "0611111111")]),
+      villesHandler(),
+      commercialsHandler(),
+      http.patch(`${API}/admin/clients/assign-bulk`, () =>
+        HttpResponse.json(
+          { success: false, message: "agent_id must reference an active commercial" },
+          { status: 422 },
+        ),
+      ),
+    );
+    renderPage();
+
+    await screen.findByText("06 11 11 11 11");
+    fireEvent.click(screen.getByLabelText("Select 0611111111"));
+    fireEvent.click(screen.getByRole("button", { name: /assign to commercial/i }));
+
+    const dialog = await screen.findByRole("dialog");
+    const commercialSelect = await within(dialog).findByLabelText(/commercial/i);
+    await within(commercialSelect).findByRole("option", { name: "Salma Alaoui" });
+    fireEvent.change(commercialSelect, { target: { value: "636" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: /^assign$/i }));
+
+    const alert = await within(dialog).findByRole("alert", {}, { timeout: 3000 });
+    expect(alert).toHaveTextContent(/could not be completed/i);
+    expect(alert).not.toHaveTextContent(/must reference an active commercial/i);
+  });
+});
+
+describe("bulk-assign (M3.5) — city and sector are conceptually unchanged", () => {
+  it("states in its copy that only the commercial changes, not city or sector", async () => {
+    signInWith(WITH_VIEW_AGENTS);
+    server.use(
+      clientsHandler([row(1, "0611111111")]),
+      villesHandler(),
+      commercialsHandler(),
+    );
+    renderPage();
+
+    await screen.findByText("06 11 11 11 11");
+    fireEvent.click(screen.getByLabelText("Select 0611111111"));
+    fireEvent.click(screen.getByRole("button", { name: /assign to commercial/i }));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(
+      within(dialog).getByText(/city and sector are left exactly as they are/i),
+    ).toBeInTheDocument();
+  });
+
+  it("never sends ville, secteur or any field beyond agent_id/client_ids", async () => {
+    signInWith(WITH_VIEW_AGENTS);
+    let body: Record<string, unknown> | undefined;
+    server.use(
+      clientsHandler([row(1, "0611111111")]),
+      villesHandler(),
+      commercialsHandler(),
+      http.patch(`${API}/admin/clients/assign-bulk`, async ({ request }) => {
+        body = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({
+          success: true,
+          message: "ok",
+          data: { agent_id: 636, assigned_count: 1, client_ids: [1] },
+        });
+      }),
+    );
+    renderPage();
+
+    await screen.findByText("06 11 11 11 11");
+    fireEvent.click(screen.getByLabelText("Select 0611111111"));
+    fireEvent.click(screen.getByRole("button", { name: /assign to commercial/i }));
+
+    const dialog = await screen.findByRole("dialog");
+    const commercialSelect = await within(dialog).findByLabelText(/commercial/i);
+    await within(commercialSelect).findByRole("option", { name: "Salma Alaoui" });
+    fireEvent.change(commercialSelect, { target: { value: "636" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: /^assign$/i }));
+
+    await waitFor(() => expect(body).toBeDefined());
+    expect(Object.keys(body!).sort()).toEqual(["agent_id", "client_ids"]);
+  });
+});
+
+describe("bulk-assign (M3.5) — commercial picker requests active-only, bounded", () => {
+  it("requests status=active at per_page=100 when the sheet opens", async () => {
+    signInWith(WITH_VIEW_AGENTS);
+    let url: URL | undefined;
+    server.use(
+      clientsHandler([row(1, "0611111111")]),
+      villesHandler(),
+      commercialsHandler((u) => (url = u)),
+    );
+    renderPage();
+
+    await screen.findByText("06 11 11 11 11");
+    fireEvent.click(screen.getByLabelText("Select 0611111111"));
+    fireEvent.click(screen.getByRole("button", { name: /assign to commercial/i }));
+
+    await screen.findByRole("dialog");
+    await waitFor(() => expect(url).toBeDefined());
+    expect(url?.searchParams.get("status")).toBe("active");
+    expect(url?.searchParams.get("per_page")).toBe("100");
   });
 });

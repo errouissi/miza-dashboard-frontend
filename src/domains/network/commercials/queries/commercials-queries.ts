@@ -5,6 +5,7 @@ import {
   blockCommercial,
   updateCommercial,
   fetchCommercials,
+  fetchCommercialOptions,
   type UpdateCommercialInput,
 } from "../api/commercials-api";
 import type { CommercialListParams } from "../model/commercial";
@@ -25,16 +26,37 @@ export function useCommercialsQuery(params: CommercialListParams) {
 }
 
 /**
- * Every mutation reshapes the list, so all of them invalidate the LIST space.
- * `lists()`, not `all` — this domain exports no picker of its own yet, so
- * there is no sibling key space to keep in sync (unlike `managersKeys`, which
- * gained one this milestone). No optimistic updates and no automatic retries
- * (FTA D-7, §11): a status change that appears to succeed and then silently
- * reverts is worse than a slow one.
+ * The commercial set for relation pickers (M3.5). Same SLOW tier as the list
+ * itself — a commercial's name and status are part of the identity record the
+ * tier already covers, not reference data. `enabled` lets the caller gate this
+ * on `view-agents` — a DIFFERENT permission from whatever gates the caller's
+ * own screen (mirrors `useVilleOptionsQuery`'s `enabled` parameter, not
+ * `useManagerOptionsQuery`'s unconditional fetch — Commercials' manager filter
+ * needed no gate because both endpoints share `view-agents`; Clients' own
+ * permission set does not include it).
+ */
+export function useCommercialOptionsQuery(options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: commercialsKeys.options(),
+    queryFn: fetchCommercialOptions,
+    staleTime: STALE_TIMES.SLOW,
+    enabled: options?.enabled ?? true,
+  });
+}
+
+/**
+ * Every mutation reshapes the list, so all of them invalidate the WHOLE key
+ * space — `all`, not just `lists()`, now that a sibling key space
+ * (`options()`) actually exists here too (mirrors `useInvalidateManagers`'
+ * identical reasoning). Invalidating only `lists()` would leave a newly
+ * blocked commercial showing as a valid bulk-assign target in Clients' picker
+ * until SLOW's staleTime elapsed. No optimistic updates and no automatic
+ * retries (FTA D-7, §11): a status change that appears to succeed and then
+ * silently reverts is worse than a slow one.
  */
 function useInvalidateCommercials() {
   const queryClient = useQueryClient();
-  return () => queryClient.invalidateQueries({ queryKey: commercialsKeys.lists() });
+  return () => queryClient.invalidateQueries({ queryKey: commercialsKeys.all });
 }
 
 export function useUpdateCommercialMutation() {

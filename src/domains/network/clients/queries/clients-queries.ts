@@ -1,9 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { STALE_TIMES } from "@/infrastructure/query";
 import {
+  assignClientsBulk,
   fetchClients,
   toggleClientStatus,
   updateClient,
+  type AssignClientsBulkInput,
   type UpdateClientInput,
 } from "../api/clients-api";
 import type { ClientListParams } from "../model/client";
@@ -53,6 +55,21 @@ export function useToggleClientStatusMutation() {
   const invalidate = useInvalidateClients();
   return useMutation({
     mutationFn: (id: number) => toggleClientStatus(id),
+    onSuccess: invalidate,
+  });
+}
+
+/**
+ * The M3.5 bulk-assign mutation. Invalidates the same LIST space as every
+ * other Clients mutation — this domain owns no sibling key space of its own
+ * (unlike Commercials, which now does), so `lists()` is the whole story.
+ * Selection-clearing on success is the CALLER's job (the list page owns the
+ * selection state, not this hook) — see `client-bulk-assign-sheet.tsx`.
+ */
+export function useAssignClientsBulkMutation() {
+  const invalidate = useInvalidateClients();
+  return useMutation({
+    mutationFn: (input: AssignClientsBulkInput) => assignClientsBulk(input),
     onSuccess: invalidate,
   });
 }

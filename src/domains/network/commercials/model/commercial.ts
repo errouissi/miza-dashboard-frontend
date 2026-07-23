@@ -152,3 +152,24 @@ export const COMMERCIAL_LIST_DEFAULTS: CommercialListParams = {
 
 /** `per_page` is capped server-side (`integer|min:1|max:100`). */
 export const MAX_PER_PAGE = 100;
+
+/**
+ * The commercial set, for relation pickers in sibling Network domains (FTA §4
+ * — ADR-0008 applied to a picker's consumer). Added now, against the real
+ * caller (M3.5's Clients bulk-assign sheet), exactly as flagged when
+ * Commercials shipped (FTA D-11 — no picker was exported ahead of a caller
+ * that needed one).
+ *
+ * UNLIKE `ManagerOption` (Managers' own picker, which fetches every manager
+ * regardless of status), this set is fetched `status=active` ONLY —
+ * `ClientController::assignBulk` rejects any `agent_id` that is not an active
+ * commercial (`Agent::where('role','commercial')->where('status','active')`),
+ * so a blocked/inactive commercial is never a valid target. Filtering
+ * server-side here means the picker never offers a selection that would 422.
+ * BC-H still applies: bounded at `per_page=100`.
+ */
+export type CommercialOption = {
+  id: number;
+  nom: string;
+  prenom: string;
+};

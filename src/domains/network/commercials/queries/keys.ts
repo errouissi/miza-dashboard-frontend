@@ -11,4 +11,11 @@ export const commercialsKeys = {
   all: ["commercials"] as const,
   lists: () => [...commercialsKeys.all, "list"] as const,
   list: (params: CommercialListParams) => [...commercialsKeys.lists(), params] as const,
+  /**
+   * The relation-picker set (M3.5's Clients bulk-assign sheet). One
+   * parameterless key, mirroring `managersKeys.options()` — every consumer
+   * reads the same cache entry and triggers one fetch, however many
+   * components ask.
+   */
+  options: () => [...commercialsKeys.all, "options"] as const,
 };

@@ -78,23 +78,29 @@ export const PERMISSIONS = Object.freeze({
    * Client management — its OWN permission set, gated by `ClientController`,
    * entirely separate from the Agent domains' `view-agents`/`update-agent`.
    * `routes/api.php`'s `/admin/clients` group carries eight permissions in
-   * total; only the three this milestone (M3.4) actually uses are
-   * registered here — `create-client`, `delete-client`, `assign-client`,
-   * `view-client-stats` and `reset-client-password` all gate real endpoints
-   * (create, delete, assign/reassign/bulk-assign, statistics, password
-   * reset) that are explicitly OUT OF SCOPE for this milestone by decision,
-   * not deferred for a contract reason. Registering them now would be
-   * guessing at UI that does not exist (this file's own rule).
+   * total. `create-client`, `delete-client`, `view-client-stats` and
+   * `reset-client-password` gate real endpoints (create, delete, statistics,
+   * password reset) that remain explicitly OUT OF SCOPE — registering them
+   * now would be guessing at UI that does not exist (this file's own rule).
    *
    * `MANAGE_CLIENT_STATUS` gates the ONLY status-changing endpoint for
    * clients (`PATCH /{id}/status`) — there is no separate block/activate
    * pair the way the Agent domains have, so this permission is used
    * directly, unlike `manage-agent-status`, which Managers/Commercials
    * deliberately avoid.
+   *
+   * `ASSIGN_CLIENT` (M3.5) gates all four of `assignToAgent`/`assignBulk`/
+   * `reassign`/`unassignFromAgent` server-side (`routes/api.php:319-332`
+   * all share the identical `permission:assign-client` middleware) — but
+   * this milestone builds ONLY `PATCH /assign-bulk` against it. The single-
+   * client assign/reassign/unassign actions remain unbuilt; this string is
+   * not evidence they are in scope, only that the bulk endpoint shares
+   * their gate.
    */
   VIEW_CLIENTS: "view-clients",
   UPDATE_CLIENT: "update-client",
   MANAGE_CLIENT_STATUS: "manage-client-status",
+  ASSIGN_CLIENT: "assign-client",
 } as const satisfies Record<string, string>);
 
 export type PermissionName = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

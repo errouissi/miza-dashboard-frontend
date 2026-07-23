@@ -139,6 +139,45 @@ export async function updateClient(id: number, input: UpdateClientInput): Promis
   });
 }
 
+/** The bulk-assign input. `agentId` must resolve to an active commercial server-side. */
+export type AssignClientsBulkInput = {
+  agentId: number;
+  clientIds: number[];
+};
+
+/**
+ * Bulk-reassigns many clients to one active commercial in a single request
+ * (`ClientController::assignBulk`, `PATCH /admin/clients/assign-bulk`) — up
+ * to 100 ids per call (validator: `client_ids` `array|min:1|max:100`), and
+ * genuinely all-or-nothing: the update runs inside `DB::transaction` after
+ * validation, so there is no partial-success case to render.
+ *
+ * UPDATES `agent_id` ONLY. Unlike the legacy single-client `POST /{id}/assign`
+ * (`Client::assignToAgent`, which also rewrites `ville`/`secteur` to match the
+ * new agent), this endpoint's own route comment says so explicitly:
+ * "Admin-only bulk reassignment (PATCH; updates agent_id only)" — confirmed
+ * from source, not assumed. A client bulk-assigned to a commercial in a
+ * different city keeps its existing city/sector until edited separately —
+ * `client-bulk-assign-sheet.tsx`'s copy says this plainly.
+ *
+ * ERROR SHAPE, verified from source, NOT assumed from every other Clients
+ * endpoint: `assignBulk` is the FIRST Clients action that correctly catches
+ * `ValidationException` before its generic handler, so a malformed
+ * `agent_id`/`client_ids` shape returns a real field-mapped 422 (BC-N does
+ * NOT apply here). The business-rule rejection ("agent_id must reference an
+ * active commercial", "Some clients do not exist") is a SEPARATE, hand-rolled
+ * `{success:false, message}` 422 with no `errors` key and no `code` — it
+ * normalizes to `kind: "unknown"`, not `"validation"` or `"domain"`. That gap
+ * is handled as a generic mutation failure in `client-bulk-assign-sheet.tsx`,
+ * not worked around here or matched by message string.
+ */
+export async function assignClientsBulk(input: AssignClientsBulkInput): Promise<void> {
+  await httpClient.patch("/admin/clients/assign-bulk", {
+    agent_id: input.agentId,
+    client_ids: input.clientIds,
+  });
+}
+
 /**
  * Flips `active ↔ blocked`, and sends a `pending` client to `active`
  * (`Client::toggleStatus()`: `$this->status === 'active' ? 'blocked' :

@@ -253,3 +253,53 @@ decisions made *during implementation*.
   - Any other field encoding multiple values into one backend string in the
     future should default to reusing this same `", "` convention rather than
     inventing a second one, unless a real reason argues otherwise.
+
+## ADR-0016 — M3.5 bulk-assign ships current-page-only selection; the frozen "all-pages" step is deferred, not built
+
+- **Date:** 2026-07-23
+- **Status:** Accepted (deliberate scope narrowing; owed work recorded)
+- **Context:** Two frozen documents both name a capability M3.5 did not build.
+  `phase8-frontend-implementation-roadmap.html`'s M3 deliverables list "Client
+  bulk-assign — the first bulk action, exercising the 100-cap **and the
+  deliberate all-pages selection step** (Design System §14)." Design System
+  §14 itself specifies: "Header checkbox selects the current page
+  (indeterminate for partial); **selecting all pages is a deliberate second
+  step with an explicit count** — silent all-page selection on an action like
+  bulk-assign is how accidents at scale happen," and that the bulk action bar
+  should surface the 100 cap directly in the selection count ("100 max"), not
+  only enforce it silently on failure. M3.5 shipped explicit, current-page-only
+  selection with no all-pages step and no cap surfaced in the count copy —
+  given as an explicit scope instruction before implementation, not derived
+  from the frozen documents. The gap was found during this session's own
+  doc-closure review, **after** implementation and manual validation had
+  already passed — the M3.5 discovery pass itself did not cross-check the
+  frozen roadmap's M3 section or Design System §14 before scope was fixed,
+  which is the actual process gap worth naming for future discovery passes.
+- **Decision:** M3.5 ships current-page-only selection as its real, final
+  scope. The frozen documents' "all-pages, deliberate second step" and the
+  "100 max" surfaced-count copy are **deferred, not built**, and recorded here
+  as owed work rather than silently dropped — the same discipline ADR-0014
+  used for the detail-page deferral.
+- **Rationale:** Given explicitly, not re-derived: current-page-only is the
+  simpler, safer v1 surface, and matches the frozen design's own underlying
+  concern (accidental at-scale bulk actions) even though it satisfies that
+  concern by omitting the wider capability entirely rather than by gating it
+  behind the specified deliberate second step.
+- **Consequences:**
+  - **This is NOT the same gap as "select all matching filters,"** which the
+    M3.5 discovery pass correctly ruled out as unbuildable without a backend
+    change (`assignBulk` accepts only explicit `client_ids`, no filter
+    object). The frozen spec's "all-pages" step is a **client-side** capability
+    — walk every page of the current filtered view, union the ids, still cap
+    at 100 for submission — genuinely buildable with today's contract. A
+    future session must not conflate the two or assume "all-pages" requires a
+    backend change.
+  - Owed work for a later session, should the product want it: (1) an
+    explicit "select all N across all pages" second-step action, distinct
+    from the current per-page select-all, with its own confirmation given the
+    100-cap risk; (2) surfacing "x / 100 max" in the bulk action bar's count
+    copy, in place of the current plain count.
+  - Future discovery passes must cross-check the frozen roadmap's milestone
+    section AND the relevant Design System section(s) before fixing scope —
+    not only the backend contract — so a frozen-document deviation is caught
+    before implementation, not after.

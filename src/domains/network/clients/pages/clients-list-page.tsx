@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { isAppError, resolveErrorDisplay } from "@/infrastructure/errors";
 import { PERMISSIONS } from "@/infrastructure/permissions";
@@ -12,6 +12,7 @@ import {
   ListErrorState,
   ListLoadingState,
 } from "@/shared/components/patterns/list-states";
+import { ClientBulkAssignSheet } from "../components/client-bulk-assign-sheet";
 import { ClientFormSheet } from "../components/client-form-sheet";
 import { ClientStatusDialog } from "../components/client-status-dialog";
 import { ClientVilleFilter } from "../components/client-ville-filter";
@@ -42,12 +43,32 @@ import {
  *   - Delete Client — `Client::destroy()` is a REAL, permanent row deletion
  *     (no `SoftDeletes`), a materially different risk from the Agent
  *     domains' BC-R soft-block. Not offered.
- *   - Assign / Reassign / Bulk-assign / Reset password / Statistics — each
- *     a distinct, real backend capability, none built here. The roadmap
- *     itself names "Client bulk-assign" as its own separate M3.5
- *     deliverable, not part of this one.
+ *   - Single-client Assign / Reassign / Unassign / Reset password /
+ *     Statistics — each a distinct, real backend capability, none built
+ *     here. `assign-client` also gates these three (`routes/api.php:319-332`
+ *     all share the identical middleware), but M3.5 builds only the bulk
+ *     endpoint against it — holding the permission is not evidence these
+ *     are in scope.
  *   - A detail page — ADR-0014's pattern, unchanged.
  *   - Map/location editing — no map UI exists anywhere in this product yet.
+ *
+ * M3.5 ADDS BULK-ASSIGN ONLY (`PATCH /admin/clients/assign-bulk`), gated on
+ * its own `ASSIGN_CLIENT` permission, with a CURRENT-PAGE-ONLY selection
+ * model — an explicit scope decision, not a technical limitation:
+ *   - Row checkboxes and "select all" only ever cover rows rendered on the
+ *     current page. There is no "select all matching this filter" — the
+ *     backend has no such endpoint; only explicit `client_ids` are accepted,
+ *     and honoring that would mean silently fetching every page first.
+ *   - Selection is CLEARED on every page, page-size, search or filter
+ *     change — never carried across a param change, and never persisted
+ *     across page navigation.
+ *   - Because `per_page` is already clamped to `MAX_PER_PAGE` (100) before
+ *     this page ever renders a row, a full-page "select all" can never
+ *     produce more than 100 ids — the same cap `assignBulk`'s own validator
+ *     enforces server-side.
+ *   - Assigning does NOT change a client's city or sector — confirmed from
+ *     source (`ClientController::assignBulk` updates `agent_id` only) — see
+ *     `client-bulk-assign-sheet.tsx`'s copy and `clients-api.ts`'s docblock.
  *
  * ITS OWN CONTRACT, VERIFIED INDEPENDENTLY FROM SOURCE
  * (`ClientController::index`), NOT INHERITED FROM THE AGENT DOMAINS BY
@@ -136,16 +157,48 @@ export function ClientsListPage() {
   const clientsQuery = useClientsQuery(params);
   const { has } = usePermission();
 
-  /** Each action mirrors ONE server-side check. No create gate, no delete gate, no assign gate — all explicitly out of scope. */
+  /** Each action mirrors ONE server-side check. No create gate, no delete gate — all explicitly out of scope. */
   const canUpdate = has(PERMISSIONS.UPDATE_CLIENT);
   const canToggleStatus = has(PERMISSIONS.MANAGE_CLIENT_STATUS);
   const hasAnyRowAction = canUpdate || canToggleStatus;
+
+  /** Gates the bulk-assign checkboxes, select-all and action bar — fail-closed, same discipline as every row action above. */
+  const canAssign = has(PERMISSIONS.ASSIGN_CLIENT);
 
   /** Gated on `access-dashboard`, exactly as the Agent domains' city filters — that is what guards `GET /admin/villes`. */
   const canReadVilles = has(PERMISSIONS.ACCESS_DASHBOARD);
 
   const [editing, setEditing] = useState<Client | undefined>(undefined);
   const [togglingStatus, setTogglingStatus] = useState<Client | undefined>(undefined);
+
+  /**
+   * CURRENT-PAGE-ONLY selection (M3.5 scope decision — see the module
+   * docblock). Cleared below whenever page/page-size/search/status/assigned/
+   * ville changes, and never populated from any page other than the one
+   * currently rendered.
+   */
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [showBulkAssign, setShowBulkAssign] = useState(false);
+
+  // Adjusting state during render (not an effect) — the sanctioned React
+  // pattern for "reset derived state when an input changes". `selectionKey`
+  // captures every param whose change must drop the selection; when it
+  // differs from the last render's, the reset happens synchronously, before
+  // this render commits, rather than via a post-commit effect that would
+  // cascade an extra render.
+  const selectionKey = [
+    params.page,
+    params.perPage,
+    params.search,
+    params.status,
+    params.assigned,
+    params.ville,
+  ].join("|");
+  const [lastSelectionKey, setLastSelectionKey] = useState(selectionKey);
+  if (selectionKey !== lastSelectionKey) {
+    setLastSelectionKey(selectionKey);
+    setSelectedIds(new Set());
+  }
 
   const patchParams = (patch: Partial<ClientListParams>) => {
     const next = { ...params, ...patch };
@@ -178,6 +231,42 @@ export function ClientsListPage() {
 
   const isFiltered =
     !!params.search || !!params.status || !!params.assigned || !!params.ville;
+
+  // Every id below comes from the CURRENTLY RENDERED page only — there is no
+  // broader "all matching ids" set anywhere in this component.
+  const pageIds = page?.items.map((client) => client.id) ?? [];
+  const allOnPageSelected =
+    pageIds.length > 0 && pageIds.every((id) => selectedIds.has(id));
+  const someOnPageSelected = pageIds.some((id) => selectedIds.has(id));
+
+  const selectAllCheckboxRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (selectAllCheckboxRef.current) {
+      selectAllCheckboxRef.current.indeterminate =
+        someOnPageSelected && !allOnPageSelected;
+    }
+  });
+
+  const toggleSelected = (id: number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAllOnPage = () => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allOnPageSelected) {
+        pageIds.forEach((id) => next.delete(id));
+      } else {
+        pageIds.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  };
 
   return (
     <ListPage
@@ -284,6 +373,23 @@ export function ClientsListPage() {
         first.
       </p>
 
+      {canAssign && selectedIds.size > 0 ? (
+        <div className="bg-muted flex items-center justify-between gap-4 rounded-md border p-3">
+          <p className="text-sm font-medium">
+            {selectedIds.size} {selectedIds.size === 1 ? "client" : "clients"} selected on
+            this page
+          </p>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => setSelectedIds(new Set())}>
+              Clear selection
+            </Button>
+            <Button size="sm" onClick={() => setShowBulkAssign(true)}>
+              Assign to commercial
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
       {clientsQuery.isPending ? (
         <ListLoadingState />
       ) : clientsQuery.isError ? (
@@ -302,6 +408,19 @@ export function ClientsListPage() {
             <thead>
               <tr className="border-b text-left">
                 {/* Plain headers throughout: the endpoint accepts no sort. */}
+                <th scope="col" className="w-10 p-2">
+                  {canAssign ? (
+                    <input
+                      ref={selectAllCheckboxRef}
+                      type="checkbox"
+                      aria-label="Select all clients on this page"
+                      checked={allOnPageSelected}
+                      onChange={toggleSelectAllOnPage}
+                    />
+                  ) : (
+                    <span className="sr-only">Select</span>
+                  )}
+                </th>
                 <th scope="col" className="p-2 font-medium">
                   Phone
                 </th>
@@ -328,6 +447,16 @@ export function ClientsListPage() {
             <tbody>
               {page?.items.map((client) => (
                 <tr key={client.id} className="border-b">
+                  <td className="p-2">
+                    {canAssign ? (
+                      <input
+                        type="checkbox"
+                        aria-label={`Select ${client.phone}`}
+                        checked={selectedIds.has(client.id)}
+                        onChange={() => toggleSelected(client.id)}
+                      />
+                    ) : null}
+                  </td>
                   <td className="p-2">{formatPhone(client.phone)}</td>
                   <td className="p-2">
                     {/* A three-value enum, labelled locally — the THIRD real
@@ -408,6 +537,12 @@ export function ClientsListPage() {
         onOpenChange={(open) => {
           if (!open) setTogglingStatus(undefined);
         }}
+      />
+      <ClientBulkAssignSheet
+        open={showBulkAssign}
+        onOpenChange={setShowBulkAssign}
+        clientIds={Array.from(selectedIds)}
+        onAssigned={() => setSelectedIds(new Set())}
       />
     </ListPage>
   );

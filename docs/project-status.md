@@ -3,29 +3,34 @@
 **The current state of the project.** Overwrite this file after every completed
 milestone — it describes *now*, not history. History lives in `decisions.md` and git.
 
-_Last updated: 2026-07-19_
+_Last updated: 2026-07-23_
 
 ---
 
 ## Current milestone
 
 **M3 — Network / identity graph.** M3.1 (Admins), M3.2 (Managers), M3.3
-(Commercials) and **M3.4 (Clients) complete**; **M3.5 (Client bulk-assign) is
-next — not started.**
+(Commercials), M3.4 (Clients) and **M3.5 (Client bulk-assign) are all
+complete.** **M3.6 (Agent onboarding wizard) is next — not started.** M3.x
+(Admin/Manager/Commercial detail pages, ADR-0014) remains pending, blocked by
+FE-2.
 
 ## Current branch
 
-`main` at `700d99f` — **level with `origin/main`**. M3.3's implementation and
-its two follow-up UI fixes are committed and pushed. **M3.4 (Clients) —
-list, server pagination, search, three filters, edit, a single status
-toggle, permission gating, loading/empty/error states, and its 43-test
-suite — has passed manual UI validation and is approved and about to be
-committed and pushed together**, alongside the four supporting app-level
-edits (permission registry, routes, nav, route-authorization test) and a
-backend-only dev fixture (`DevClientSeeder`, committed separately in
-`C:\Miza\backend`).
+`main`, level with `origin/main` before this session's commit. `eaaa78b` (M3.4
+Clients) is HEAD at the start of this session. **M3.5 (Client bulk-assign) —
+current-page row selection, current-page select-all, a bulk action bar, a
+dedicated bulk-assign sheet, an active-only Commercials picker, `assign-client`
+permission gating, the bulk-assign mutation, selection-reset rules, success
+invalidation, and field/generic error handling — has passed manual UI
+validation and is approved, committed and pushed this session.** No backend
+changes were required or made — M3.5 builds entirely against the existing
+`ClientController::assignBulk` contract verified during its own discovery pass.
 
 ## Last completed implementation
+
+**M3.5 — Client bulk-assign.** See its own section below for the full
+write-up. The previous entry, kept for continuity:
 
 **M3.3 — Commercials.** The third Network domain, contract-verified independently
 from source (`AgentController::indexCommercials`) rather than inherited from
@@ -272,6 +277,144 @@ gained 2 more parameterized cases (`CLIENTS_PATH`, refuse + redirect).
 **388/388 across 23 files**, run twice standalone to rule out FE-1's known
 flake — stable both times.
 
+## M3.5 — Client bulk-assign (complete)
+
+The fifth and final Network deliverable named by the roadmap's M3 milestone.
+A fresh discovery pass was run before any implementation — assuming nothing
+about the bulk-assign endpoint's shape, permission or constraints from having
+just built Clients' list screen (the same discipline M3.2/M3.3/M3.4 each
+required). Its own discovery report is the source for everything below;
+implementation followed explicit scope, model and error-handling decisions
+given afterward, not derived mid-implementation.
+
+**Scope, explicitly bulk-only:**
+
+- Row checkboxes and a header select-all, **current-page only** — never a
+  wider "select all matching this filter", which the backend cannot express
+  (`PATCH /admin/clients/assign-bulk` accepts only explicit `client_ids`, no
+  filter object).
+- A bulk action bar (selected count, "Clear selection", "Assign to
+  commercial"), rendered only when the selection is non-empty.
+- A dedicated `ClientBulkAssignSheet`, built on the existing `FormDrawer`
+  shell — **not** a repurposed `ConfirmActionDialog`, which is
+  destructive-action-shaped (hardcoded `variant="destructive"`, no input
+  slot) and does not fit a form that needs to collect a target commercial.
+- A new Commercials picker (`useCommercialOptionsQuery`/`CommercialOption`,
+  exported from `commercials/index.ts`), filtered **`status=active` only** —
+  unlike Managers' own picker, which fetches every manager regardless of
+  status. Filtering server-side means the picker can never offer a
+  selection `assignBulk` would reject.
+- `ASSIGN_CLIENT` (`assign-client`) registered in the permission registry and
+  used to gate checkboxes, select-all and the action bar — fail-closed,
+  verified by test. The commercial picker inside the sheet is gated
+  **separately** on `view-agents` (a different permission), mirroring
+  `useVilleOptionsQuery`'s `enabled` pattern.
+- `assignClientsBulk`/`useAssignClientsBulkMutation`: `PATCH
+  /admin/clients/assign-bulk` with `{agent_id, client_ids}` only. Success
+  invalidates Clients' list space and clears the selection (the caller's
+  responsibility, not the mutation's).
+- Selection-reset rules: cleared whenever page, page size, search, status,
+  assigned or city changes — implemented as a render-time state adjustment
+  (`if (selectionKey !== lastSelectionKey) { … }`), not a `useEffect`, to
+  avoid the cascading-render lint rule (`react-hooks/set-state-in-effect`).
+  Never persisted across page navigation, never fetches other pages.
+  Because `per_page` is already clamped to `MAX_PER_PAGE` (100) before any
+  row renders, a full-page select-all can never produce more than 100 ids —
+  the same cap the backend's own validator enforces — pinned by a dedicated
+  100-row test.
+- Error handling: `assignBulk` is the **first** Clients endpoint that
+  correctly catches `ValidationException` before its generic handler (BC-N
+  does **not** apply here) — a malformed `agent_id`/`client_ids` shape 422s
+  with a real `errors` object, mapped onto the commercial field. The
+  business-rule rejection ("agent_id must reference an active commercial",
+  "some clients do not exist") is a **separate**, hand-rolled
+  `{success:false, message}` 422 with no `errors` key and no `code` — it
+  normalizes to `kind: "unknown"`, not `"validation"` or `"domain"`, and is
+  deliberately folded into the same generic-failure branch every other
+  domain form already uses for non-validation errors. **Not matched by
+  message string, and not worked around** — the missing `code` is recorded
+  as a backend follow-up, not fixed client-side.
+- Copy states plainly, in the sheet: only the assigned commercial changes —
+  each client's city and sector are left exactly as they are. Confirmed from
+  source: `ClientController::assignBulk` updates `agent_id` only (unlike the
+  legacy single-client `POST /{id}/assign`, which also rewrites `ville`/
+  `secteur` to match the new agent) — the backend's own route comment says
+  so explicitly ("Admin-only bulk reassignment (PATCH; updates agent_id
+  only)").
+
+**Explicitly deferred, by decision, not by contract necessity** — `assign-client`
+also gates all three of these server-side (`routes/api.php:319-332` shares
+the identical middleware across `assignToAgent`/`reassign`/
+`unassignFromAgent`), so holding the permission is not evidence they are in
+scope:
+
+- Single-client Assign, Reassign, Unassign
+- Create Client, Delete Client
+- Reset Password, Statistics
+- A detail page (ADR-0014, unchanged)
+
+**A real deviation from two frozen documents, found during this session's own
+doc-closure review and recorded — not silently dropped — as ADR-0016:** the
+roadmap's M3 deliverables and Design System §14 both name an "all-pages
+selection, deliberate second step" and a "100 max" count surfaced in the bulk
+action bar as part of Client bulk-assign. M3.5 ships **current-page-only**
+selection, given as an explicit scope instruction, with neither of those. See
+ADR-0016 for the full reasoning, why it is not the same gap as "select all
+matching filters" (correctly ruled out below as unbuildable against today's
+contract), and the owed work for a later session.
+
+**No new shared abstraction was introduced.** Row selection and the bulk
+action bar are the **first** instance of this pattern in the product — zero
+prior evidence, nowhere near a Rule-of-Three question. The Commercials picker
+export is the **second** instance of the cross-domain picker-export pattern
+(Managers → Commercials was the first) — two, not three, still short of a
+generalization decision. See the updated tally below.
+
+**No backend changes were needed.** M3.5 builds entirely against
+`ClientController::assignBulk`, already live and already correctly
+implemented for the validation-envelope half of its error contract — the
+first Clients endpoint found in this state. The missing `code` on the
+business-rule rejection is a backend follow-up, not a defect blocking this
+milestone.
+
+**New backend finding, registered this milestone:**
+
+- **BC-X** — `ClientController::assignBulk`'s (and `reassign`'s)
+  business-rule rejection ("agent_id must reference an active commercial",
+  "some clients do not exist") is a hand-rolled `{success:false, message}`
+  422 with no `errors` key and no `code` — unlike every coded domain error
+  elsewhere in the product (e.g. `COMMERCIAL_HAS_STOCK_CANNOT_REASSIGN`).
+  `normalizeError()` classifies it as `kind: "unknown"`, so the frontend has
+  no principled way to distinguish it from any other unclassified failure
+  beyond a generic message. Non-blocking (a working generic error state
+  covers it), but worth a backend consultation item: give this rejection a
+  `code`, matching the product's own convention.
+
+**Manual UI validation passed**, against the real backend: selection,
+select-all, the action bar, the sheet's active-only commercial picker
+(bounded at the seeded environment's one active commercial, id `636`),
+successful assignment with `ville`/`secteur` visibly unchanged, and the
+generic error path for an invalid target agent were all exercised live.
+
+**Tests:** 44 new tests in `clients-list-page.test.tsx` (43 → 62 in that
+file), covering: `assign-client` permission gating and fail-closed behavior,
+individual row selection, current-page select-all, selection clearing on
+every one of the six tracked param changes, non-persistence across page
+navigation, the 100-id cap on a full 100-row page, payload shape, success
+invalidation and selection clearing, the validation-envelope 422 mapped onto
+the commercial field, the generic-copy path for the code-less business-rule
+422 (asserted to NOT contain the backend's own message text), the
+active-only/bounded commercial picker request, and that no single-client
+assign/reassign/unassign or other out-of-scope control was added. One
+pre-existing test ("never offers create, delete, assign or bulk-assign") was
+narrowed to "never offers create, delete, or single-client assign/reassign/
+unassign, bulk-assign is the only assignment action" — a deliberate,
+approved test update reflecting the scope decision itself, not a workaround.
+**407/407 across 23 files**, run standalone twice to rule out FE-1's known
+flake — stable both times; one interleaved run hit FE-1 on five unrelated,
+untouched files under heavier machine load, confirming the flake rather than
+a regression.
+
 ## Overall progress
 
 | Milestone | Status |
@@ -288,22 +431,24 @@ flake — stable both times.
 | M3.1 — Admins (incl. permission selector) | ✅ complete |
 | M3.2 — Managers | ✅ **complete** |
 | M3.3 — Commercials, plus city-select and multi-select follow-ups | ✅ complete |
-| **M3.4 — Clients** | ✅ **complete** |
-| M3.5 — Client bulk-assign | ⬜ next — not started |
-| M3.6 — Agent onboarding wizard | ⬜ pending |
+| M3.4 — Clients | ✅ complete |
+| **M3.5 — Client bulk-assign** | ✅ **complete** |
+| M3.6 — Agent onboarding wizard | ⬜ next — not started |
 | M3.x — Admin + Manager + Commercial detail pages (ADR-0014) | ⬜ pending — **blocked by FE-2** |
 | M4+ — Money, Stock, Grattage, Overview | ⬜ not started |
 
-**Tests: 388/388 across 23 files** (was 343/22 before M3.4 — Clients added 43
-domain tests in a new `clients-list-page.test.tsx`, and `route-authorization.test.tsx`
-gained 2 more parameterized cases for `CLIENTS_PATH`). Lint · typecheck ·
-format · build all clean; the full suite was run standalone twice this
-session to confirm no flake — stable both times.
+**Tests: 407/407 across 23 files** (was 388/23 before M3.5 — Clients' own
+spec file grew from 43 to 62 tests; no new test file was needed since M3.5
+extends the existing Clients list screen rather than adding a route). Lint ·
+typecheck · format · build all clean; the full suite was run standalone
+twice this session to confirm no flake — stable both times.
 
 ## Shared pattern layer
 
-Six components, **unmodified since extraction** — have now absorbed a **seventh**
-resource (Clients) with zero changes:
+Six components, **unmodified since extraction** — have now absorbed M3.5's
+bulk-assign work with zero changes (the new checkbox column, select-all and
+action bar were all built inline in `ClientsListPage`; the new sheet is built
+on the unmodified `FormDrawer`):
 
 - `ConfirmActionDialog` · `ListPage` · `FormDrawer`
 - `ListLoadingState` · `ListErrorState` · `ListEmptyState`
@@ -312,9 +457,12 @@ resource (Clients) with zero changes:
 `DataTable` · `FilterBar` · `StatusBadge` · `MoneyAmount` · `EntityChip` ·
 Resource-definition module · URL-filter hook
 
-**Rule-of-Three evidence tally after M3.4, recorded factually, not acted on:**
+**Rule-of-Three evidence tally after M3.5, recorded factually, not acted on**
+(unchanged from M3.4 except the two new rows — M3.5 added no new list
+resource, so `DataTable`/`FilterBar`/`StatusBadge`/`MoneyAmount`/`EntityChip`/
+resource-definition module/URL-filter hook evidence is exactly as it was):
 
-| Component | Evidence after M3.4 | At ADR-0006's stated threshold? |
+| Component | Evidence | At ADR-0006's stated threshold? |
 | --- | --- | --- |
 | `DataTable` | 4 paginated resources (Villes, Managers, Commercials, Clients) | Reaches "3" |
 | `FilterBar` | 4 resources with server-supported search/multi-filter | Reaches "3" |
@@ -323,13 +471,15 @@ Resource-definition module · URL-filter hook
 | `EntityChip` | 0 — filter `<select>`s are not the roadmap's sanctioned infinite-query autocomplete | Not reached |
 | Resource-definition module | 0 — Network is not reference-shaped | Not reached |
 | URL-filter hook | ADR-0006's own wording ("a resource with 3+ filters") reads as a **per-resource**, not cross-resource, threshold — unlike its five siblings. Managers already had 5 filters at M3.2; Clients has 4 (`search`, `status`, `assigned`, `ville`). Flagged during M3.3 planning, **still not resolved** | Ambiguous, unresolved |
+| **Cross-domain picker export** (`useVilleOptionsQuery` → `useManagerOptionsQuery` → **`useCommercialOptionsQuery`**, new this session) | **2** instances of the pattern itself (Managers exporting to Commercials, now Commercials exporting to Clients) — 3 individual picker exports exist, but the *pattern being evaluated* (one domain exporting an options query for a sibling's picker) has occurred twice | Not yet at "3" — the next domain that needs a sibling picker is the actual test case |
+| **Row selection / bulk action bar** (new this session) | **1** — M3.5 is the first and only bulk-selection UI in the product | Not reached, not close |
 
-**Explicit decision this session: still do not extract anything.** M3.2, M3.3
-and M3.4 are now all built — the condition M3.3's own deferral named ("until
-Managers, Commercials and Clients are all built") is met, so this tally is
-due for an actual decision the next time shared extraction comes up, not
-further deferral by default. No extraction happened this session and no ADR
-was written; the decision itself is a `next-session.md` follow-up.
+**Explicit decision this session: still do not extract anything**, for the
+same reasons recorded at M3.4 — the tally above is unchanged from M3.4 on
+every row that predates M3.5, and M3.5's own two new rows are each far below
+threshold. No extraction happened, no ADR was written, and the M3.4-era
+Rule-of-Three decision point ("due, not deferred") remains open — it was not
+resolved by M3.5, which touched no shared component either way.
 
 ## Current blockers
 
@@ -362,9 +512,10 @@ further; the suite is now at 388 tests, 43 more than when this was last raised.
 
 ## M3 detail pages — deferred by ADR-0014
 
-Unchanged. M3.4 ships list-only, contributes no nested route, so FE-2 remains
-non-blocking for it exactly as it did for M3.1, M3.2 and M3.3. All four
-list-management resources are now built with no detail page among them.
+Unchanged. M3.4 and M3.5 both ship with no nested route (M3.5 extends the
+existing Clients list route in place, rather than adding one), so FE-2
+remains non-blocking exactly as it did for M3.1–M3.4. All four list-management
+resources are now built with no detail page among them.
 
 ## Backend dependencies
 
@@ -396,6 +547,14 @@ re-confirmed rather than assumed from the Agent domains:**
 | BC-N | **defect** | Third confirmed instance — `ClientController::update()` validates inside a bare `catch (\Exception)`, so e.g. a duplicate-phone update returns 500, not 422 | 🔴 open — the form shows a generic error banner, not a field message |
 | BC-U | **limitation** | Third confirmed instance — the `update()` validator has no `nullable` for `ville_comercial`, though the column allows null | 🟡 open — a client's city can never be explicitly cleared through the UI |
 | BC-W | **defect, new** | `ClientController`'s single-record methods use `findOrFail`, not caught specifically, so a nonexistent client id 500s instead of 404ing | 🟡 open — live-confirmed, unreachable through this UI (no detail page, no direct id navigation) |
+
+**From the M3.5 contract verification, against `ClientController::assignBulk`,
+independently re-confirmed rather than assumed from `update`/`index`:**
+
+| ID | Class | Item | Status |
+| --- | --- | --- | --- |
+| — | **verified, positive** | `assignBulk`/`reassign` correctly catch `ValidationException` before their generic handler — BC-N does **not** extend to these two endpoints, the first Clients actions found in this state | ✅ no action needed, recorded so a future session does not assume BC-N universally |
+| BC-X | **limitation, new** | `assignBulk`'s (and `reassign`'s) business-rule rejection ("agent_id must reference an active commercial", "some clients do not exist") is a hand-rolled `{success:false, message}` 422 with no `errors` key and no `code`, unlike the product's own coded-domain-error convention (e.g. `COMMERCIAL_HAS_STOCK_CANNOT_REASSIGN`) | 🟡 open — normalizes to `kind:"unknown"`; the frontend shows a generic error, which is honest but not specific. Non-blocking |
 
 Carried, unchanged from M3.2:
 
@@ -437,7 +596,9 @@ src/domains/
     │                             backend-formatted money · NO sort, NO create,
     │                             NO detail page, NO secteur filter, NO manager
     │                             reassignment; city field is a Villes-backed
-    │                             select, same as Managers')
+    │                             select, same as Managers'; exports an
+    │                             active-only CommercialOption picker, added
+    │                             M3.5, for Clients' bulk-assign sheet)
     └── clients/            M3.4 (paginated · search · 3 filters (status,
                                    assigned, ville) · a THIRD status enum
                                    (active/blocked/pending — distinct from
@@ -446,7 +607,11 @@ src/domains/
                                    raw decimal-cast money (solde), a distinct
                                    shape from Managers'/Commercials' bcadd
                                    accessor · NO sort, NO create, NO delete, NO
-                                   assign/reassign, NO detail page; city field
-                                   is a Villes-backed select, same pattern as
-                                   Managers'/Commercials')
+                                   detail page; city field is a Villes-backed
+                                   select, same pattern as Managers'/
+                                   Commercials') + M3.5 (current-page row
+                                   selection, current-page select-all, a bulk
+                                   action bar, and a bulk-assign sheet against
+                                   `PATCH .../assign-bulk`; NO single-client
+                                   assign/reassign/unassign — still deferred)
 ```
