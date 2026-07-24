@@ -125,8 +125,20 @@ export function normalizeError(error: unknown, ctx: NormalizeContext = {}): AppE
   }
 
   // 3. No envelope: classify by status. This is where 401 lands.
+  //
+  // `message` is checked first — it is every other domain's convention
+  // (Villes, Secteurs, Products, Network, the Phase-4A domain envelope
+  // above). `error` is a SEPARATE, real convention of its own: Money's
+  // DepoController/DebtPaymentController never emit `message` on failure,
+  // only `{"error": "..."}}` (verified from source — every failure path in
+  // both controllers). Without this fallback, every Deposit/Debt Payment
+  // failure normalizes with no message at all.
   const bareMessage =
-    isRecord(body) && typeof body.message === "string" ? body.message : undefined;
+    isRecord(body) && typeof body.message === "string"
+      ? body.message
+      : isRecord(body) && typeof body.error === "string"
+        ? body.error
+        : undefined;
 
   return new AppError({
     kind: kindForBareStatus(status),

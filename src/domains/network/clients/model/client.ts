@@ -1,3 +1,5 @@
+import type { StatusTone } from "@/shared/components/business/status-badge";
+
 /**
  * A client — the fourth Network resource, and a structurally different
  * contract from every prior one. `ClientController::index` runs **no
@@ -100,11 +102,24 @@ export type Client = {
 export const CLIENT_STATUSES = ["active", "blocked", "pending"] as const;
 export type ClientStatus = (typeof CLIENT_STATUSES)[number];
 
-/** Domain-owned labels. Temporary English pending O-1. No shared badge (ADR-0006 — see the page docblock on the Rule-of-Three question this raises). */
+/** Domain-owned labels. Temporary English pending O-1. */
 export const CLIENT_STATUS_LABELS: Record<ClientStatus, string> = {
   active: "Active",
   blocked: "Blocked",
   pending: "Pending",
+};
+
+/**
+ * Domain-owned tone mapping (Design System §17) for the shared `StatusBadge`.
+ * `pending` is `warning`, not `neutral` — per §17's own table, `pending`
+ * (Clients' OTP registration state) is explicitly one of the backend
+ * statuses mapped to the warning tone, the same tone Cheques'/Deposits'
+ * own `pending` will use once Money is built.
+ */
+export const CLIENT_STATUS_TONES: Record<ClientStatus, StatusTone> = {
+  active: "success",
+  blocked: "danger",
+  pending: "warning",
 };
 
 /**

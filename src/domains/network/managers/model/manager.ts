@@ -1,3 +1,5 @@
+import type { StatusTone } from "@/shared/components/business/status-badge";
+
 /**
  * A manager — an agent with `role = manager`, and the second Network resource.
  *
@@ -79,20 +81,29 @@ export type Manager = {
  * The account status enum — THREE values, not a boolean.
  *
  * This is the product's first real status enum: Admins carry `is_active`, which is
- * a different vocabulary and does not generalise to this one. Per ADR-0006 a
- * `StatusBadge` needs three resources with real enums, so this is evidence #1 and
- * the labels below stay domain-owned.
+ * a different vocabulary and does not generalise to this one. This was evidence #1
+ * toward ADR-0006's stated `StatusBadge` threshold — reached at M3.4, extracted at
+ * M4.1 ahead of Money. The labels stay domain-owned (copy is domain knowledge); the
+ * TONE mapping below is domain-owned for the identical reason (`shared/` must not
+ * know what a manager's "inactive" means) and feeds the shared `StatusBadge`.
  *
  * Mirrors `indexManagers`' validator (`in:active,blocked,inactive`) exactly.
  */
 export const MANAGER_STATUSES = ["active", "blocked", "inactive"] as const;
 export type ManagerStatus = (typeof MANAGER_STATUSES)[number];
 
-/** Domain-owned labels. Temporary English pending O-1. No shared badge (ADR-0006). */
+/** Domain-owned labels. Temporary English pending O-1. */
 export const MANAGER_STATUS_LABELS: Record<ManagerStatus, string> = {
   active: "Active",
   blocked: "Blocked",
   inactive: "Inactive",
+};
+
+/** Domain-owned tone mapping (Design System §17) for the shared `StatusBadge`. */
+export const MANAGER_STATUS_TONES: Record<ManagerStatus, StatusTone> = {
+  active: "success",
+  blocked: "danger",
+  inactive: "muted",
 };
 
 /**

@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { isAppError, resolveErrorDisplay } from "@/infrastructure/errors";
 import { PERMISSIONS } from "@/infrastructure/permissions";
 import { usePermission } from "@/shared/hooks";
-import { formatMoney } from "@/shared/formatters";
+import { MoneyAmount } from "@/shared/components/business/money-amount";
 import { Button } from "@/shared/components/ui/button";
 import { ListPage } from "@/shared/components/patterns/list-page";
 import {
@@ -151,11 +151,12 @@ export function ProductsListPage() {
                 <tr key={product.id} className="border-b">
                   <td className="p-2">{product.name}</td>
                   <td className="text-muted-foreground p-2">{product.operator}</td>
-                  {/* Money renders through the shared formatter, never inline
-                      (FTA §14, Design System §5). Right-aligned so denominations
-                      compare down the column. */}
-                  <td className="p-2 text-right tabular-nums">
-                    {formatMoney(product.value)}
+                  {/* Money renders through the shared MoneyAmount component,
+                      never inline (FTA §14, Design System §5). Right-aligned
+                      so denominations compare down the column — alignment is
+                      this cell's job, tabular numerals are MoneyAmount's. */}
+                  <td className="p-2 text-right">
+                    <MoneyAmount value={product.value} />
                   </td>
                   <td className="p-2">
                     {canManage ? (

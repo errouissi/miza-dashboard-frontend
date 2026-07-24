@@ -1,3 +1,5 @@
+import type { StatusTone } from "@/shared/components/business/status-badge";
+
 /**
  * A commercial — an agent with `role = commercial`, and the third Network
  * resource. Same controller, same permission set, same envelope shape as
@@ -91,11 +93,22 @@ export type Commercial = {
 export const COMMERCIAL_STATUSES = ["active", "blocked", "inactive"] as const;
 export type CommercialStatus = (typeof COMMERCIAL_STATUSES)[number];
 
-/** Domain-owned labels. Temporary English pending O-1. No shared badge (ADR-0006 — not yet at 3). */
+/** Domain-owned labels. Temporary English pending O-1. */
 export const COMMERCIAL_STATUS_LABELS: Record<CommercialStatus, string> = {
   active: "Active",
   blocked: "Blocked",
   inactive: "Inactive",
+};
+
+/**
+ * Domain-owned tone mapping (Design System §17) for the shared `StatusBadge`
+ * — same vocabulary and same tones as `MANAGER_STATUS_TONES`, kept as its
+ * own map per ADR-0012 (no merged vocabulary across domains).
+ */
+export const COMMERCIAL_STATUS_TONES: Record<CommercialStatus, StatusTone> = {
+  active: "success",
+  blocked: "danger",
+  inactive: "muted",
 };
 
 /**

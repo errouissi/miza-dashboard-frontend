@@ -8,6 +8,7 @@ import { AGENT_ONBOARDING_PATH } from "@/domains/network/agent-onboarding";
 import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/shared/components/ui/avatar";
+import { StatusBadge } from "@/shared/components/business/status-badge";
 import { ListPage } from "@/shared/components/patterns/list-page";
 import {
   ListEmptyState,
@@ -23,6 +24,7 @@ import {
   COMMERCIAL_LIST_DEFAULTS,
   COMMERCIAL_STATUSES,
   COMMERCIAL_STATUS_LABELS,
+  COMMERCIAL_STATUS_TONES,
   MAX_PER_PAGE,
   type Commercial,
   type CommercialListParams,
@@ -392,17 +394,10 @@ export function CommercialsListPage() {
                       {commercial.numAbonnement ?? ABSENT}
                     </td>
                     <td className="p-2">
-                      {/* A three-value enum, labelled locally — same as Managers,
-                          still short of ADR-0006's 3 for StatusBadge. */}
-                      <span
-                        className={
-                          commercial.status === "active"
-                            ? "text-sm"
-                            : "text-muted-foreground text-sm"
-                        }
-                      >
-                        {COMMERCIAL_STATUS_LABELS[commercial.status]}
-                      </span>
+                      <StatusBadge
+                        tone={COMMERCIAL_STATUS_TONES[commercial.status]}
+                        label={COMMERCIAL_STATUS_LABELS[commercial.status]}
+                      />
                     </td>
                     <td className="p-2">{commercial.villeActuelle ?? ABSENT}</td>
                     <td className="p-2">

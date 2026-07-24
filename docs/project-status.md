@@ -9,22 +9,25 @@ _Last updated: 2026-07-25_
 
 ## Current milestone
 
-**M3 — Network / identity graph — ALL SIX SUB-MILESTONES COMPLETE.** M3.1
-(Admins), M3.2 (Managers), M3.3 (Commercials), M3.4 (Clients), M3.5 (Client
-bulk-assign) and **M3.6 (Agent onboarding wizard) are all complete.** M3.6's
-manual validation against the real backend ran to completion; every issue it
-surfaced was fixed in three follow-up rounds during this session (see the
-M3.6 section below for the full write-up). M3.x (Admin/Manager/Commercial
-detail pages, ADR-0014) remains the only open M3 item, blocked by FE-2 — not
-part of M3's own six named sub-milestones, and not started.
+**M3 — Network / identity graph — COMPLETE** (all six sub-milestones).
+**M4 — Money is UNDERWAY: M4.1 (infrastructure) is complete; M4.2 (Cheques)
+is next, not started.** A full M4 discovery pass ran before any
+implementation (architecture proposal, API inventory, business rules, risks
+and unknowns, across Cheques/Deposits/Debt Payments) and is the source for
+M4.1's scope and for M4.2's plan in `next-session.md`. M3.x (Admin/Manager/
+Commercial detail pages, ADR-0014) remains the only open M3 item, blocked by
+FE-2 — unaffected by M4.
 
 ## Current branch
 
-`main`, level with `origin/main` — M3.6 (implementation plus all three
-post-validation fix rounds) is fully committed and pushed this session. No
-uncommitted files remain. See `next-session.md` for the exact commit.
+`main`, level with `origin/main` — M4.1 (Money infrastructure) is fully
+committed and pushed this session, manually reviewed and validated first.
+No uncommitted files remain. See `next-session.md` for the exact commit.
 
 ## Last completed implementation
+
+**M4.1 — Money infrastructure — COMPLETE.** See its own section below for
+the full write-up. The previous entries, kept for continuity:
 
 **M3.6 — Agent onboarding wizard — COMPLETE.** Manually validated against
 the real backend; every issue that validation found is fixed and recorded in
@@ -726,6 +729,96 @@ while pending. All 12 existing `/^create agent$/i` button-name assertions
 were updated to the new label. Suite: **442/442 across 24 files** — the
 milestone's final count.
 
+## M4.1 — Money infrastructure (complete)
+
+The first M4 sub-milestone: pure infrastructure, no Money domain code, per
+explicit scope. Built from a full M4 discovery pass (architecture proposal,
+domain boundaries, API inventory, business rules, risks and unknowns across
+Cheques/Deposits/Debt Payments, verified from the live backend source, not
+the roadmap's prose) run before any implementation. Manually reviewed and
+validated before this close-out.
+
+**`normalizeError` now recognizes a second envelope shape.** Verified from
+source: `DepoController` and `DebtPaymentController` never emit `{message}`
+on failure, only `{"error": "..."}` — every failure path in both
+controllers confirmed, including both grattage-reconciliation domain
+exceptions. The bare-status fallback now reads `body.error` when
+`body.message` is absent (message still wins if both are present). Without
+this, every Deposit/Debt Payment failure would normalize with no message at
+all — this is not a per-domain workaround; normalization happens once,
+centrally, in the axios interceptor, so there is no other place to fix it.
+Three new tests pin the fallback, the precedence, and that a 422 with this
+shape still classifies as `unknown`, never mistaken for a field-mapped
+`ValidationException`.
+
+**`FileUploadField` promoted from `agent-onboarding/` to
+`shared/components/business/`, unchanged.** Rule-of-Three satisfied by
+Money's three upcoming callers (Cheque photo, Deposit proof, Debt Payment
+proof) — the exact reuse `phase8-architecture.html` §7 already named
+("uploads Agent onboarding and Cheque submission both require"), not
+invented ahead of a caller. The wizard's two call sites now import from the
+shared location; nothing about its props or behavior changed.
+
+**`StatusBadge` extracted** — Design System §17's full six-tone system
+(neutral/warning/info/success/danger/muted), not the three call sites' own
+minimal shape (a plain conditionally-muted `<span>`, byte-for-byte identical
+across Managers/Commercials/Clients). Built to the richer spec deliberately:
+Money's Cheques (pending/approved/rejected/annuler) and Deposits
+(pending/validated/rejected) need tones Network's binary "active vs not"
+never had to express, and extracting the minimal shape now would mean
+redoing this component at M4.2. The component itself takes only `tone` +
+`label` — it knows no status vocabulary (CLAUDE.md: no business logic in
+`shared/`); each domain keeps its own `<Resource>_STATUS_TONES` map next to
+its existing `<Resource>_STATUS_LABELS` map (`active`→success,
+`blocked`→danger, `inactive`→muted, Clients' `pending`→warning, per §17's
+own mapping table) and passes the result in. All three Network list pages
+now render `<StatusBadge>` instead of their duplicated `<span>`.
+**Colour implementation is direct Tailwind utility classes, not new CSS
+custom properties** — the current theme (`index.css`) has only a neutral
+shadcn palette plus `--destructive`; no `--success`/`--warning`/`--info`
+tokens exist. Adding them felt like a larger, more visible design-token
+decision than this task's scope; revisit if a later milestone wants proper
+tokens.
+
+**`MoneyAmount` extracted** — wraps `formatMoney`, adds `tabular-nums` and
+the Design System §5 danger-color rule for negative values (which
+`formatMoney` itself does not apply, being a pure string formatter). Takes
+a `number`, not a string — deliberately narrower than "any money value in
+the product": Managers'/Commercials' `avanceTotal` (a `bcadd`-computed
+accessor string) and Clients' `solde` (a `decimal:2`-cast string) are BOTH
+still carried and rendered verbatim, per their own models' existing
+docblocks — parsing either back to a number would be the exact binary-
+floating-point defect those docblocks already warn against. Only Products'
+`value` (a genuinely numeric `decimal`-cast column) was swapped in; Money's
+own Cheque/Deposit/Debt Payment `amount` fields (confirmed plain
+`decimal(10,2)` columns, no accessor) are the real reason this was built
+now, ahead of M4.2.
+
+**`infrastructure/query/invalidation-map.ts` scaffolded, empty.** Mirrors
+`infrastructure/errors/error-code-registry.ts`'s established shape exactly:
+a frozen, empty registry (`INVALIDATION_MAP`), a lookup
+(`queryKeyPrefixesFor`) and an apply function (`invalidateForEvent`) that
+both degrade safely for an unregistered event — invalidating nothing,
+never throwing, the same "unhelpful but safe" fallback the error registry
+already uses. **No domain events registered**, by explicit instruction —
+Money's first real event (`cheque.approved`) is M4.2's job, not this one's;
+registering it now would be inventing a contract ahead of the mutation that
+emits it.
+
+**No backend changes, no Money domain code, no speculative abstractions.**
+Every extraction was justified by Rule-of-Three evidence that already
+existed (StatusBadge/MoneyAmount both already at ADR-0006's stated
+threshold before M4.1 even started, per the tally below) or by named,
+upcoming M4.2 callers (`FileUploadField`, the invalidation map) — nothing
+was built for a hypothetical fourth or fifth caller.
+
+**Tests:** 5 new (3 for the `normalizeError` fallback, 2 for the
+invalidation-map scaffold, in its own new test file). No existing test
+needed updating — every extraction changed markup/styling only, never
+rendered text, and no test asserted on the replaced `<span>`'s structure or
+class names. **447/447 across 25 files** (was 442/24), run twice standalone
+to rule out FE-1 — stable both times.
+
 ## Overall progress
 
 | Milestone | Status |
@@ -746,34 +839,45 @@ milestone's final count.
 | M3.5 — Client bulk-assign | ✅ complete |
 | **M3.6 — Agent onboarding wizard** | ✅ **complete** — manually validated, three post-validation fix rounds applied |
 | M3.x — Admin + Manager + Commercial detail pages (ADR-0014) | ⬜ pending — **blocked by FE-2** |
-| M4+ — Money, Stock, Grattage, Overview | ⬜ not started |
+| **M4.1 — Money infrastructure** | ✅ **complete** — manually reviewed and validated |
+| M4.2 — Cheques | ⬜ next, not started |
+| M4.3 — Deposits | ⬜ not started — contingent on the `DepoResource` backend consultation (see Backend dependencies) |
+| M4.4 — Debt Payments | ⬜ not started — contingent on the placement/permission questions (see Backend dependencies) |
+| M5+ — Stock, Grattage, Overview | ⬜ not started |
 
-**Tests: 442/442 across 24 files** (was 407/23 before M3.6; 431/24 at
-initial implementation; grew to 442 across three post-validation fix
-rounds — see the M3.6 Follow-up 3/4/5 sections above for the breakdown).
-Lint · typecheck · format · build all clean, re-verified after every round,
-`pnpm test:ci` run twice standalone each time to rule out FE-1 — stable
-throughout.
+**Tests: 447/447 across 25 files** (was 407/23 before M3.6; 431/24 at
+M3.6's initial implementation; 442/24 after M3.6's three post-validation fix
+rounds; now 447/25 after M4.1). Lint · typecheck · format · build all clean,
+re-verified after every round, `pnpm test:ci` run twice standalone each time
+to rule out FE-1 — stable throughout.
 
 ## Shared pattern layer
 
-Six components, **unmodified since extraction** — M3.6 did not touch any of
-them either (the wizard is a page-level flow, not a list screen; `FormDrawer`
-was considered for the success step and correctly rejected — a five-step
-wizard is not a quick-edit drawer):
+Six `patterns/` components, **unmodified since extraction**:
 
 - `ConfirmActionDialog` · `ListPage` · `FormDrawer`
 - `ListLoadingState` · `ListErrorState` · `ListEmptyState`
 
-**Deliberately not extracted** (per explicit decision — see below):
-`DataTable` · `FilterBar` · `StatusBadge` · `MoneyAmount` · `EntityChip` ·
-Resource-definition module · URL-filter hook
+**Three `business/` components, new at M4.1** — `shared/components/business/`
+did not exist before this milestone:
 
-**M3.6's `FileUploadField`/`TextField` stay domain-local too** — used ~11
-and ~20 times respectively, but entirely within the one wizard (same-screen
-repetition, not cross-resource evidence). No extraction decision applies to
-them; ADR-0006's Rule-of-Three is about resources, not repetition within a
-single screen.
+- `StatusBadge` — six-tone system (Design System §17); `tone`+`label` props
+  only, no status vocabulary of its own. Consumed by Managers/Commercials/
+  Clients' list pages via each domain's own `*_STATUS_TONES` map.
+- `MoneyAmount` — wraps `formatMoney`, adds `tabular-nums` + the negative-
+  value danger color. Consumed by Products' list page only — Managers'/
+  Commercials'/Clients' pre-formatted money strings deliberately do not use
+  it (see the M4.1 section above).
+- `FileUploadField` — promoted unchanged from `agent-onboarding/`. Consumed
+  by the wizard's Documents/Moto steps; not yet consumed by Money (M4.2+).
+
+**Still deliberately not extracted**: `DataTable` · `FilterBar` ·
+`EntityChip` · Resource-definition module · URL-filter hook.
+
+**`TextField` stays domain-local to the wizard** — used ~20 times, but
+entirely within one screen (same-screen repetition, not cross-resource
+evidence). ADR-0006's Rule-of-Three is about resources, not repetition
+within a single screen, so no extraction decision applies to it yet.
 
 **The cross-domain picker-export tally moved to "3" during M3.6's
 post-validation Follow-up 4** — the wizard's manager picker still *reuses*
@@ -793,36 +897,29 @@ This is a different shape of coupling than the picker-export tally above and
 is **not** added to that row — recorded here as its own, first instance, not
 conflated with it.
 
-**Rule-of-Three evidence tally, recorded factually, not acted on**
-(unchanged from M3.5 on every row except the two above; M3.6's initial
-implementation added no new list resource, so `DataTable`/`FilterBar`/
-`StatusBadge`/`MoneyAmount`/`EntityChip`/resource-definition module/
-URL-filter hook evidence is exactly as it was):
+**Rule-of-Three evidence tally, recorded factually.** `StatusBadge`,
+`MoneyAmount` and `FileUploadField` moved from "evidence recorded, not
+acted on" to **extracted** at M4.1 — the first rows in this tally's history
+to actually cross into `shared/`. Every other row is unchanged from M3.6:
 
 | Component | Evidence | At ADR-0006's stated threshold? |
 | --- | --- | --- |
-| `DataTable` | 4 paginated resources (Villes, Managers, Commercials, Clients) | Reaches "3" |
-| `FilterBar` | 4 resources with server-supported search/multi-filter | Reaches "3" |
-| `StatusBadge` | 3 resources with a real status enum, but only **2 distinct vocabularies**: Managers and Commercials share one (`active`/`blocked`/`inactive`); Clients introduces a second (`active`/`blocked`/`pending`) | Reaches the stated count of "3", though the vocabularies aren't uniform |
-| `MoneyAmount` | 3 distinct serialization shapes, not 3 callers of *one* shape: Managers/Commercials (`avanceTotal`, a `bcadd`-computed accessor), Clients (`solde`, a plain `decimal:2`-cast column, no computation), Products (`formatMoney`-formatted) — arguably strengthens the case *against* one shared component, since none of the three match | Still unclear even at "3" |
+| `DataTable` | 4 paginated resources (Villes, Managers, Commercials, Clients) | Reaches "3" — **still not extracted** |
+| `FilterBar` | 4 resources with server-supported search/multi-filter | Reaches "3" — **still not extracted** |
+| `StatusBadge` | 3 resources with a real status enum (Managers/Commercials share one vocabulary, Clients a second) | **EXTRACTED at M4.1** — built to Design System §17's full spec, not the 3 call sites' own minimal shape, anticipating Money's richer vocabulary |
+| `MoneyAmount` | Products' `value` is a genuinely numeric column; Managers'/Commercials'/Clients' money fields are deliberately excluded (pre-formatted strings, not raw numbers) | **EXTRACTED at M4.1**, consumed by Products only today — Money's Cheque/Deposit/Debt Payment `amount` fields (M4.2+) are the real 2nd/3rd/4th callers |
 | `EntityChip` | 0 — filter `<select>`s are not the roadmap's sanctioned infinite-query autocomplete | Not reached |
 | Resource-definition module | 0 — Network is not reference-shaped | Not reached |
-| URL-filter hook | ADR-0006's own wording ("a resource with 3+ filters") reads as a **per-resource**, not cross-resource, threshold — unlike its five siblings. Managers already had 5 filters at M3.2; Clients has 4 (`search`, `status`, `assigned`, `ville`). Flagged during M3.3 planning, **still not resolved** | Ambiguous, unresolved |
-| **Cross-domain picker export** (`useVilleOptionsQuery` → `useManagerOptionsQuery` → `useCommercialOptionsQuery` → **`useSecteursQuery`**, new at M3.6 Follow-up 4) | **3** instances of the pattern itself: Managers → Commercials (M3.3), Commercials → Clients (M3.5), Secteurs → Agent Onboarding (M3.6) | **Reaches "3"** — a future session should treat this as the actual decision point, not defer it again by default |
-| **Row selection / bulk action bar** (M3.5) | **1** — M3.5 remains the only bulk-selection UI in the product; M3.6 added none | Not reached, not close |
-| **File upload control** (`FileUploadField`, new at M3.6) | **1** — M3.6 is the first and only file-upload UI in the product, despite ~11 internal call sites within the one wizard | Not reached, not close — internal repetition within one screen is not Rule-of-Three evidence |
+| URL-filter hook | ADR-0006's own wording ("a resource with 3+ filters") reads as a **per-resource**, not cross-resource, threshold. Managers already had 5 filters at M3.2; Clients has 4. **Still not resolved** | Ambiguous, unresolved |
+| **Cross-domain picker export** (`useVilleOptionsQuery` → `useManagerOptionsQuery` → `useCommercialOptionsQuery` → `useSecteursQuery`) | **3** instances: Managers → Commercials (M3.3), Commercials → Clients (M3.5), Secteurs → Agent Onboarding (M3.6). **Unaffected by M4.1** — no new instance added | Reaches "3" — still the next actual decision point, still not resolved |
+| **Row selection / bulk action bar** (M3.5) | **1** — unaffected by M4.1 | Not reached, not close |
+| **File upload control** (`FileUploadField`) | **EXTRACTED at M4.1** — justified by Money's three NAMED upcoming callers (Cheque photo, Deposit proof, Debt Payment proof, all confirmed from source during M4 discovery), not by current evidence alone; M3.6's own ~11 internal call sites were explicitly insufficient on their own | Promoted ahead of the callers actually landing — a deliberate exception, not a precedent for extracting on named-but-unbuilt callers generally |
 
-**Explicit decision at M3.6: still do not extract anything, even now that
-the picker-export tally reads "3".** The file-upload row is far below
-threshold — a single screen using a component many times is not the same
-evidence as many screens each needing one — and the picker-export tally
-reaching "3" during a manual-validation bug-fix pass is exactly the kind of
-moment ADR-0006 warns against acting on reflexively; it is flagged above as
-the next session's actual decision point, not extracted here mid-fix. No
-extraction happened, no ADR was written for `FileUploadField`, `TextField`,
-the Sector select or the phone regex (see `decisions.md` — only the
-success-screen deviation was judged genuinely architectural), and the
-M3.4-era Rule-of-Three decision point ("due, not deferred") remains open.
+**The cross-domain picker-export tally and the URL-filter-hook question
+remain the two open Rule-of-Three decision points**, unresolved by M4.1 —
+whichever session picks up M4.2 should treat the picker-export tally as
+live, since Cheque/Deposit agent pickers may add a fourth instance (see
+`next-session.md`'s M4.2 plan).
 
 ## Current blockers
 

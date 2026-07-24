@@ -127,4 +127,42 @@ describe("normalizeError — envelope-based discrimination (Decision 1)", () => 
     const original = new AppError({ kind: "domain", code: "X" });
     expect(normalizeError(original)).toBe(original);
   });
+
+  it("reads a bare `error` message when `message` is absent (Money's DepoController/DebtPaymentController convention)", () => {
+    // Verified from source: DepoController and DebtPaymentController never
+    // emit `message` on failure — every failure path uses `{"error": "..."}}`
+    // instead, on both plain rejections ("This deposit is not pending.") and
+    // the grattage-reconciliation domain exceptions.
+    const error = normalizeError(
+      httpFailure(400, { error: "This deposit is not pending." }),
+    );
+
+    expect(error.kind).toBe("unknown");
+    expect(error.message).toBe("This deposit is not pending.");
+    expect(error.code).toBeUndefined();
+  });
+
+  it("prefers `message` over `error` when a response somehow carries both", () => {
+    const error = normalizeError(
+      httpFailure(400, { message: "From message", error: "From error" }),
+    );
+
+    expect(error.message).toBe("From message");
+  });
+
+  it("still classifies a bare `error` response by status (422 stays unknown, not validation)", () => {
+    // DepositService's grattage-reconciliation guards return 422 with
+    // `{"error": "..."}}` and no `errors` key — must not be mistaken for a
+    // field-mapped ValidationException.
+    const error = normalizeError(
+      httpFailure(422, {
+        error:
+          "Deposit amount (100.00) does not match agent #4's outstanding grattage total (250.00).",
+      }),
+    );
+
+    expect(error.kind).toBe("unknown");
+    expect(error.fieldErrors).toBeUndefined();
+    expect(error.message).toContain("does not match");
+  });
 });

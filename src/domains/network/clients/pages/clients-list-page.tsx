@@ -6,6 +6,7 @@ import { usePermission } from "@/shared/hooks";
 import { ABSENT, formatDate, formatPhone } from "@/shared/formatters";
 import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
+import { StatusBadge } from "@/shared/components/business/status-badge";
 import { ListPage } from "@/shared/components/patterns/list-page";
 import {
   ListEmptyState,
@@ -21,6 +22,7 @@ import {
   CLIENT_LIST_DEFAULTS,
   CLIENT_STATUSES,
   CLIENT_STATUS_LABELS,
+  CLIENT_STATUS_TONES,
   MAX_PER_PAGE,
   type Client,
   type ClientListParams,
@@ -459,21 +461,10 @@ export function ClientsListPage() {
                   </td>
                   <td className="p-2">{formatPhone(client.phone)}</td>
                   <td className="p-2">
-                    {/* A three-value enum, labelled locally — the THIRD real
-                        status enum in the product (Managers, Commercials,
-                        Clients), finally at ADR-0006's stated "3" for
-                        StatusBadge. Not extracted here — see the module
-                        docblock; the values differ (pending vs inactive), and
-                        this is a decision for review, not one made silently. */}
-                    <span
-                      className={
-                        client.status === "active"
-                          ? "text-sm"
-                          : "text-muted-foreground text-sm"
-                      }
-                    >
-                      {CLIENT_STATUS_LABELS[client.status]}
-                    </span>
+                    <StatusBadge
+                      tone={CLIENT_STATUS_TONES[client.status]}
+                      label={CLIENT_STATUS_LABELS[client.status]}
+                    />
                   </td>
                   <td className="p-2">{client.ville ?? ABSENT}</td>
                   <td className="p-2">

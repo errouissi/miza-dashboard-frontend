@@ -9,39 +9,35 @@ _Last updated: 2026-07-25_
 
 ## Current state
 
-**M3 — Network / identity graph is COMPLETE.** All six sub-milestones (M3.1
-Admins, M3.2 Managers, M3.3 Commercials, M3.4 Clients, M3.5 Client
-bulk-assign, M3.6 Agent onboarding wizard) are implemented, tested, and —
-for M3.6 specifically — manually validated against the real backend, with
-every issue that validation found fixed across three follow-up rounds this
-session. **The next milestone is M4 — Money** (roadmap: Cheques, Deposits,
-Debt Payments — the product's first approval queues, first irreversible
-confirmations, first cross-domain cache invalidation).
+**M3 is complete. M4 (Money) is underway: M4.1 (infrastructure) is
+complete and closed out; M4.2 (Cheques) is next, not started.** A full M4
+discovery pass (architecture proposal, domain boundaries, API inventory,
+business rules, risks, unknowns — across Cheques, Deposits and Debt
+Payments, verified from the live backend source) ran before M4.1's
+implementation. This file carries forward everything from that pass that
+M4.2 actually needs; the rest (Deposits'/Debt Payments' own findings) is
+summarized briefly below and re-verified properly when M4.3/M4.4 start.
 
-- **Code**: M3.6 (initial implementation plus all three post-validation fix
-  rounds) is committed and pushed. Working tree is clean.
-- **Tests**: 442/442 across 24 files, stable across four separate
-  `pnpm test:ci` double-runs this session (one after initial implementation,
-  one after each of the three fix rounds).
-- **Quality gates**: typecheck, lint, format:check and build all pass, on
-  every one of those four checkpoints.
+- **Code**: M4.1 (infrastructure) is committed and pushed. Working tree is
+  clean. No Money domain code exists yet — `domains/money/` does not exist.
+- **Tests**: 447/447 across 25 files, stable across two standalone
+  `pnpm test:ci` runs this session.
+- **Quality gates**: typecheck, lint, format:check and build all pass.
 - **Documentation**: this file and `project-status.md` are both current as
-  of M3.6's close. **No new ADR was recorded** — none of the three
-  post-validation fix rounds constituted a new architectural decision (see
-  `project-status.md`'s M3.6 Follow-up 3/4/5 sections for exactly what each
-  one changed and why none rose to that level).
+  of M4.1's close. No new ADR was recorded — M4.1 was pure infrastructure
+  extraction with no contract or scope decisions of its own.
 - **Commit / push**: both done this session. This file does not
-  self-reference the closing commit's own hash — this project's standing
-  convention backfills a commit's hash from the *next* session, not the one
-  making it (see how `bd09d2e` was recorded for M3.5, below).
+  self-reference the closing commit's own hash — backfilled next session,
+  per this project's standing convention (see how `5dd20e8` is recorded for
+  M3.6, below).
 
 ## Before anything else
 
 ```bash
 cd C:\Miza\frontend-v2
 git status                 # expect: clean
-git log --oneline -3        # expect the M3.6 closure commit at HEAD
-pnpm test:ci               # expect: 442/442 across 24 files
+git log --oneline -3        # expect the M4.1 closure commit at HEAD
+pnpm test:ci               # expect: 447/447 across 25 files
 pnpm lint && pnpm typecheck && pnpm format:check && pnpm build
 ```
 
@@ -57,132 +53,203 @@ pnpm lint && pnpm typecheck && pnpm format:check && pnpm build
 - **M3.4 Clients** — committed as `eaaa78b`
 - **M3.5 Client bulk-assign** — committed as `bd09d2e`
 - **M3.6 Agent onboarding wizard**, plus its manual validation and three
-  post-validation fix rounds — **committed and pushed this session.** The
-  three rounds, in order: (1) Villes-backed City selects +
-  `ManagerAreaMultiSelect` reuse + Fuel Amount relocated to Moto (gas-only)
-  + Subscription Number relabelled; (2) Sector became a city-scoped select
-  over Secteurs' `useSecteursQuery` + Moroccan phone-format validation on
-  Phone Subscription Number; (3) a real Review-step auto-submit defect
-  found and fixed (no button is ever `type="submit"` anymore) plus a
-  same-tick double-click race closed with a synchronous ref guard. Full
-  write-up: `project-status.md`'s M3.6 section and its Follow-up 3/4/5
-  subsections.
+  post-validation fix rounds — committed as `5dd20e8`
+- **M4.1 Money infrastructure** — `normalizeError`'s `{error}` fallback,
+  `StatusBadge`/`MoneyAmount`/`FileUploadField` extracted to
+  `shared/components/business/`, the empty `invalidation-map.ts` scaffold —
+  **committed and pushed this session, manually reviewed and validated
+  first.** Full write-up: `project-status.md`'s M4.1 section.
 
-## Next task: M4 — Money (roadmap M4, "the first irreversible actions")
+## Next task: M4.2 — Cheques
 
-**Do not start writing code before a discovery pass.** Every M3.x
-sub-milestone began by reading the frozen documents' relevant sections and
-verifying the real backend contract from source before scope was fixed
-(`session-bootstrap.md` §3/§4) — M4 gets no exception. Read
-`phase8-architecture.html`, `phase8-design-system.html` and
-`phase8-frontend-technical-architecture.html`'s sections on Money and on
-`ApprovalQueuePage` in full, then read the actual Money controllers in the
-backend source (do not assume names or shapes from the roadmap's prose).
-**Present a plan and wait for approval before implementing** —
-`session-bootstrap.md` §4's own checklist, unchanged.
+**Do not start writing code before presenting a plan and getting approval**
+(`session-bootstrap.md` §4 — unchanged). The API inventory and business
+rules below are already verified from source (the M4 discovery pass); they
+do not need re-verifying from scratch, but re-read `ChequeController.php`
+and the `Cheque`/`ChequeAllocation` models directly before writing the
+mapper, per this project's standing discipline of reading the controller
+before trusting a summary of it.
 
-**What the frozen roadmap names for M4** (read
-`phase8-frontend-implementation-roadmap.html`'s own M4 section directly —
-this list is a pointer, not a substitute):
+### Scope (per the discovery pass's recommended order)
 
-- Cheques: submission, pending queue, approve / reject / annuler.
-- Deposits: list (filterable by type), validate, reject.
-- Debt Payments: list + submit.
-- `ApprovalQueuePage` — the first instance of this pattern in the product.
-- **The freshness rule** (FTA §8): confirmation dialogs render from a fresh
-  refetch and refuse the action if the record changed underneath the
-  operator — the first time this product needs it.
-- **The invalidation map** (FTA D-3), its first real entries — e.g.
-  `cheque.approved` → agent capacity.
-- Error-code registry entries for the Money domain's 409 families (FTA D-10).
+List → submit → pending queue (`ApprovalQueuePage`, first instance) →
+approve (including the allocation-split sub-form) → reject → annuler →
+detail (`DetailPage`, first instance). Cheques go first among the three
+M4 resources — richest, best-specified, cleanest single envelope shape
+(`{success,message,data}`, the one Money resource that already matches
+every Network domain's convention) — the right one to prove
+`ApprovalQueuePage`/`DetailPage` against before Deposits (which has its own
+backend gap, see below) or Debt Payments (which has its own unresolved
+placement question).
 
-**Depends on M3** (transactions attribute to agents) — satisfied, M3 is now
-complete. **Does NOT depend on the M3.x detail-page milestone** (see below);
-M4 has no nested routes of its own and is not blocked by FE-2.
+### API inventory (verified from source)
 
-## M3.x — Admin/Manager/Commercial detail pages: still open, still separate from M4
+| Method | Path | Permission | Notes |
+| --- | --- | --- | --- |
+| POST | `/admin/cheques` | `create-cheque` | multipart; `photo_cheque` required image ≤2MB |
+| GET | `/admin/cheques` | `view-cheques` | filters: `statute` (`en_attente/accepter/rejetee/annuler`), `agent_id`, `date_from`, `date_to`, `search` (num_cheque only), `per_page` (max 100) |
+| GET | `/admin/cheques/pending` | `view-pending-cheques` | no filters, oldest-first |
+| GET | `/admin/cheques/{id}` | `view-cheques` | includes `status_label`, eager-loads `allocations` |
+| PUT | `/admin/cheques/{id}/approve` | `approve-cheque` | optional `allocations:[{type,amount}]`; omitted → 100% rapped |
+| PUT | `/admin/cheques/{id}/reject` | `reject-cheque` | requires `decision_reason` |
+| PUT | `/admin/cheques/{id}/annuler` | `annuler-cheque` | approved-only; reverses balances; negative-balance guard |
+| GET | `/admin/cheques/agent/{agentId}` | `view-cheques` | full history + per-status sums, unpaginated |
 
-Unchanged from every prior handoff: ADR-0014 deferred these to their own
-later milestone, not cancelled them — they are **not** one of M3's six
-named sub-milestones and were never blocking M3's own closure. Still
-blocked by **FE-2** (`withPermissionGuards` is shallow — a nested route's
-own `handle.permission` is silently ignored in favour of its parent's).
-**FE-2 MUST be fixed before the first nested detail route is introduced.**
-M4 does not touch this; it has no nested routes.
+Six granular permissions (`create-cheque`, `view-cheques`,
+`view-pending-cheques`, `approve-cheque`, `reject-cheque`,
+`annuler-cheque`) — all seeded, but **only to `super-admin`**; the `admin`
+role holds none of them in the current seed. There is no non-super-admin
+account to exercise a partial-permission path with — register a new
+finding if this still blocks fail-closed QA the way BC-A already does for
+Network.
 
-## Things that MUST NOT be changed without a new decision (carried from M3.6, still standing)
+### Business rules (verified from source)
 
-- 🚫 **Do not add edit mode to the M3.6 wizard.** Create-only, by decision.
-  Editing an existing agent belongs to the still-pending, FE-2-blocked
-  detail-page milestone.
-- 🚫 **Do not add an agent detail page.** ADR-0014, unchanged.
-- 🚫 **Do not move `FileUploadField`/`TextField` to `shared/`.** Domain-local
-  by explicit Rule-of-Three reasoning (repetition within one screen is not
-  cross-resource evidence).
-- 🚫 **Do not build a generic wizard framework.** FTA D-9 rejects a
-  state-machine library for the one wizard in the product. A second wizard
-  (Agent Transfers is the roadmap's own candidate) is the actual revisit
-  trigger, not M4.
-- 🚫 **Do not replace the bounded manager `<select>`, or the Sector
-  `<select>` added in Follow-up 4, with an async entity picker.** Both are
-  explicit, approved narrowings of Design System §12's entity-chip rule,
-  recorded decisions, not oversights.
-- 🚫 **Do not move the fuel-amount field or its essence cross-field
-  validation back to the Financial step.** Both are deliberately on Moto —
-  see the comment in `model/agent-onboarding.ts` before "fixing" this.
-- 🚫 **Do not replace the credential success screen with toast-and-navigate.**
-  ADR-0017.
-- 🚫 **Do not give any button inside the onboarding wizard's `<form>` a
-  `type="submit"`, and do not merge the Next/Review-confirm buttons back
-  into a single shared JSX slot.** This is exactly the defect
-  Follow-up 5 found and fixed — reintroducing it (even by refactoring the
-  button bar "for cleanliness") reopens the same auto-submit bug.
-  Submission must stay wired to `handleConfirm`'s `onClick` alone; see
-  `project-status.md` for the full mechanism and the regression tests that
-  pin it.
-- 🚫 **Do not add localStorage/autosave draft persistence** to the wizard.
-  The no-data-loss rule is about surviving a failed submission, not a
-  browser reload.
-- 🚫 **Do not modify existing tests** to accommodate an implementation
-  without stopping to explain first — unchanged, standing rule.
+- **Approve, split allocations**: optional `allocations:[{type:
+  rapped|grattage, amount}]`, max 2 entries, unique types, sum must
+  `bccomp`-equal the cheque amount exactly. Omitted → single 100% rapped.
+  `rapped` → `agent.solde` + `agent.montant_avance_rapped`; `grattage` →
+  `agent.montant_avance_grattage` only, never `solde`.
+- **Annuler**: approved-only. Reverses per-allocation (or a 100%-rapped
+  legacy fallback for pre-split cheques). Negative-balance guard refuses if
+  the agent already spent below the reversal amount — this ONE rejection
+  is field-mapped (`errors` key), unlike the others below.
+- **Reject**: pending-only, no balance effect.
+- **"Already processed"** (approve/reject called on a non-pending cheque):
+  400, `{success:false, message}`, **no `code`** — normalizes to
+  `kind:"unknown"`, same class as BC-X. Not fixable client-side.
+- Cheque numbers are globally unique. Photo: image-only, 2MB.
+- Pre-Phase-2 `rejected` cheques with no `cheque_allocations` rows are
+  **permanently ambiguous** between a genuine rejection and a legacy
+  pre-split cancellation — documented in the backend's own migration as
+  intentionally left this way. Do not claim more certainty than the data
+  supports on a historical row.
+
+### The invalidation map's first real entries (M4.2 populates `invalidation-map.ts`)
+
+`cheque.approved`/`cheque.annuled` write `agent.montant_avance_rapped`/
+`montant_avance_grattage` — the SAME columns Managers'/Commercials' list
+already renders as `avanceTotal`. Register:
+
+```
+cheque.approved  -> ['money','cheques'], ['network','managers'], ['network','commercials']
+cheque.annuled   -> ['money','cheques'], ['network','managers'], ['network','commercials']
+cheque.rejected  -> ['money','cheques']   (no balance columns touched — confirmed from source)
+```
+
+Invalidating both Network prefixes is deliberate even though only one role
+applies to any given cheque — the agent's role isn't known without an
+extra read, and over-invalidating a cheap `SLOW`-tier list is far safer
+than under-invalidating.
+
+### Known infrastructure risks to design around
+
+- **`ConfirmActionDialog` is hardcoded `variant="destructive"`.** Approving
+  a cheque is not a destructive action visually — needs a `variant` prop
+  or a sibling component before Approve/build. Reject/Annuler fit the
+  existing destructive styling fine.
+- **No cross-role agent search endpoint.** `GET /admin/agents/managers`
+  and `/commercials` are separate, each capped `per_page ≤ 100` (BC-H). The
+  Cheque submit form's `agent_id` picker needs either role and doesn't know
+  which — decide whether to merge two async queries into one picker (a
+  real, if unusual, `EntityChip`/cross-domain-picker instance — would move
+  the picker-export tally to 4) or accept a narrower approach, as an
+  explicit, recorded decision, not a default.
+- **Query tiers**: Cheques list → `SLOW` or `LIVE` (lean `LIVE` — multiple
+  admins may work the pending queue concurrently); Pending queue →
+  `LIVE`, `refetchOnWindowFocus: true`; a cheque read inside the approve/
+  reject/annuler confirmation → `CRITICAL` (the freshness rule — FTA §8 —
+  applies here for the first time in this product: refetch fresh
+  immediately before confirming, and refuse if the record changed
+  underneath the operator).
+
+## Deposits and Debt Payments — carried findings, not yet actioned
+
+Brief pointers only; re-verify properly when M4.3/M4.4 actually start
+(these are more unsettled than Cheques and deserve their own fresh look,
+not an assumption carried forward unchecked):
+
+- **Deposits' `DepoResource` (the only thing `GET /admin/depos` and
+  `GET /admin/depos/{id}` return) omits `type` and `status` from the wire
+  entirely** — confirmed from the resource class itself. Blocks a
+  StatusBadge column, a status filter, or the type tab
+  `phase8-architecture.html` explicitly calls for. **Raise with the backend
+  before starting M4.3's list screen** — do not build around it silently.
+- **Deposits and Debt Payments fail with `{"error": "..."}`, not
+  `{"message": "..."}`** — this is now handled by M4.1's `normalizeError`
+  fallback, so this is no longer a blocker, just a fact worth knowing when
+  writing their mappers.
+- **Debt Payments is scoped to the logged-in admin only** — no `admin_id`
+  filter exists anywhere, `debt_cash` is seeded to `super-admin` only (not
+  `admin`). Whether this is a Money list screen or an Admin-profile panel
+  is an open product question — raise it before M4.4's routing/placement
+  is fixed, not after building it as a `ListPage`.
+- **`DebtPayment::destroy` route is commented out**; the controller method
+  (with a 5-minute self-service delete window) is dead code. Do not build a
+  delete UI without confirming this is intentional.
+
+## Things that MUST NOT be changed without a new decision (carried, still standing)
+
+- 🚫 **Do not add edit mode to the M3.6 wizard**, an agent detail page, or
+  move `TextField` to `shared/`. Unchanged (ADR-0014, Rule-of-Three).
+- 🚫 **Do not build a generic wizard framework.** FTA D-9. Unchanged.
+- 🚫 **Do not replace the bounded manager/sector `<select>`s with an async
+  entity picker** without a fresh, explicit decision — this is the exact
+  question M4.2's own agent picker now re-raises; do not silently resolve
+  it by copying the M3.6 narrowing without re-deriving it.
+- 🚫 **Do not move the fuel-amount field/validation back to Financial**, or
+  replace the credential success screen (ADR-0017). Unchanged.
+- 🚫 **Do not give any wizard button `type="submit"`.** Unchanged — see
+  M3.6 Follow-up 5.
+- 🚫 **Do not register a Money domain event in `invalidation-map.ts` ahead
+  of the mutation that emits it.** M4.1 shipped it empty on purpose; M4.2
+  is where `cheque.approved`/`cheque.rejected`/`cheque.annuled` actually
+  get registered, from a real mutation, not speculatively.
+- 🚫 **Do not add `--success`/`--warning`/`--info` CSS custom properties**
+  to `index.css` as a side effect of a Cheques screen. `StatusBadge`'s
+  M4.1 color implementation (direct Tailwind utilities) was a deliberate,
+  scoped choice — revisit it explicitly if it needs to change, don't drift
+  into it.
+- 🚫 **Do not extract `DataTable`/`FilterBar`/`EntityChip` reflexively**
+  just because Cheques adds another paginated, filtered, FK-bearing
+  resource. Both tallies are already at or near threshold (see
+  `project-status.md`) — this is a real decision point M4.2 may finally
+  force, but it should be a deliberate call, not a side effect of "we
+  needed a table anyway."
 - 🚫 **Do not authorize on roles** — permission strings only (FTA D-5).
-- 🚫 **Do not invent backend contracts.** BC-S, BC-H, BC-N, BC-U, BC-V, BC-W,
-  BC-X and BC-Y are all standing examples of disclosed limitations, not
-  problems to route around.
-- 🚫 **Do not merge mappers or key factories** across domains (ADR-0012).
-- 🚫 **The cross-domain picker-export tally is now at "3"** (Managers →
-  Commercials, Commercials → Clients, Secteurs → Agent Onboarding — see
-  `project-status.md`). This is flagged as a real Rule-of-Three decision
-  point for a future session, but do not extract anything reflexively just
-  because the count is reached mid-M4-work — it needs a deliberate decision
-  session, not a side effect of an unrelated milestone.
+- 🚫 **Do not invent backend contracts.** BC-S, BC-H, BC-N, BC-U, BC-V,
+  BC-W, BC-X, BC-Y and the new Deposits/Debt-Payments findings above are
+  all standing disclosed limitations, not problems to route around.
+- 🚫 **Do not merge mappers or key factories** across domains (ADR-0012) —
+  Cheques/Deposits/Debt Payments each keep their own, same as every prior
+  resource.
 
 ## Known follow-ups (carried, unchanged unless noted)
 
-- [x] **M3.6 manual validation — DONE.** Three fix rounds applied, every
-      quality gate re-verified after each. See `project-status.md`.
-- [x] **M3.6 commit and push — DONE** this session.
-- [ ] **FE-1 — test flake, unchanged.** Five older test files'
-      `findByRole("alert")` calls still race the 1000ms default timeout.
-      Suite is now at 442 tests across 24 files, stable across four
-      double-runs this session. Recommended before the suite grows further
-      — especially with M4's approval-queue tests coming.
-- [ ] **FE-2 — nested-route guard.** Unchanged; still non-blocking for M4
-      (no nested routes there either). Must be fixed before the first
-      detail-page milestone.
+- [x] **M4.1 infrastructure — DONE.** Manually reviewed, validated,
+      committed, pushed. See `project-status.md`.
+- [ ] **M4.2 Cheques — NEXT.** See the plan above. Discovery already done;
+      implementation has not started.
+- [ ] **M4.3 Deposits — contingent on the `DepoResource` backend
+      consultation.** Do not start until that's raised, or until an
+      explicit decision narrows scope around it.
+- [ ] **M4.4 Debt Payments — contingent on the placement/permission
+      product questions above.**
+- [ ] **FE-1 — test flake, unchanged.** Suite is now at 447 tests across 25
+      files, stable across two double-runs this session. Recommended
+      before Cheques' own test file adds meaningfully more.
+- [ ] **FE-2 — nested-route guard.** Unchanged; still non-blocking for M4.
 - [ ] **BC-Y, BC-X, BC-N, BC-U, BC-V, BC-S — raise with the backend.**
-      Unchanged from M3.5/M3.6.
-- [ ] **ADR-0016 owed work** (M3.5's deferred all-pages bulk-assign step,
-      "100 max" count copy) — not urgent, not started.
-- [ ] **Rule-of-Three / shared-extraction decision — now genuinely due, not
-      just close.** The cross-domain picker-export tally reached "3" during
-      M3.6 Follow-up 4 (see `project-status.md`'s updated tally). Still not
-      resolved — worth deciding explicitly early in M4's own discovery pass
-      if Money needs a sibling picker too, rather than letting the count
-      climb further unaddressed.
+      Unchanged.
+- [ ] **ADR-0016 owed work** (M3.5's deferred all-pages bulk-assign step) —
+      not urgent, not started.
+- [ ] **Rule-of-Three: cross-domain picker export (at "3") and the
+      URL-filter-hook question — still the two live decision points.**
+      M4.2's own agent-picker design may resolve (or further complicate)
+      the first one — see "Known infrastructure risks" above.
 - [ ] **Gate G2 formal closure** — unchanged, governance only.
 - [ ] Backend: `view-permissions` permission (B-6 deferred the OR-gate cleanup).
-- [x] M3.1–M3.6 and all their follow-ups closed out — see `project-status.md`.
+- [x] M3.1–M3.6 and M4.1 closed out — see `project-status.md`.
 
 ## Session workflow
 

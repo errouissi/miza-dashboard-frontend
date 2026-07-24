@@ -8,6 +8,7 @@ import { AGENT_ONBOARDING_PATH } from "@/domains/network/agent-onboarding";
 import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/shared/components/ui/avatar";
+import { StatusBadge } from "@/shared/components/business/status-badge";
 import { ListPage } from "@/shared/components/patterns/list-page";
 import {
   ListEmptyState,
@@ -22,6 +23,7 @@ import {
   MANAGER_LIST_DEFAULTS,
   MANAGER_STATUSES,
   MANAGER_STATUS_LABELS,
+  MANAGER_STATUS_TONES,
   MAX_PER_PAGE,
   type Manager,
   type ManagerListParams,
@@ -34,8 +36,10 @@ import {
  *
  * WRITTEN BY COPYING ADMINS AND VILLES, and deliberately not abstracted. Managers
  * is only the SECOND paginated resource and the FIRST with a real status enum, so
- * `DataTable`, `FilterBar`, `StatusBadge` and `MoneyAmount` all remain unextracted
- * — ADR-0006 requires three genuinely comparable cases and this is not the third.
+ * `DataTable` and `FilterBar` remain unextracted here — ADR-0006 requires three
+ * genuinely comparable cases and this was not the third. (`StatusBadge` WAS
+ * extracted at M4.1, once Managers/Commercials/Clients together reached that
+ * threshold — this page now consumes it via `MANAGER_STATUS_TONES`.)
  *
  * IT EXPOSES ONLY WHAT THE ENDPOINT SUPPORTS (ADR-0009):
  *   - pagination and search: YES, both are real backend parameters
@@ -407,17 +411,10 @@ export function ManagersListPage() {
                       {manager.numAbonnement ?? ABSENT}
                     </td>
                     <td className="p-2">
-                      {/* A three-value enum, labelled locally. First StatusBadge
-                          evidence, but only the first — no shared badge (ADR-0006). */}
-                      <span
-                        className={
-                          manager.status === "active"
-                            ? "text-sm"
-                            : "text-muted-foreground text-sm"
-                        }
-                      >
-                        {MANAGER_STATUS_LABELS[manager.status]}
-                      </span>
+                      <StatusBadge
+                        tone={MANAGER_STATUS_TONES[manager.status]}
+                        label={MANAGER_STATUS_LABELS[manager.status]}
+                      />
                     </td>
                     <td className="p-2">{manager.ville ?? ABSENT}</td>
                     <td className="p-2">{manager.villeSousResponsabilite ?? ABSENT}</td>

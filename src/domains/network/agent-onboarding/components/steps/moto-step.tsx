@@ -1,12 +1,12 @@
 import { useEffect } from "react";
 import { Controller, useFormContext } from "react-hook-form";
+import { FileUploadField } from "@/shared/components/business/file-upload-field";
 import {
   DOCUMENT_ACCEPT,
   MOTO_TYPES,
   MOTO_TYPE_LABELS,
   type AgentOnboardingFormValues,
 } from "../../model/agent-onboarding";
-import { FileUploadField } from "../file-upload-field";
 import { TextField } from "../text-field";
 
 /**

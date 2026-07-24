@@ -1,10 +1,10 @@
 import { Controller, useFormContext } from "react-hook-form";
+import { FileUploadField } from "@/shared/components/business/file-upload-field";
 import {
   DOCUMENT_ACCEPT,
   IMAGE_ACCEPT,
   type AgentOnboardingFormValues,
 } from "../../model/agent-onboarding";
-import { FileUploadField } from "../file-upload-field";
 
 /**
  * Step 2 — Documents. Five required uploads, two optional. Named slots

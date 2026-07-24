@@ -3,12 +3,22 @@ import { cn } from "@/shared/lib/utils";
 import { Button, buttonVariants } from "@/shared/components/ui/button";
 
 /**
- * A LOCAL, domain-specific file upload control — not extracted into
- * `shared/`. Reused ~11 times within this one wizard (Documents' 7 slots,
- * Moto's 4), which is same-screen repetition inside a single flow, not
- * cross-resource evidence (ADR-0006's Rule-of-Three is about the latter).
- * Nothing else in the product uploads files yet, so there is no second
- * caller to generalize for.
+ * A file upload control — preview/replace/remove wrapper around a native
+ * file input (Architecture §7, FTA §4's `shared/components/business`).
+ *
+ * PROMOTED FROM `domains/network/agent-onboarding/` (M4.1). It shipped
+ * domain-local at M3.6 because its ~11 call sites were all same-screen
+ * repetition inside one wizard, not cross-resource evidence (ADR-0006's
+ * Rule-of-Three is about the latter). Money's Cheque/Deposit/Debt Payment
+ * submission forms are each a genuinely separate resource that also uploads
+ * a file — the second, third and fourth callers Rule-of-Three actually asks
+ * for — so this is promoted now, not speculatively.
+ *
+ * PRESENTATION ONLY, same boundary `ConfirmActionDialog` and `FormDrawer`
+ * already hold in `shared/`: it owns no validation rule, no size cap, no
+ * accepted-MIME list of its own — every one of those is domain knowledge
+ * (a Cheque photo's 2MB image-only limit is not a Deposit proof's 5MB
+ * image-or-PDF limit) and arrives from the caller via `accept`/`error`.
  *
  * The label's own text IS the click target (a real `<label htmlFor>`,
  * styled as a button) rather than a separate "Browse" affordance next to a
@@ -18,8 +28,8 @@ import { Button, buttonVariants } from "@/shared/components/ui/button";
  * No drag-and-drop zone: Design System §12 describes one, but a click-to-
  * browse control with replace/remove already satisfies the substantive
  * requirements (named slots, accepted-type and size caps stated up front,
- * replace/remove actions) without building drag-and-drop machinery this
- * milestone's scope does not ask for.
+ * replace/remove actions) without building drag-and-drop machinery no
+ * caller has asked for yet.
  */
 export type FileUploadFieldProps = {
   label: string;
