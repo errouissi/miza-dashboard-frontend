@@ -12,5 +12,16 @@ export { MANAGERS_PATH, managersRoutes } from "./routes";
 export { useManagerOptionsQuery } from "./queries/managers-queries";
 export type { ManagerOption } from "./model/manager";
 
-// api/, the list query, mutations, components, the page and the full Manager
-// type stay internal. Siblings get the picker surface above — nothing else.
+/**
+ * The area-of-responsibility multi-select, exported for the M3.6 onboarding
+ * wizard's Identity step (manager role) — the SAME component and behavior
+ * `ManagerFormSheet` already uses, not a second implementation. The backend
+ * contract this component sits on top of is unchanged for this second
+ * caller either: `value`/`onChange` are still exactly the one
+ * `ville_sous_responsabilite` string (see the component's own docblock).
+ */
+export { ManagerAreaMultiSelect } from "./components/manager-area-multiselect";
+
+// api/, the list query, mutations, the page and the full Manager type stay
+// internal. Siblings get the picker surface and the area multi-select above
+// — nothing else.

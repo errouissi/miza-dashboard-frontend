@@ -3,34 +3,33 @@
 **The current state of the project.** Overwrite this file after every completed
 milestone — it describes *now*, not history. History lives in `decisions.md` and git.
 
-_Last updated: 2026-07-23_
+_Last updated: 2026-07-25_
 
 ---
 
 ## Current milestone
 
-**M3 — Network / identity graph.** M3.1 (Admins), M3.2 (Managers), M3.3
-(Commercials), M3.4 (Clients) and **M3.5 (Client bulk-assign) are all
-complete.** **M3.6 (Agent onboarding wizard) is next — not started.** M3.x
-(Admin/Manager/Commercial detail pages, ADR-0014) remains pending, blocked by
-FE-2.
+**M3 — Network / identity graph — ALL SIX SUB-MILESTONES COMPLETE.** M3.1
+(Admins), M3.2 (Managers), M3.3 (Commercials), M3.4 (Clients), M3.5 (Client
+bulk-assign) and **M3.6 (Agent onboarding wizard) are all complete.** M3.6's
+manual validation against the real backend ran to completion; every issue it
+surfaced was fixed in three follow-up rounds during this session (see the
+M3.6 section below for the full write-up). M3.x (Admin/Manager/Commercial
+detail pages, ADR-0014) remains the only open M3 item, blocked by FE-2 — not
+part of M3's own six named sub-milestones, and not started.
 
 ## Current branch
 
-`main`, level with `origin/main` before this session's commit. `eaaa78b` (M3.4
-Clients) is HEAD at the start of this session. **M3.5 (Client bulk-assign) —
-current-page row selection, current-page select-all, a bulk action bar, a
-dedicated bulk-assign sheet, an active-only Commercials picker, `assign-client`
-permission gating, the bulk-assign mutation, selection-reset rules, success
-invalidation, and field/generic error handling — has passed manual UI
-validation and is approved, committed and pushed this session.** No backend
-changes were required or made — M3.5 builds entirely against the existing
-`ClientController::assignBulk` contract verified during its own discovery pass.
+`main`, level with `origin/main` — M3.6 (implementation plus all three
+post-validation fix rounds) is fully committed and pushed this session. No
+uncommitted files remain. See `next-session.md` for the exact commit.
 
 ## Last completed implementation
 
-**M3.5 — Client bulk-assign.** See its own section below for the full
-write-up. The previous entry, kept for continuity:
+**M3.6 — Agent onboarding wizard — COMPLETE.** Manually validated against
+the real backend; every issue that validation found is fixed and recorded in
+its own section below, which is the authoritative write-up. The previous
+entry, kept for continuity:
 
 **M3.3 — Commercials.** The third Network domain, contract-verified independently
 from source (`AgentController::indexCommercials`) rather than inherited from
@@ -415,6 +414,318 @@ flake — stable both times; one interleaved run hit FE-1 on five unrelated,
 untouched files under heavier machine load, confirming the flake rather than
 a regression.
 
+## M3.6 — Agent onboarding wizard (complete)
+
+**Status: COMPLETE.** Implementation, manual validation against the real
+backend, and three follow-up rounds of fixes the validation surfaced are all
+done; every automated gate re-passes after each round. This section is now
+the closed record — see "Follow-up 3/4/5" below for what manual validation
+actually found and how each was fixed.
+
+A fresh discovery pass was run before any implementation, per the same
+discipline every prior M3 sub-milestone required, and per the process fix
+ADR-0016 itself asked for: the frozen roadmap's M3 section, Design System
+§12/§13, and FTA §10/D-9 were read in full before scope was fixed, not
+derived from the backend contract alone. Its own discovery report is the
+source for the contract facts below.
+
+**A dedicated, new domain** — `domains/network/agent-onboarding/` — not
+hosted inside Managers or Commercials. `AgentController::store` creates
+*either* role through one controller action, so the wizard belongs to
+neither existing domain; forcing it into one would misrepresent ownership
+under ADR-0012. This is the first **workflow domain** in the product (every
+prior domain maps 1:1 to one backend resource with its own list); see the
+Rule-of-Three tally below for why this did not get its own ADR, and
+`next-session.md` for why the credential-display decision did.
+
+**Wizard flow, one RHF instance across all five steps**: Identity →
+Documents → Financial → Moto → Review → Success. Not five separate forms
+and not a state machine (FTA D-9 — the wizard's only real complexity is a
+role-conditional branch and a moto-conditional branch, not a non-linear step
+graph). Back navigation preserves every entered value and every chosen file
+by construction — `stepIndex` only decides which step's JSX renders; the
+form instance itself never unmounts, and nothing in the implementation ever
+calls `form.reset()` except explicitly, after a *successful* submission's
+"Onboard another agent" action. A failed submission leaves the form and
+every field exactly as it was — no code path clears it, which is what
+satisfies Design System §23's "a lost connection MUST NOT cost a filled
+onboarding wizard its data" (about surviving a failed submission, not a
+browser reload — no localStorage/autosave draft persistence exists or was
+asked for by any frozen document).
+
+**The first multipart/`FormData` request in this product.** File uploads are
+mandatory on create, so this is the first non-JSON request body anywhere in
+the codebase. `httpClient` needed no changes — axios sets the multipart
+boundary itself from a `FormData` instance.
+
+**A local, domain-only `FileUploadField`**, in
+`agent-onboarding/components/`, reused ~11 times within this one wizard
+(Documents' 7 slots, Moto's 4) — same-screen repetition inside a single
+flow, not cross-resource evidence, so it stays domain-local per ADR-0006's
+Rule-of-Three discipline rather than moving to `shared/`. A companion local
+`TextField` (label+input+error) avoids repeating the same three elements
+~20 times across the five steps. Neither is a new architectural pattern;
+both are correct applications of an existing one, which is why neither
+warranted its own ADR (see `next-session.md`).
+
+**Every file field respects the REAL backend limits, verified from source,
+not assumed from the Design System**: every one of the up to 11 possible
+uploads is capped at 2MB (`max:2048`) — the Design System's own stated "5MB
+proofs" tier does not exist anywhere in the actual validator, and the UI
+does not claim one. MIME acceptance is exact, not uniform: `photo`/CIN
+front/back accept images only (`mimes:jpeg,png,jpg`); every other document
+(habitat certificate, auto-entrepreneur card, both optional fiches, all
+four moto documents) accepts PDF or image (`mimes:pdf,jpeg,png,jpg`).
+
+**Role-conditional fields (manager vs commercial), verified NOT to be
+validator-required by either role** — `ville_sous_responsabilite` (manager)
+and `manager_id`/`ville_actuelle`/`secteur` (commercial) are all `nullable`
+server-side; the backend force-nulls the wrong role's fields silently on
+create. The distinction is about which fields are shown, not additional
+validation. The commercial's manager picker reuses Managers' existing
+`useManagerOptionsQuery` — the same bounded `<select>` pattern already used
+everywhere else in Network, **not** the product's first async entity-chip
+picker, despite Design System §12's unconditional "MUST use an entity chip
+for any foreign key in a form." An explicit, approved narrowing, not an
+oversight — see `next-session.md` for why this did not get its own ADR
+either, and stays a recorded decision instead.
+
+**Moto is entirely conditional on `has_moto`**, mirroring
+`required_if:has_moto` exactly: a checkbox, then (only when checked) the
+moto type radio, chassis number, and 4 required documents.
+
+**The essence/moto cross-field rule mirrors `AgentController::store`'s own
+manual business-rule check exactly**: `montant_essence` must be 0 whenever
+the agent has no motorcycle, or the motorcycle is electric — only a
+gas-moto agent may have a nonzero fuel amount. **Deliberately validated on
+leaving the Moto step, not the Financial step where the field itself
+lives** — the rule depends on `hasMoto`/`typeMoto`, which do not exist yet
+while the operator is still on Financial (Moto is the next step in the
+frozen order), so gating the Financial→Moto transition on it would block a
+legitimate "fuel amount now, motorcycle details next" flow before the
+information it depends on has been entered. This is a deliberate,
+documented design choice (commented in `model/agent-onboarding.ts`), not an
+oversight — do not move it back to Financial without re-deriving why it was
+placed on Moto.
+
+**Two entry points, one wizard** — "Create Manager" on the Managers list
+page and "Create Commercial" on the Commercials list page, both gated on
+the new `CREATE_AGENT` permission and navigating to the same route with
+`?role=manager`/`?role=commercial`, which the wizard reads to preselect
+(but not lock) the role radio. **No new sidebar navigation entry** — by
+decision, matching how Villes/Secteurs/Products' own create actions are
+list-page buttons, not nav items.
+
+**A dedicated success screen, not a toast.** `store()`'s response carries a
+backend-generated account number (`MG#####`/`CM#####`) and an 8-character
+random password, both computed server-side — there is no field anywhere in
+the form for either. The password is shown exactly once; `Agent::$hidden`
+excludes it from every later read, so a toast-and-navigate flow (the
+pattern every other create/edit form in this product uses) would lose it
+permanently. **See ADR-0017** — this is the one new architectural decision
+recorded from M3.6, because it is a genuine, deliberate exception to FTA
+§10's own documented submission flow, not a styling preference.
+
+**Explicitly deferred, by decision, not by contract necessity**:
+
+- Edit mode for the wizard — `AgentController::update` accepts nearly the
+  same fields, but M3.6 is create-only; editing an existing agent is the
+  still-pending, FE-2-blocked detail-page milestone's job.
+- An agent detail page (ADR-0014, unchanged).
+- A generic wizard framework — FTA D-9 rejects a state-machine library for
+  the one wizard in the product; nothing here builds toward a second one.
+- A shared/generic upload framework — `FileUploadField` stays domain-local.
+- The async entity-chip picker for `manager_id` (see above).
+- Persisted localStorage/autosave drafts across a browser reload — the
+  no-data-loss rule is about a failed submission, not a crash/reload, and
+  no frozen document asks for the latter.
+- Any backend changes — M3.6 builds entirely against the existing
+  `AgentController::store` contract, verified during its own discovery
+  pass. No backend code was touched.
+
+**New backend findings, registered this milestone (verified from source,
+not assumed):**
+
+- **Positive finding** — `AgentController::store` correctly catches
+  `ValidationException` before its generic handler; BC-N does **not** apply
+  to it, mirroring the pattern already found on Clients' `assignBulk`. The
+  one manual business-rule check (the essence/moto rule) also returns a
+  properly `errors`-keyed 422, unlike Clients' equivalent gap (BC-X) — no
+  special-casing was needed for it client-side.
+- **Frozen-document inaccuracy, not a backend defect** — Design System §12
+  states file uploads are capped at "images/PDF, 2MB documents, 5MB proofs."
+  The real validator caps every single file field uniformly at 2MB; no 5MB
+  tier exists anywhere in `store()` or `update()`. The UI states 2MB
+  everywhere, accurately, not the document's claim.
+- **Known, accepted permission-boundary gap** — `useManagerOptionsQuery`
+  (Managers' own public surface) has no `enabled` gate, because its one
+  prior caller (Commercials) shares `view-agents` with the endpoint it
+  reads. This wizard is gated on `create-agent`, a *different* permission —
+  a session holding `create-agent` without `view-agents` would 403 on the
+  manager picker specifically. Documented in `identity-step.tsx`, not fixed
+  — modifying Managers' public surface is out of this domain's scope.
+- **Zero backend feature-test coverage** for `AgentController::store` —
+  every finding above is read from source, not confirmed by an authoritative
+  test suite.
+- **A narrow, pre-existing backend sequencing risk, not introduced by this
+  milestone** — `createMoto()` runs, and uploads its files, *before*
+  `DB::transaction` wraps the agent insert. If the agent insert then fails
+  inside the transaction, an already-created `Moto` row and its uploaded
+  files would be orphaned. Not something the frontend can route around;
+  recorded here so a future session doesn't rediscover it from scratch.
+- **Untested outside this environment** — the real infrastructure's PHP
+  `upload_max_filesize`/`post_max_size` have not been manually verified to
+  accommodate up to 11 simultaneous file uploads in one request. An infra
+  fact, not a code fact — needs a real-environment check during manual
+  validation, not something readable from source.
+
+**No new shared abstraction was introduced or extracted.** See the updated
+Rule-of-Three tally below.
+
+**Tests: 20 new tests** in `agent-onboarding-wizard-page.test.tsx`
+(permission gating, wizard navigation, per-step validation, back-navigation
+preservation, role switching, moto conditionals including the essence rule,
+file validation, FormData payload shape, successful submission, success
+screen/credential display, and failed-submission data preservation), plus 4
+new tests across Managers'/Commercials' own list-page spec files (button
+visibility + navigation to the wizard). One pre-existing test per list-page
+file ("never offers a create action") was narrowed once a real, approved
+create button existed — the same class of update M3.5 made to its own
+"never offers bulk-assign" test, explained inline, not silent.
+
+**Test environment limitation found and worked around, not hidden**: a
+`FormData` containing a real `File` hangs indefinitely under this
+MSW+jsdom test setup — reproduced independent of the implementation (even
+via a raw `fetch()` call bypassing axios entirely). The submission tests
+mock `httpClient.post` directly instead of going through MSW for this
+reason; documented inline in the test file. This is a test-tooling gap, not
+a product defect — nothing about the real browser/backend path is affected.
+
+**Two real engineering findings, verified empirically, both already
+commented at their point of use in code — not repeated as project-wide
+rules**: react-hook-form reports an untouched native radio *group* as
+`null` (not `undefined`), which the wizard's zod schema now models
+correctly (`typeMoto: z.string().nullable().optional()`); and the
+essence-field validation placement decision above.
+
+**Test count at initial implementation: 431/431 across 24 files** (was
+407/23 before M3.6 — the wizard's own spec file is the 24th). See "Follow-up
+3/4/5" below for how this grew to its final, post-validation count.
+
+## Follow-up 3 — City, Area of responsibility and Fuel Amount fixed from manual-validation review (first UX batch)
+
+Manual UI validation of the wizard found three defects, all fixed in the
+same pass, before the checklist continued:
+
+- **`ville` and `villeActuelle` (Identity step) were still free-text
+  inputs** — a drift from the pattern M3.2/M3.3/M3.4's own edit forms
+  already established (Follow-up 1/2 above). Both are now `<select>`s
+  sourced from `useVilleOptionsQuery` (Villes' existing public surface,
+  unchanged), gated on `access-dashboard` via `enabled`, with the identical
+  legacy-value-fallback handling Managers'/Commercials' own forms use. The
+  payload is unchanged: still the city's NAME, not a Villes id.
+- **`villeSousResponsabilite` (manager role) was a free-text input**,
+  despite `ManagerAreaMultiSelect` already existing for exactly this field
+  on Managers' own edit form. `ManagerAreaMultiSelect` is now exported from
+  `managers/index.ts` (FTA §4 — a documented cross-domain coupling, the same
+  pattern already used for `useManagerOptionsQuery`) and reused **unchanged**
+  by the wizard — not a second implementation. The backend contract is
+  identical to Follow-up 2's: one `", "`-joined string, ADR-0015 unchanged.
+- **`montant_essence` ("Fuel Amount") lived on the Financial step
+  unconditionally**, even though `AgentController::store` force-zeroes it
+  for every combination except a GAS motorcycle. It now lives on the Moto
+  step, rendered only when `hasMoto && typeMoto === "essance"`, with an
+  effect that force-resets it to `"0"` the instant that condition stops
+  holding — a nonzero value entered while Gas was selected can never be
+  silently carried into an Electric or no-moto submission. The wire field
+  name and payload are unchanged.
+- **The Subscription Number label was renamed** to "Phone Subscription
+  Number" — wording only. The backend field (`num_d_abonnement`) and payload
+  are unchanged.
+
+No backend changes. Tests: wizard spec net +1 (two stale essence-error tests
+that assumed the old Financial-step field location were replaced by three
+tests covering the new visibility/reset behaviour). Suite: 432/432 across 24
+files.
+
+## Follow-up 4 — Sector becomes a city-scoped select; Phone Subscription Number gets Moroccan-format validation (second UX batch)
+
+Two more defects, found continuing the same manual-validation pass:
+
+- **`secteur` (commercial role) was a free-text input.** It is now a
+  `<select>` sourced from `useSecteursQuery({ villeId })` — the SAME hook
+  `SecteursListPage`'s own city filter already uses, not a new
+  implementation — where `villeId` is resolved from the operator's selected
+  Current City NAME against the already-fetched Villes list.
+  `useSecteursQuery` gained an optional `enabled` parameter (mirroring
+  `useVilleOptionsQuery`'s own) and is now exported, alongside the `Secteur`
+  type, from `secteurs/index.ts` — a **third** instance of the cross-domain
+  picker-export pattern (see the updated Rule-of-Three tally below).
+  Changing the Current City clears the selected sector and re-scopes the
+  query automatically (the queryKey carries `villeId`); the select is
+  disabled until a city is chosen. **The payload is unchanged**:
+  `agents.secteur` still has no foreign key to `secteurs` (BC-V, unchanged),
+  so the value submitted is still the sector's plain NAME, exactly what the
+  free-text field used to send.
+- **Phone Subscription Number accepted any string.** `AgentController::store`
+  validates `num_d_abonnement` as a plain `required|string|max:255` — not as
+  a phone number — so this is a deliberate, frontend-only tightening: the
+  field now validates against the SAME Moroccan phone regex
+  `ClientFormSheet` already uses for `phone`
+  (`/^(\+212|0)[5-7][0-9]{8}$/`), duplicated locally in
+  `model/agent-onboarding.ts` per ADR-0012 (validation schemas stay
+  duplicated per domain), not imported. The backend payload and field name
+  are unchanged.
+
+No backend changes. Tests: 5 new (3 sector, 2 phone). Suite: 437/437 across
+24 files.
+
+## Follow-up 5 — Review step auto-submit defect, found and fixed (third UX batch, critical)
+
+Manual validation found the most serious defect of the three rounds:
+**reaching the Review step immediately submitted the agent**, with no click
+on any confirmation control.
+
+**Root cause**: the Moto→Review "Next" button and Review's own submit button
+occupied the *same JSX position* in a ternary
+(`{step === "review" ? <Button type="submit"> : <Button type="button">Next</Button>}`).
+React reuses the same underlying `<button>` DOM node across that kind of
+transition rather than unmounting/remounting it, so clicking "Next" caused
+React to mutate that node's `type` attribute from `"button"` to `"submit"`
+**in place**, synchronously, inside the very click handler that advanced
+`stepIndex`. The browser evaluates "does this click submit the form?"
+*after* synchronous handlers run, against the button's *current*
+(already-mutated) `type` — so it saw `"submit"` and fired an implicit native
+form submission the instant Review rendered. No second click was ever
+involved.
+
+**Fix**: no button in the wizard is ever `type="submit"`. Review's button
+(relabelled **"Confirm and Create Agent"**) is wired directly to a
+`handleConfirm` function via `onClick`, never to the browser's native submit
+event; the `<form>`'s own `onSubmit` is now a no-op guard
+(`event.preventDefault()` only), so even an implicit Enter-key submission
+cannot create an agent.
+
+**A second, related gap was found writing the regression test for this**:
+guarding `handleConfirm` with `createMutation.isPending` alone is
+insufficient against a duplicate request from two clicks landing in the same
+synchronous tick — `form.handleSubmit`'s validation is asynchronous, so
+`mutate()` (and therefore `isPending` actually becoming `true`) does not
+happen until a later microtask, well after a second click has already
+re-read the stale `isPending` captured at the last render. Closed with a
+synchronous `useRef` guard (`submittingRef`), set `true` before `submit()`
+is even called and released once it settles — a plain mutable value, not
+subject to React's render-timing lag, which is the only thing a same-tick
+second click can actually observe as changed.
+
+No backend changes. Tests: 5 new, in a dedicated `describe("Review does not
+auto-submit")` block, proving: no API call moving Motorcycle→Review; no API
+call merely rendering Review; no API call clicking Back from Review; exactly
+one API call clicking Confirm; no duplicate call from three rapid clicks
+while pending. All 12 existing `/^create agent$/i` button-name assertions
+were updated to the new label. Suite: **442/442 across 24 files** — the
+milestone's final count.
+
 ## Overall progress
 
 | Milestone | Status |
@@ -432,35 +743,61 @@ a regression.
 | M3.2 — Managers | ✅ **complete** |
 | M3.3 — Commercials, plus city-select and multi-select follow-ups | ✅ complete |
 | M3.4 — Clients | ✅ complete |
-| **M3.5 — Client bulk-assign** | ✅ **complete** |
-| M3.6 — Agent onboarding wizard | ⬜ next — not started |
+| M3.5 — Client bulk-assign | ✅ complete |
+| **M3.6 — Agent onboarding wizard** | ✅ **complete** — manually validated, three post-validation fix rounds applied |
 | M3.x — Admin + Manager + Commercial detail pages (ADR-0014) | ⬜ pending — **blocked by FE-2** |
 | M4+ — Money, Stock, Grattage, Overview | ⬜ not started |
 
-**Tests: 407/407 across 23 files** (was 388/23 before M3.5 — Clients' own
-spec file grew from 43 to 62 tests; no new test file was needed since M3.5
-extends the existing Clients list screen rather than adding a route). Lint ·
-typecheck · format · build all clean; the full suite was run standalone
-twice this session to confirm no flake — stable both times.
+**Tests: 442/442 across 24 files** (was 407/23 before M3.6; 431/24 at
+initial implementation; grew to 442 across three post-validation fix
+rounds — see the M3.6 Follow-up 3/4/5 sections above for the breakdown).
+Lint · typecheck · format · build all clean, re-verified after every round,
+`pnpm test:ci` run twice standalone each time to rule out FE-1 — stable
+throughout.
 
 ## Shared pattern layer
 
-Six components, **unmodified since extraction** — have now absorbed M3.5's
-bulk-assign work with zero changes (the new checkbox column, select-all and
-action bar were all built inline in `ClientsListPage`; the new sheet is built
-on the unmodified `FormDrawer`):
+Six components, **unmodified since extraction** — M3.6 did not touch any of
+them either (the wizard is a page-level flow, not a list screen; `FormDrawer`
+was considered for the success step and correctly rejected — a five-step
+wizard is not a quick-edit drawer):
 
 - `ConfirmActionDialog` · `ListPage` · `FormDrawer`
 - `ListLoadingState` · `ListErrorState` · `ListEmptyState`
 
-**Deliberately not extracted this session** (per explicit decision — see below):
+**Deliberately not extracted** (per explicit decision — see below):
 `DataTable` · `FilterBar` · `StatusBadge` · `MoneyAmount` · `EntityChip` ·
 Resource-definition module · URL-filter hook
 
-**Rule-of-Three evidence tally after M3.5, recorded factually, not acted on**
-(unchanged from M3.4 except the two new rows — M3.5 added no new list
-resource, so `DataTable`/`FilterBar`/`StatusBadge`/`MoneyAmount`/`EntityChip`/
-resource-definition module/URL-filter hook evidence is exactly as it was):
+**M3.6's `FileUploadField`/`TextField` stay domain-local too** — used ~11
+and ~20 times respectively, but entirely within the one wizard (same-screen
+repetition, not cross-resource evidence). No extraction decision applies to
+them; ADR-0006's Rule-of-Three is about resources, not repetition within a
+single screen.
+
+**The cross-domain picker-export tally moved to "3" during M3.6's
+post-validation Follow-up 4** — the wizard's manager picker still *reuses*
+`useManagerOptionsQuery` unchanged (no new instance from that), but the
+Sector fix added `secteurs/index.ts` exporting `useSecteursQuery` to the
+wizard: (1) Managers → Commercials (M3.3), (2) Commercials → Clients (M3.5),
+(3) **Secteurs → Agent Onboarding (M3.6 Follow-up 4)**. This reaches the
+count the tally has been tracking toward since M3.4 — flagged here as a
+decision point for a **future** session, not acted on now (no extraction
+happened this session; adding one would be scope well beyond a
+manual-validation fix).
+
+**A second, distinct cross-domain pattern appeared in Follow-up 3**:
+`managers/index.ts` now exports `ManagerAreaMultiSelect` itself (a
+component, not a `useXOptionsQuery` hook) for the wizard to reuse unchanged.
+This is a different shape of coupling than the picker-export tally above and
+is **not** added to that row — recorded here as its own, first instance, not
+conflated with it.
+
+**Rule-of-Three evidence tally, recorded factually, not acted on**
+(unchanged from M3.5 on every row except the two above; M3.6's initial
+implementation added no new list resource, so `DataTable`/`FilterBar`/
+`StatusBadge`/`MoneyAmount`/`EntityChip`/resource-definition module/
+URL-filter hook evidence is exactly as it was):
 
 | Component | Evidence | At ADR-0006's stated threshold? |
 | --- | --- | --- |
@@ -471,15 +808,21 @@ resource-definition module/URL-filter hook evidence is exactly as it was):
 | `EntityChip` | 0 — filter `<select>`s are not the roadmap's sanctioned infinite-query autocomplete | Not reached |
 | Resource-definition module | 0 — Network is not reference-shaped | Not reached |
 | URL-filter hook | ADR-0006's own wording ("a resource with 3+ filters") reads as a **per-resource**, not cross-resource, threshold — unlike its five siblings. Managers already had 5 filters at M3.2; Clients has 4 (`search`, `status`, `assigned`, `ville`). Flagged during M3.3 planning, **still not resolved** | Ambiguous, unresolved |
-| **Cross-domain picker export** (`useVilleOptionsQuery` → `useManagerOptionsQuery` → **`useCommercialOptionsQuery`**, new this session) | **2** instances of the pattern itself (Managers exporting to Commercials, now Commercials exporting to Clients) — 3 individual picker exports exist, but the *pattern being evaluated* (one domain exporting an options query for a sibling's picker) has occurred twice | Not yet at "3" — the next domain that needs a sibling picker is the actual test case |
-| **Row selection / bulk action bar** (new this session) | **1** — M3.5 is the first and only bulk-selection UI in the product | Not reached, not close |
+| **Cross-domain picker export** (`useVilleOptionsQuery` → `useManagerOptionsQuery` → `useCommercialOptionsQuery` → **`useSecteursQuery`**, new at M3.6 Follow-up 4) | **3** instances of the pattern itself: Managers → Commercials (M3.3), Commercials → Clients (M3.5), Secteurs → Agent Onboarding (M3.6) | **Reaches "3"** — a future session should treat this as the actual decision point, not defer it again by default |
+| **Row selection / bulk action bar** (M3.5) | **1** — M3.5 remains the only bulk-selection UI in the product; M3.6 added none | Not reached, not close |
+| **File upload control** (`FileUploadField`, new at M3.6) | **1** — M3.6 is the first and only file-upload UI in the product, despite ~11 internal call sites within the one wizard | Not reached, not close — internal repetition within one screen is not Rule-of-Three evidence |
 
-**Explicit decision this session: still do not extract anything**, for the
-same reasons recorded at M3.4 — the tally above is unchanged from M3.4 on
-every row that predates M3.5, and M3.5's own two new rows are each far below
-threshold. No extraction happened, no ADR was written, and the M3.4-era
-Rule-of-Three decision point ("due, not deferred") remains open — it was not
-resolved by M3.5, which touched no shared component either way.
+**Explicit decision at M3.6: still do not extract anything, even now that
+the picker-export tally reads "3".** The file-upload row is far below
+threshold — a single screen using a component many times is not the same
+evidence as many screens each needing one — and the picker-export tally
+reaching "3" during a manual-validation bug-fix pass is exactly the kind of
+moment ADR-0006 warns against acting on reflexively; it is flagged above as
+the next session's actual decision point, not extracted here mid-fix. No
+extraction happened, no ADR was written for `FileUploadField`, `TextField`,
+the Sector select or the phone regex (see `decisions.md` — only the
+success-screen deviation was judged genuinely architectural), and the
+M3.4-era Rule-of-Three decision point ("due, not deferred") remains open.
 
 ## Current blockers
 
@@ -496,12 +839,16 @@ resolved by M3.5, which touched no shared component either way.
 `block-agent` is now seeded; block and activate work end to end for both
 Managers and Commercials (same permission, same endpoints).
 
-### FE-1 — unchanged this session
+### FE-1 — unchanged, not touched by M3.6
 
 Five older test files' `findByRole("alert")` calls still run against the 1000 ms
-default timeout while taking 951–1240 ms. Not touched in this session — no new
-evidence gathered, no fix applied. Still recommended before the suite grows
-further; the suite is now at 388 tests, 43 more than when this was last raised.
+default timeout while taking 951–1240 ms. Not touched by M3.6 — no new
+evidence gathered, no fix applied. `pnpm test:ci` was run twice standalone
+after M3.6's initial implementation and after each of its three
+post-validation fix rounds (four checkpoints total) — stable every time,
+no flake observed in any of them. Still recommended before the suite grows
+further; the suite is now at 442 tests across 24 files, 54 more than when
+this was last raised at M3.4.
 
 **Governance follow-ups — not blockers** (unchanged):
 
@@ -512,10 +859,13 @@ further; the suite is now at 388 tests, 43 more than when this was last raised.
 
 ## M3 detail pages — deferred by ADR-0014
 
-Unchanged. M3.4 and M3.5 both ship with no nested route (M3.5 extends the
-existing Clients list route in place, rather than adding one), so FE-2
-remains non-blocking exactly as it did for M3.1–M3.4. All four list-management
-resources are now built with no detail page among them.
+Unchanged. M3.4, M3.5 and M3.6 all ship with no nested route — M3.5 extends
+the existing Clients list route in place, and M3.6's wizard is a new but
+flat, top-level route (`AGENT_ONBOARDING_PATH`, no `children`), same shape
+as every other M3 route. FE-2 remains non-blocking for all of them. All four
+list-management resources are still built with no detail page among them,
+and the wizard adds no detail-page footprint either — it is create-only by
+decision (see its own section above).
 
 ## Backend dependencies
 
@@ -537,7 +887,7 @@ independently re-confirmed rather than assumed from Managers:**
 
 | ID | Class | Item | Status |
 | --- | --- | --- | --- |
-| BC-V | **limitation** | `agents.secteur` has no foreign key to `secteurs` (confirmed: `Secteur` model has no relation back to `Agent`), is filtered by exact match, and the dev database has **zero** seeded secteurs. No options source exists to build a select from | 🟡 open — **no secteur filter or column was built** (ADR-0009: a control with nothing to select would misrepresent the system). Do not invent a distinct-values endpoint |
+| BC-V | **limitation** | `agents.secteur` has no foreign key to `secteurs` (confirmed: `Secteur` model has no relation back to `Agent`), is filtered by exact match, and the dev database has **zero** seeded secteurs. No options source exists to build a select from | 🟡 open — Commercials' list filter still has **no secteur filter or column** (ADR-0009 unchanged). **M3.6's wizard field is different**: it sources sector *options* from the real `Secteurs` reference table (scoped by city), but still submits a plain NAME with no FK, so the underlying limitation is unaffected — do not invent a distinct-values endpoint |
 
 **From the M3.4 contract verification, against `ClientController`, independently
 re-confirmed rather than assumed from the Agent domains:**
@@ -555,6 +905,16 @@ independently re-confirmed rather than assumed from `update`/`index`:**
 | --- | --- | --- | --- |
 | — | **verified, positive** | `assignBulk`/`reassign` correctly catch `ValidationException` before their generic handler — BC-N does **not** extend to these two endpoints, the first Clients actions found in this state | ✅ no action needed, recorded so a future session does not assume BC-N universally |
 | BC-X | **limitation, new** | `assignBulk`'s (and `reassign`'s) business-rule rejection ("agent_id must reference an active commercial", "some clients do not exist") is a hand-rolled `{success:false, message}` 422 with no `errors` key and no `code`, unlike the product's own coded-domain-error convention (e.g. `COMMERCIAL_HAS_STOCK_CANNOT_REASSIGN`) | 🟡 open — normalizes to `kind:"unknown"`; the frontend shows a generic error, which is honest but not specific. Non-blocking |
+
+**From the M3.6 contract verification, against `AgentController::store`,
+independently re-confirmed rather than assumed from `update`
+(implementation complete, this table entry stands regardless of manual
+validation outcome — it is a source-code fact, not a UI behavior):**
+
+| ID | Class | Item | Status |
+| --- | --- | --- | --- |
+| — | **verified, positive** | `store()` correctly catches `ValidationException` before its generic handler, and its one manual business-rule check (the essence/moto rule) returns a properly `errors`-keyed 422 — BC-N does **not** apply to it | ✅ no action needed, recorded so a future session does not assume BC-N universally |
+| BC-Y | **limitation, new** | `createMoto()` runs — and uploads its files — *before* `DB::transaction` wraps the agent insert in `store()`. A failed agent insert after a successful moto creation would leave an orphaned `Moto` row and orphaned files | 🟡 open — narrow (agent insert failing after successful moto creation + upload is rare), not something the frontend can route around. Worth a backend consultation item, not a blocker |
 
 Carried, unchanged from M3.2:
 
@@ -599,7 +959,7 @@ src/domains/
     │                             select, same as Managers'; exports an
     │                             active-only CommercialOption picker, added
     │                             M3.5, for Clients' bulk-assign sheet)
-    └── clients/            M3.4 (paginated · search · 3 filters (status,
+    ├── clients/            M3.4 (paginated · search · 3 filters (status,
                                    assigned, ville) · a THIRD status enum
                                    (active/blocked/pending — distinct from
                                    Managers'/Commercials' active/blocked/inactive)
@@ -614,4 +974,31 @@ src/domains/
                                    action bar, and a bulk-assign sheet against
                                    `PATCH .../assign-bulk`; NO single-client
                                    assign/reassign/unassign — still deferred)
+    └── agent-onboarding/   M3.6 — COMPLETE, manually validated
+                                   (not a resource domain — a WORKFLOW domain,
+                                   the first of its kind; creates a Manager OR
+                                   a Commercial through one shared backend
+                                   endpoint, POST /admin/agents; no list of
+                                   its own, no detail page, reached only via
+                                   Managers'/Commercials' own "Create..."
+                                   buttons; page-based 5-step wizard: Identity
+                                   -> Documents -> Financial -> Moto -> Review
+                                   -> Success, one RHF instance throughout;
+                                   first multipart/FormData request in the
+                                   product; local-only FileUploadField and
+                                   TextField, not shared/; reuses Managers'
+                                   useManagerOptionsQuery for the manager
+                                   picker and ManagerAreaMultiSelect for area
+                                   of responsibility, both unchanged; city
+                                   fields are Villes-backed selects; sector is
+                                   a Villes-scoped select over Secteurs'
+                                   useSecteursQuery, clearing/reloading on
+                                   city change; phone subscription number
+                                   validated against the same Moroccan regex
+                                   ClientFormSheet uses; fuel amount lives on
+                                   the Moto step, gas-only; no button is ever
+                                   type="submit" — Review's confirm action is
+                                   the sole, explicit submission path;
+                                   dedicated success screen for one-time
+                                   backend-generated credentials, ADR-0017)
 ```

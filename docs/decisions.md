@@ -303,3 +303,54 @@ decisions made *during implementation*.
     section AND the relevant Design System section(s) before fixing scope —
     not only the backend contract — so a frozen-document deviation is caught
     before implementation, not after.
+
+## ADR-0017 — M3.6 onboarding success transitions to a dedicated screen, not the standard toast-and-navigate flow
+
+- **Date:** 2026-07-24
+- **Status:** Accepted
+- **Context:** FTA §10 documents one standard write flow for the whole
+  product, with no named exceptions until now: "(5) On success: invalidate,
+  toast, and navigate or close per the flow." Every create/edit form built
+  so far (Villes, Secteurs, Products, Admins, Managers, Commercials, Clients)
+  follows it exactly. `AgentController::store`'s success response breaks the
+  precondition that flow assumes: it returns a backend-generated account
+  number (`MG#####`/`CM#####`) and an 8-character random plaintext password,
+  both computed server-side, with no form field for either. `Agent::$hidden`
+  excludes `password` from every subsequent read of the model — this
+  response is the ONE time the plaintext password is ever transmitted. A
+  toast is transient by design (Design System's own auto-dismiss behavior
+  for success feedback) and `navigate` moves the operator away from the
+  screen holding it. Combined, the standard flow would show the password for
+  a few seconds, on a screen the operator is about to leave, with no way to
+  ever see it again.
+- **Decision:** A successful onboarding submission transitions to a
+  **dedicated success screen** — the wizard does not toast-and-navigate.
+  The screen displays the generated account number and password as
+  persistent, selectable, individually copyable text, and stays on screen
+  until the operator explicitly chooses to onboard another agent. Generic
+  toast-only success handling is not sufficient for this one response and
+  must not be substituted for it.
+- **Rationale:** This is a genuine, deliberate exception to FTA §10's
+  documented submission flow, not a UI preference — the standard flow's own
+  assumptions (nothing shown on success is unrecoverable, so brief display
+  plus navigation is safe) do not hold for a one-time plaintext secret. The
+  exception is scoped as narrowly as the reason for it: only the credential
+  display changes; validation, suspension, mutation semantics (never
+  optimistic, never auto-retried) and failure handling (form stays open,
+  everything intact) all still follow §10 exactly.
+- **Consequences:**
+  - Protects an unrecoverable credential from being lost to a fast toast
+    dismissal or an automatic navigation the operator didn't ask for.
+  - Establishes the pattern for any future endpoint that returns a
+    comparable one-time, unrecoverable secret: use a dedicated success
+    screen, not the standard toast-and-navigate flow. No such endpoint
+    exists elsewhere in the product today; this is the first and only
+    instance.
+  - A future refactor of the wizard's submission handling MUST preserve the
+    dedicated success screen unless the backend gains a safe way to
+    retrieve or reset the credential after the fact (e.g. a proper
+    reset-password flow) — at which point the tradeoff this ADR made should
+    be re-evaluated, not silently reverted.
+  - Does NOT apply to any other current or future form by default — the
+    standard FTA §10 flow remains the norm everywhere else. This is a named
+    exception, not a precedent for adding success screens generally.

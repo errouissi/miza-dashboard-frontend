@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { isAppError, resolveErrorDisplay } from "@/infrastructure/errors";
 import { PERMISSIONS } from "@/infrastructure/permissions";
 import { usePermission } from "@/shared/hooks";
 import { ABSENT, formatDate } from "@/shared/formatters";
+import { AGENT_ONBOARDING_PATH } from "@/domains/network/agent-onboarding";
 import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/shared/components/ui/avatar";
@@ -108,6 +109,7 @@ const SELECT_CLASS =
 
 export function ManagersListPage() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const params = readParams(searchParams);
   const managersQuery = useManagersQuery(params);
   const { has } = usePermission();
@@ -116,14 +118,20 @@ export function ManagersListPage() {
    * Each action mirrors ONE server-side check. `view-agents` gates the route and
    * therefore the list itself; these gate the actions inside it.
    *
-   * There is no create gate here: agent creation is the M3.6 wizard, not this
-   * screen. There is no delete gate either — `destroy` is a soft block identical
-   * to `block`, so exposing it would be two buttons for one outcome (BC-R).
+   * There is no delete gate here: `destroy` is a soft block identical to
+   * `block`, so exposing it would be two buttons for one outcome (BC-R).
    */
   const canUpdate = has(PERMISSIONS.UPDATE_AGENT);
   const canBlock = has(PERMISSIONS.BLOCK_AGENT);
   const canActivate = has(PERMISSIONS.ACTIVATE_AGENT);
   const hasAnyRowAction = canUpdate || canBlock || canActivate;
+
+  /**
+   * `create-agent` gates the M3.6 wizard's own route too (fail-closed there
+   * independently) — gated again here so an operator without it never sees
+   * a button that would lead to a 403.
+   */
+  const canCreateAgent = has(PERMISSIONS.CREATE_AGENT);
 
   /**
    * The city filter is gated on `access-dashboard` because that is what guards
@@ -183,8 +191,16 @@ export function ManagersListPage() {
   return (
     <ListPage
       title="Managers"
-      // No create action: agent onboarding is the M3.6 wizard (5 mandatory file
-      // uploads), not a drawer this screen can open.
+      // The M3.6 onboarding wizard (5+ mandatory file uploads) is its own
+      // route and domain, not a drawer this screen could open — this button
+      // only navigates there, preselecting the role.
+      action={
+        canCreateAgent ? (
+          <Button onClick={() => navigate(`${AGENT_ONBOARDING_PATH}?role=manager`)}>
+            Create Manager
+          </Button>
+        ) : null
+      }
       filters={
         <div className="flex flex-wrap items-end gap-3">
           <div className="flex flex-col gap-1.5">

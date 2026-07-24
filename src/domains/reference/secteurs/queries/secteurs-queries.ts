@@ -15,12 +15,24 @@ import { secteursKeys } from "./keys";
  *
  * STATIC tier, same reasoning as Villes: administrative reference data that feeds
  * pickers elsewhere, where an hour-stale name costs nothing.
+ *
+ * `enabled` (default `true`) mirrors `useVilleOptionsQuery`'s own parameter —
+ * added for the M3.6 onboarding wizard's Sector field (a second, city-scoped
+ * caller), so it can gate the request both on `access-dashboard` and on a
+ * city actually being selected, rather than firing an unfiltered fetch (or
+ * one this session cannot read) while there is nothing to scope it to. The
+ * original caller (`SecteursListPage`) is unaffected — it never passes the
+ * option and keeps the default.
  */
-export function useSecteursQuery(params: SecteurListParams) {
+export function useSecteursQuery(
+  params: SecteurListParams,
+  options?: { enabled?: boolean },
+) {
   return useQuery({
     queryKey: secteursKeys.list(params),
     queryFn: () => fetchSecteurs(params),
     staleTime: STALE_TIMES.STATIC,
+    enabled: options?.enabled ?? true,
   });
 }
 

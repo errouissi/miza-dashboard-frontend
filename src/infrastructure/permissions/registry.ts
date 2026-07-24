@@ -57,9 +57,13 @@ export const PERMISSIONS = Object.freeze({
    * collapsing them into one "can change status" flag would show a control the API
    * would refuse.
    *
+   * `CREATE_AGENT` (M3.6) gates `POST /admin/agents` — the agent onboarding
+   * wizard, a NEW dedicated domain (`domains/network/agent-onboarding`), not
+   * hosted inside Managers or Commercials (ADR-0012): the endpoint creates
+   * either role through one controller action, so it belongs to neither.
+   *
    * DELIBERATELY ABSENT until they have a caller (this file's own rule — entries
    * are added per resource, never ahead of the domain that uses them):
-   *   `create-agent`         — agent onboarding is the M3.6 wizard, not M3.2.
    *   `manage-agent-status`  — guards `toggle-status`, which this domain does not
    *                            use: it flips active↔blocked only and so cannot
    *                            express the third status. Block and activate are
@@ -73,6 +77,7 @@ export const PERMISSIONS = Object.freeze({
   UPDATE_AGENT: "update-agent",
   BLOCK_AGENT: "block-agent",
   ACTIVATE_AGENT: "activate-agent",
+  CREATE_AGENT: "create-agent",
 
   /**
    * Client management — its OWN permission set, gated by `ClientController`,

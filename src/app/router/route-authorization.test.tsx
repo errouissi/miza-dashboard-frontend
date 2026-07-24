@@ -14,6 +14,7 @@ import { ADMINS_PATH } from "@/domains/network/admins";
 import { MANAGERS_PATH } from "@/domains/network/managers";
 import { COMMERCIALS_PATH } from "@/domains/network/commercials";
 import { CLIENTS_PATH } from "@/domains/network/clients";
+import { AGENT_ONBOARDING_PATH } from "@/domains/network/agent-onboarding";
 import { routes } from "./routes";
 
 /**
@@ -209,6 +210,8 @@ describe("every contributed domain route is guarded", () => {
   // `access-dashboard` — the same string, since both endpoints sit behind one
   // controller and one permission set. CLIENTS_PATH is guarded by
   // `view-clients` — its own permission, a separate controller entirely.
+  // AGENT_ONBOARDING_PATH (M3.6) is guarded by `create-agent` — its own
+  // permission, on its own dedicated domain (ADR-0012), not `view-agents`.
   // `unpermittedSession` holds nothing at all, so it exercises every gate
   // identically.
   const domainPaths = [
@@ -219,6 +222,7 @@ describe("every contributed domain route is guarded", () => {
     MANAGERS_PATH,
     COMMERCIALS_PATH,
     CLIENTS_PATH,
+    AGENT_ONBOARDING_PATH,
   ];
 
   it.each(domainPaths)("refuses %s without the permission", async (path) => {

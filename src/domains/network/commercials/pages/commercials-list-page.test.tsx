@@ -731,14 +731,28 @@ describe("permission gating — each action on its own permission", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("never offers a create action — onboarding is the M3.6 wizard", async () => {
+  it("hides the Create Commercial button without create-agent", async () => {
+    // ALL_AGENT_PERMISSIONS deliberately excludes CREATE_AGENT — this is the
+    // default, fully-privileged-for-THIS-screen fixture, not a
+    // fully-privileged operator overall.
     server.use(commercialsHandler(rows), villesHandler(), managersOptionsHandler());
     renderPage();
 
     await screen.findByText("Salma Alaoui");
     expect(
-      screen.queryByRole("button", { name: /new commercial|add commercial|create/i }),
+      screen.queryByRole("button", { name: /create commercial/i }),
     ).not.toBeInTheDocument();
+  });
+
+  it("shows Create Commercial and navigates to the M3.6 wizard, preselecting the role, when create-agent is held", async () => {
+    signInWith([...ALL_AGENT_PERMISSIONS, PERMISSIONS.CREATE_AGENT]);
+    server.use(commercialsHandler(rows), villesHandler(), managersOptionsHandler());
+    const router = renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: /create commercial/i }));
+
+    expect(router.state.location.pathname).toBe("/network/agents/onboard");
+    expect(router.state.location.search).toBe("?role=commercial");
   });
 
   it("never offers a delete action — destroy is a soft block (BC-R)", async () => {
