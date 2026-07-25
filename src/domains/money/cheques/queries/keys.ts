@@ -1,4 +1,4 @@
-import type { ChequeListParams } from "../model/cheque";
+import type { ChequeListParams, PendingChequeListParams } from "../model/cheque";
 
 /**
  * The Cheques query-key factory (FTA §8).
@@ -23,4 +23,13 @@ export const chequesKeys = {
   list: (params: ChequeListParams) => [...chequesKeys.lists(), params] as const,
   details: () => [...chequesKeys.all, "detail"] as const,
   detail: (id: number) => [...chequesKeys.details(), id] as const,
+  /**
+   * The pending queue — its own scope under `["cheques"]`, separate from
+   * `lists()`. `GET /admin/cheques/pending` is a distinct endpoint with its
+   * own permission (`view-pending-cheques`), not a filtered view of
+   * `lists()`, so it does not share that scope's key space.
+   */
+  pendingLists: () => [...chequesKeys.all, "pending"] as const,
+  pendingList: (params: PendingChequeListParams) =>
+    [...chequesKeys.pendingLists(), params] as const,
 };

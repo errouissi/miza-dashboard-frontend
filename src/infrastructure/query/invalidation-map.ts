@@ -16,9 +16,10 @@ import type { QueryClient, QueryKey } from "@tanstack/react-query";
  * event, was not built yet. `cheque.created` (M4.2 Phase 3A) is the FIRST
  * real entry: registered from a real mutation (`useCreateChequeMutation`),
  * not ahead of one (`session-bootstrap.md`'s own rule). `cheque.approved`/
- * `cheque.rejected`/`cheque.annuled` — which DO cross into Network's
- * `avanceTotal` — remain unregistered until the mutations that emit them
- * exist (a later M4.2 phase); do not add them speculatively.
+ * `cheque.rejected`/`cheque.annuled` (M4.2 Phase 3C) are now registered too,
+ * from `useApproveChequeMutation`/`useRejectChequeMutation`/
+ * `useAnnulerChequeMutation` — see each entry below for why it invalidates
+ * what it does.
  *
  * The mechanism, the fallback, and its test shipped at M4.1 — mirrors
  * `infrastructure/errors/error-code-registry.ts` exactly: an empty, frozen
@@ -53,6 +54,31 @@ export type DomainEvent = string;
 const INVALIDATION_MAP: Readonly<Record<DomainEvent, readonly QueryKey[]>> =
   Object.freeze({
     "cheque.created": [["cheques"]],
+    /**
+     * Approving a cheque writes `agent.montant_avance_rapped` and/or
+     * `agent.montant_avance_grattage`, and (for a `rapped` allocation)
+     * `agent.solde` too (`ChequeController::approve`, verified from
+     * source). Both Managers' and Commercials' own lists render
+     * `avanceTotal`, computed from those same columns — invalidating BOTH
+     * flat prefixes, not just the one matching the cheque's actual agent
+     * role, is deliberate: which role a given `agent_id` holds is not known
+     * without an extra read, and over-invalidating a cheap `SLOW`-tier list
+     * is far safer than under-invalidating a balance an operator is about
+     * to act on.
+     */
+    "cheque.approved": [["cheques"], ["managers"], ["commercials"]],
+    /**
+     * Annuler REVERSES the same columns `approve` wrote (per-allocation, or
+     * a 100%-rapped legacy fallback) — same two Network prefixes as
+     * `cheque.approved`, same reasoning.
+     */
+    "cheque.annuled": [["cheques"], ["managers"], ["commercials"]],
+    /**
+     * Reject touches NO balance column at all (verified from source,
+     * `ChequeController::reject` — `montant_avance` explicitly stays
+     * unchanged) — only Cheques' own key space needs busting.
+     */
+    "cheque.rejected": [["cheques"]],
   });
 
 /** The prefixes a given event invalidates, or an empty list for an unregistered one. */

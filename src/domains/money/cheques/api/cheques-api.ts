@@ -6,6 +6,7 @@ import {
   type ChequeAllocationType,
   type ChequeListParams,
   type ChequeStatus,
+  type PendingChequeListParams,
 } from "../model/cheque";
 import type { CreateChequeFormValues } from "../model/create-cheque";
 
@@ -128,6 +129,33 @@ export async function fetchChequeById(id: number): Promise<Cheque> {
 }
 
 /**
+ * `GET /admin/cheques/pending` — same flat-paginator envelope as `index()`
+ * (`ChequeController::pending`: `paginate()`, transformed with `photo_url`
+ * spread in, no `status_label`, no `processed_by_name` — it only eager-loads
+ * `agent`). No filters accepted server-side, so only `page`/`per_page` are
+ * ever sent — see `PendingChequeListParams`'s own docblock.
+ */
+export async function fetchPendingCheques(
+  params: PendingChequeListParams,
+): Promise<Paginated<Cheque>> {
+  const { data } = await httpClient.get<ChequesEnvelope>("/admin/cheques/pending", {
+    params: {
+      page: params.page,
+      per_page: params.perPage,
+    },
+  });
+
+  const page = data.data;
+  return {
+    items: page.data.map(toCheque),
+    page: page.current_page,
+    perPage: page.per_page,
+    total: page.total,
+    lastPage: page.last_page,
+  };
+}
+
+/**
  * `store()`'s response envelope — verified from source to be a DIFFERENT
  * shape from `index()`/`show()`'s: `photo_url` sits as a SIBLING of the raw
  * cheque object, not spread into it (`'data' => ['cheque' => $cheque,
@@ -168,4 +196,55 @@ export async function createCheque(values: CreateChequeFormValues): Promise<Cheq
     buildCreateChequeFormData(values),
   );
   return toCheque({ ...data.data.cheque, photo_url: data.data.photo_url });
+}
+
+/**
+ * Approve/reject/annuler (M4.2 Phase 3C) all return `void` — the SAME
+ * convention `blockManager`/`activateManager`/`toggleClientStatus` already
+ * use for a status-changing PUT/PATCH with no form to repopulate on
+ * success. Deliberately NOT parsed into a `Cheque`, even though each
+ * endpoint's `data` key holds one: the three envelopes are NOT uniform
+ * (verified from source, `ChequeController`) —
+ *   - `approve()`'s `data` is `{ cheque: <model>, agent_new_montant_avance }`,
+ *     `cheque` NESTED, mirroring `store()`'s own shape;
+ *   - `reject()`/`annuler()`'s `data` IS the cheque model directly, no
+ *     wrapper, mirroring `show()`'s shape minus the manually-added
+ *     `photo_url`/`status_label` keys `show()` alone adds.
+ * Modelling three different shapes just to immediately discard the result
+ * (the caller invalidates and refetches rather than writing this response
+ * into the cache — FTA D-7, no optimistic mutations for financial
+ * workflows) would be dead code. `useChequeQuery`'s own refetch, via
+ * invalidation, is what the detail page actually renders from.
+ */
+
+/**
+ * `PUT /admin/cheques/{id}/approve` — `allocations` re-verified from source
+ * (`ChequeController::approve`'s own validator):
+ *   `allocations`          => sometimes|array|min:1|max:2
+ *   `allocations.*.type`   => required_with:allocations|in:rapped,grattage
+ *   `allocations.*.amount` => required_with:allocations|numeric|min:0.01|decimal:0,2
+ * `min:0.01` REJECTS a zero-value entry outright (a 422) — the caller
+ * (`ApproveChequeDialog`) must never send `{type, amount: 0}`; it omits the
+ * zero side entirely instead, which is why `allocations` here is always a
+ * real 1-or-2-entry array, never optional at this layer.
+ */
+export async function approveCheque(
+  id: number,
+  allocations: { type: ChequeAllocationType; amount: number }[],
+): Promise<void> {
+  await httpClient.put(`/admin/cheques/${id}/approve`, { allocations });
+}
+
+/** `PUT /admin/cheques/{id}/reject` — `decision_reason` is `required|string|max:1000` server-side. */
+export async function rejectCheque(id: number, decisionReason: string): Promise<void> {
+  await httpClient.put(`/admin/cheques/${id}/reject`, {
+    decision_reason: decisionReason,
+  });
+}
+
+/** `PUT /admin/cheques/{id}/annuler` — same `decision_reason` contract as `reject`. */
+export async function annulerCheque(id: number, decisionReason: string): Promise<void> {
+  await httpClient.put(`/admin/cheques/${id}/annuler`, {
+    decision_reason: decisionReason,
+  });
 }

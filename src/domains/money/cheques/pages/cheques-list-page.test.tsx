@@ -160,9 +160,15 @@ function commercialsHandler(onRequest?: (url: URL) => void) {
 }
 
 function renderPage(initialPath: string = PATH) {
-  const router = createMemoryRouter([{ path: PATH, element: <ChequesListPage /> }], {
-    initialEntries: [initialPath],
-  });
+  const router = createMemoryRouter(
+    [
+      { path: PATH, element: <ChequesListPage /> },
+      // A stub so the "View" navigation test (Phase 3B) lands on a real
+      // route rather than a router-level 404.
+      { path: "/money/cheques/:id", element: <p>Cheque detail</p> },
+    ],
+    { initialEntries: [initialPath] },
+  );
   render(
     <QueryClientProvider client={createQueryClient()}>
       <RouterProvider router={router} />
@@ -454,6 +460,21 @@ describe("filters", () => {
 
     await screen.findByText(/no cheque yet/i);
     expect(managersRequested).toBe(true);
+  });
+});
+
+describe("navigation to the detail page (Phase 3B)", () => {
+  it("navigates to the cheque's detail route on View", async () => {
+    server.use(
+      chequesHandler([chequeRow(7, "CHQ-007")]),
+      managersHandler(),
+      commercialsHandler(),
+    );
+    const router = renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: "View" }));
+
+    await waitFor(() => expect(router.state.location.pathname).toBe("/money/cheques/7"));
   });
 });
 

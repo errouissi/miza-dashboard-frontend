@@ -157,3 +157,24 @@ export const CHEQUE_LIST_DEFAULTS: ChequeListParams = {
 
 /** `per_page` is capped server-side (`integer|min:1|max:100`). */
 export const MAX_PER_PAGE = 100;
+
+/**
+ * The pending-queue query surface (M4.2 Phase 3B), mirroring
+ * `ChequeController::pending` exactly: NO filters at all — verified from
+ * source, unlike `index()`'s validator, `pending()` runs no
+ * `$request->validate()` and applies no `statute`/`agent_id`/`date_from`/
+ * `date_to`/`search` — it is unconditionally `Cheque::pending()`, oldest
+ * first. Only pagination applies, so this type stays deliberately narrower
+ * than `ChequeListParams` rather than reusing it with unused fields (FTA
+ * working principle: expose only what the API supports).
+ */
+export type PendingChequeListParams = {
+  page: number;
+  perPage: number;
+};
+
+/** Backend default: `paginate($request->per_page ?? 15)`, same as `index()`. */
+export const PENDING_CHEQUE_LIST_DEFAULTS: PendingChequeListParams = {
+  page: 1,
+  perPage: 15,
+};

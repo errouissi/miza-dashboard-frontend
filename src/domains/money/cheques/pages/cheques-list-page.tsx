@@ -16,7 +16,7 @@ import {
 import { Button } from "@/shared/components/ui/button";
 import { ChequeAgentFilter } from "../components/cheque-agent-filter";
 import { useChequesQuery } from "../queries/cheques-queries";
-import { CHEQUES_NEW_PATH } from "../routes";
+import { CHEQUES_NEW_PATH, chequeDetailPath } from "../routes";
 import {
   CHEQUE_LIST_DEFAULTS,
   CHEQUE_STATUSES,
@@ -69,6 +69,12 @@ import {
  * before" is still the honest label — it is exactly true whenever both
  * filters are set together, and harmlessly conservative when `date_to` is
  * used alone.
+ *
+ * A "View" ACTION COLUMN WAS ADDED AT PHASE 3B, navigating to
+ * `ChequeDetailPage` (`chequeDetailPath(cheque.id)`) — the first per-row
+ * action this list has ever had. Gated on nothing beyond this page's own
+ * `view-cheques`, mirroring the detail route's own permission exactly (the
+ * SAME check, `GET /admin/cheques/{id}`'s own guard).
  */
 
 const SELECT_CLASS =
@@ -183,6 +189,20 @@ export function ChequesListPage() {
       key: "createdAt",
       header: "Submitted",
       cell: (cheque) => formatDate(cheque.createdAt),
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      srOnlyHeader: true,
+      cell: (cheque) => (
+        <Button
+          variant="link"
+          size="sm"
+          onClick={() => navigate(chequeDetailPath(cheque.id))}
+        >
+          View
+        </Button>
+      ),
     },
   ];
 

@@ -8,13 +8,14 @@ import {
   Users,
   Contact,
   Banknote,
+  Clock,
 } from "lucide-react";
 import { PERMISSIONS, type PermissionResolver } from "@/infrastructure/permissions";
 import { ADMINS_PATH } from "@/domains/network/admins";
 import { MANAGERS_PATH } from "@/domains/network/managers";
 import { COMMERCIALS_PATH } from "@/domains/network/commercials";
 import { CLIENTS_PATH } from "@/domains/network/clients";
-import { CHEQUES_PATH } from "@/domains/money/cheques";
+import { CHEQUES_PATH, CHEQUES_PENDING_PATH } from "@/domains/money/cheques";
 import { PRODUCTS_PATH } from "@/domains/reference/products";
 import { SECTEURS_PATH } from "@/domains/reference/secteurs";
 import { VILLES_PATH } from "@/domains/reference/villes";
@@ -135,6 +136,16 @@ export const NAV_TREE: NavGroup[] = [
         // the page, not visibility of the page.
         permission: PERMISSIONS.VIEW_CHEQUES,
         icon: Banknote,
+      },
+      {
+        label: "Pending Cheques",
+        to: CHEQUES_PENDING_PATH,
+        // `view-pending-cheques` (M4.2 Phase 3B) — its OWN permission,
+        // distinct from `view-cheques` above; a session can hold either
+        // without the other, mirroring `GET /admin/cheques/pending`'s own,
+        // separate backend check.
+        permission: PERMISSIONS.VIEW_PENDING_CHEQUES,
+        icon: Clock,
       },
     ],
   },

@@ -15,7 +15,12 @@ import { MANAGERS_PATH } from "@/domains/network/managers";
 import { COMMERCIALS_PATH } from "@/domains/network/commercials";
 import { CLIENTS_PATH } from "@/domains/network/clients";
 import { AGENT_ONBOARDING_PATH } from "@/domains/network/agent-onboarding";
-import { CHEQUES_PATH, CHEQUES_NEW_PATH } from "@/domains/money/cheques";
+import {
+  CHEQUES_PATH,
+  CHEQUES_NEW_PATH,
+  CHEQUES_PENDING_PATH,
+  chequeDetailPath,
+} from "@/domains/money/cheques";
 import { routes } from "./routes";
 
 /**
@@ -217,7 +222,13 @@ describe("every contributed domain route is guarded", () => {
   // permission, the first resource outside Network. CHEQUES_NEW_PATH
   // (M4.2 Phase 3A) is guarded by `create-cheque`, a DIFFERENT permission
   // from the list route it sits beside — mirroring `POST /admin/cheques`'
-  // own, separate check.
+  // own, separate check. CHEQUES_PENDING_PATH (M4.2 Phase 3B) is guarded by
+  // `view-pending-cheques`, its own permission distinct from `view-cheques`,
+  // mirroring `GET /admin/cheques/pending`'s own separate check.
+  // `chequeDetailPath(1)` (Phase 3B) is guarded by `view-cheques` — the SAME
+  // permission as the list route, mirroring `GET /admin/cheques/{id}`'s own
+  // check — exercised via a concrete id since the route itself is the
+  // dynamic pattern `/money/cheques/:id`.
   // `unpermittedSession` holds nothing at all, so it exercises every gate
   // identically.
   const domainPaths = [
@@ -231,6 +242,8 @@ describe("every contributed domain route is guarded", () => {
     AGENT_ONBOARDING_PATH,
     CHEQUES_PATH,
     CHEQUES_NEW_PATH,
+    CHEQUES_PENDING_PATH,
+    chequeDetailPath(1),
   ];
 
   it.each(domainPaths)("refuses %s without the permission", async (path) => {
