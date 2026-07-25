@@ -9,23 +9,39 @@ _Last updated: 2026-07-25_
 
 ## Current state
 
-**M3 is complete. M4 (Money) is underway: M4.1 (infrastructure) is
-complete and closed out; M4.2 (Cheques) is next, not started.** A full M4
-discovery pass (architecture proposal, domain boundaries, API inventory,
-business rules, risks, unknowns — across Cheques, Deposits and Debt
-Payments, verified from the live backend source) ran before M4.1's
-implementation. This file carries forward everything from that pass that
-M4.2 actually needs; the rest (Deposits'/Debt Payments' own findings) is
-summarized briefly below and re-verified properly when M4.3/M4.4 start.
+**M3 is complete. M4 (Money) is underway: M4.1 (infrastructure) is complete;
+M4.2 (Cheques) Phase 1 (domain model, API, queries) and Phase 2
+(permissions, routing, list page, DataTable/FilterBar extraction) are both
+complete, implementation-level reviewed, and closed out. M4.2 Phase 3
+(submit, pending queue, approve incl. allocation split, reject, annuler,
+detail page) is next, not started.** A full M4 discovery pass (architecture
+proposal, domain boundaries, API inventory, business rules, risks, unknowns
+— across Cheques, Deposits and Debt Payments, verified from the live
+backend source) ran before M4.1's implementation. The API inventory and
+business rules below are unchanged from that pass and still the source for
+Phase 3; the rest (Deposits'/Debt Payments' own findings) is summarized
+briefly further down and re-verified properly when M4.3/M4.4 start.
 
-- **Code**: M4.1 (infrastructure) is committed and pushed. Working tree is
-  clean. No Money domain code exists yet — `domains/money/` does not exist.
-- **Tests**: 447/447 across 25 files, stable across two standalone
+- **Code**: M4.1 (infrastructure) and M4.2 Phase 1+2 (Cheques: model, API,
+  queries, permissions, routing, list page) are committed and pushed.
+  Working tree is clean. `domains/money/cheques/` exists — list only, no
+  mutations, no submit form, no pending queue, no approve/reject/annuler, no
+  detail page.
+- **Tests**: 473/473 across 26 files, stable across two standalone
   `pnpm test:ci` runs this session.
 - **Quality gates**: typecheck, lint, format:check and build all pass.
 - **Documentation**: this file and `project-status.md` are both current as
-  of M4.1's close. No new ADR was recorded — M4.1 was pure infrastructure
-  extraction with no contract or scope decisions of its own.
+  of M4.2 Phase 2's close. No new ADR was recorded — the DataTable/FilterBar
+  extraction was an explicit, asked-and-answered scope decision (recorded in
+  `project-status.md`'s M4.2 section), not a contract change.
+- **Manual validation status — genuinely incomplete, not just untested**:
+  there is currently no way to create a cheque through the UI (Phase 3
+  builds the submit form) or seed one in the dev database, so the list page
+  has only been implementation-level verified (a dedicated MSW-integration
+  test file, a route-authorization coverage fix, a full file-by-file
+  review) — never exercised against the real running backend in a browser.
+  **Do this once Phase 3's submit form exists and at least one real cheque
+  can be created.**
 - **Commit / push**: both done this session. This file does not
   self-reference the closing commit's own hash — backfilled next session,
   per this project's standing convention (see how `5dd20e8` is recorded for
@@ -36,8 +52,8 @@ summarized briefly below and re-verified properly when M4.3/M4.4 start.
 ```bash
 cd C:\Miza\frontend-v2
 git status                 # expect: clean
-git log --oneline -3        # expect the M4.1 closure commit at HEAD
-pnpm test:ci               # expect: 447/447 across 25 files
+git log --oneline -3        # expect the M4.2 Phase 1+2 closure commit at HEAD
+pnpm test:ci               # expect: 473/473 across 26 files
 pnpm lint && pnpm typecheck && pnpm format:check && pnpm build
 ```
 
@@ -57,30 +73,51 @@ pnpm lint && pnpm typecheck && pnpm format:check && pnpm build
 - **M4.1 Money infrastructure** — `normalizeError`'s `{error}` fallback,
   `StatusBadge`/`MoneyAmount`/`FileUploadField` extracted to
   `shared/components/business/`, the empty `invalidation-map.ts` scaffold —
-  **committed and pushed this session, manually reviewed and validated
-  first.** Full write-up: `project-status.md`'s M4.1 section.
+  committed and pushed, manually reviewed and validated first. Full
+  write-up: `project-status.md`'s M4.1 section.
+- **M4.2 Phase 1+2 — Cheques (list, read-only)** — domain model
+  (`Cheque`/`ChequeAllocation`/`ChequeListParams`, `amount` corrected to
+  `string`), API/mapper, flat query keys, `LIVE`-tier read-only hooks, all
+  six Cheque permissions registered, `/money/cheques` route + nav entry,
+  the Cheques list page (search/status/agent/date filters, pagination),
+  `DataTable`/`FilterBar` extracted to `shared/components/business/` (first
+  real callers), plus a post-approval implementation-level verification
+  pass (route-authorization coverage fix, new `cheques-list-page.test.tsx`)
+  — **committed and pushed this session, implementation-level reviewed
+  first (full manual browser validation still pending, see "Current state"
+  above).** Full write-up: `project-status.md`'s M4.2 section.
 
-## Next task: M4.2 — Cheques
+## Next task: M4.2 Phase 3 — Cheques mutations + detail page
 
 **Do not start writing code before presenting a plan and getting approval**
 (`session-bootstrap.md` §4 — unchanged). The API inventory and business
-rules below are already verified from source (the M4 discovery pass); they
-do not need re-verifying from scratch, but re-read `ChequeController.php`
-and the `Cheque`/`ChequeAllocation` models directly before writing the
-mapper, per this project's standing discipline of reading the controller
-before trusting a summary of it.
+rules below are already verified from source (the M4 discovery pass, plus
+Phase 1/2's own re-verification); they do not need re-verifying from
+scratch, but re-read `ChequeController.php` and the `Cheque`/
+`ChequeAllocation` models directly before writing the submit/approve/
+reject/annuler mutations, per this project's standing discipline of reading
+the controller before trusting a summary of it.
 
-### Scope (per the discovery pass's recommended order)
+### Scope (per the discovery pass's recommended order — list is now done)
 
-List → submit → pending queue (`ApprovalQueuePage`, first instance) →
-approve (including the allocation-split sub-form) → reject → annuler →
-detail (`DetailPage`, first instance). Cheques go first among the three
-M4 resources — richest, best-specified, cleanest single envelope shape
+Submit → pending queue (`ApprovalQueuePage`, first instance) → approve
+(including the allocation-split sub-form) → reject → annuler → detail
+(`DetailPage`, first instance). Cheques go first among the three M4
+resources — richest, best-specified, cleanest single envelope shape
 (`{success,message,data}`, the one Money resource that already matches
 every Network domain's convention) — the right one to prove
 `ApprovalQueuePage`/`DetailPage` against before Deposits (which has its own
 backend gap, see below) or Debt Payments (which has its own unresolved
 placement question).
+
+**Before writing the submit form's agent picker**: decide explicitly
+whether to reuse Phase 2's `ChequeAgentFilter` merge pattern
+(`useManagerOptionsQuery` + `useCommercialOptionsQuery` combined into one
+`<select>`) or something else — do not silently copy it without re-deriving
+whether the submit form's constraints (a required, not optional, selection;
+a create rather than a filter context) actually match. `BC-Z` (below) also
+blocks a correct "processed by" field on the detail page until raised with
+the backend — do not guess at a value for it.
 
 ### API inventory (verified from source)
 
@@ -124,6 +161,13 @@ Network.
   pre-split cancellation — documented in the backend's own migration as
   intentionally left this way. Do not claim more certainty than the data
   supports on a historical row.
+- **BC-Z, new at Phase 1** (full write-up in `project-status.md`'s Backend
+  dependencies table): `show()` eager-loads the wrong relation for
+  `processed_by` (`processedBy(): belongsTo(Agent::class, ...)` instead of
+  `index()`'s correct `processedByUser(): belongsTo(User::class, ...)`),
+  overwriting the raw FK with a mismatched result. The detail page (this
+  phase) cannot show a correct "processed by" name until this is raised
+  with the backend — do not model it from `show()`'s response as-is.
 
 ### The invalidation map's first real entries (M4.2 populates `invalidation-map.ts`)
 
@@ -148,18 +192,21 @@ than under-invalidating.
   a cheque is not a destructive action visually — needs a `variant` prop
   or a sibling component before Approve/build. Reject/Annuler fit the
   existing destructive styling fine.
-- **No cross-role agent search endpoint.** `GET /admin/agents/managers`
-  and `/commercials` are separate, each capped `per_page ≤ 100` (BC-H). The
-  Cheque submit form's `agent_id` picker needs either role and doesn't know
-  which — decide whether to merge two async queries into one picker (a
-  real, if unusual, `EntityChip`/cross-domain-picker instance — would move
-  the picker-export tally to 4) or accept a narrower approach, as an
-  explicit, recorded decision, not a default.
-- **Query tiers**: Cheques list → `SLOW` or `LIVE` (lean `LIVE` — multiple
-  admins may work the pending queue concurrently); Pending queue →
-  `LIVE`, `refetchOnWindowFocus: true`; a cheque read inside the approve/
-  reject/annuler confirmation → `CRITICAL` (the freshness rule — FTA §8 —
-  applies here for the first time in this product: refetch fresh
+- **No cross-role agent search endpoint** — unchanged fact, but Phase 2
+  already built one instance of the merge decision: `ChequeAgentFilter`
+  combines `useManagerOptionsQuery` + `useCommercialOptionsQuery` into one
+  `<select>` for the LIST's read-only filter. **Do not assume the submit
+  form's required `agent_id` picker should silently reuse it as-is** — a
+  filter (optional, "all agents" is a valid state) and a create field
+  (required, must resolve to a real id) are different constraints; re-derive
+  the decision for this specific case, per the note under "Scope" above.
+- **Query tiers**: Cheques list is **already `LIVE`, `refetchOnWindowFocus:
+  true`, done at Phase 1** (FTA §8 names pending cheques explicitly under
+  this tier, and the plain list is the same class of concurrently-edited
+  data — not a "lean LIVE" open question anymore). Pending queue →
+  `LIVE`, `refetchOnWindowFocus: true`, same tier; a cheque read inside the
+  approve/reject/annuler confirmation → `CRITICAL` (the freshness rule — FTA
+  §8 — applies here for the first time in this product: refetch fresh
   immediately before confirming, and refuse if the record changed
   underneath the operator).
 
@@ -202,20 +249,28 @@ not an assumption carried forward unchecked):
 - 🚫 **Do not give any wizard button `type="submit"`.** Unchanged — see
   M3.6 Follow-up 5.
 - 🚫 **Do not register a Money domain event in `invalidation-map.ts` ahead
-  of the mutation that emits it.** M4.1 shipped it empty on purpose; M4.2
-  is where `cheque.approved`/`cheque.rejected`/`cheque.annuled` actually
-  get registered, from a real mutation, not speculatively.
+  of the mutation that emits it.** M4.1 shipped it empty on purpose;
+  Phase 3 is where `cheque.approved`/`cheque.rejected`/`cheque.annuled`
+  actually get registered, from a real mutation, not speculatively. The
+  exact entries to register (invalidating `['cheques']` — flat, per Phase
+  1's own key-shape decision — plus both Network prefixes) are already
+  spelled out above; do not re-derive from scratch, but do re-verify the
+  key shape is still `["cheques", ...]` before writing them.
 - 🚫 **Do not add `--success`/`--warning`/`--info` CSS custom properties**
   to `index.css` as a side effect of a Cheques screen. `StatusBadge`'s
   M4.1 color implementation (direct Tailwind utilities) was a deliberate,
   scoped choice — revisit it explicitly if it needs to change, don't drift
   into it.
-- 🚫 **Do not extract `DataTable`/`FilterBar`/`EntityChip` reflexively**
-  just because Cheques adds another paginated, filtered, FK-bearing
-  resource. Both tallies are already at or near threshold (see
-  `project-status.md`) — this is a real decision point M4.2 may finally
-  force, but it should be a deliberate call, not a side effect of "we
-  needed a table anyway."
+- 🚫 **`DataTable`/`FilterBar` are now real, extracted shared components
+  (M4.2 Phase 2)** — consumed by Cheques' list page only. **Do not
+  retrofit Villes/Managers/Commercials/Clients onto them** as a side effect
+  of Phase 3 work; that migration is separate, larger, and was explicitly
+  out of scope when the extraction happened. `EntityChip` and the
+  URL-filter hook remain genuinely unextracted — do not build either
+  reflexively either.
+- 🚫 **Do not silently reuse `ChequeAgentFilter`'s merge pattern for the
+  submit form's required `agent_id` field** without re-deriving whether it
+  fits — see "Known infrastructure risks" above.
 - 🚫 **Do not authorize on roles** — permission strings only (FTA D-5).
 - 🚫 **Do not invent backend contracts.** BC-S, BC-H, BC-N, BC-U, BC-V,
   BC-W, BC-X, BC-Y and the new Deposits/Debt-Payments findings above are
@@ -228,28 +283,40 @@ not an assumption carried forward unchecked):
 
 - [x] **M4.1 infrastructure — DONE.** Manually reviewed, validated,
       committed, pushed. See `project-status.md`.
-- [ ] **M4.2 Cheques — NEXT.** See the plan above. Discovery already done;
-      implementation has not started.
+- [x] **M4.2 Phase 1+2 (Cheques: list, read-only) — DONE.**
+      Implementation-level reviewed (route-authorization coverage fix, new
+      `cheques-list-page.test.tsx`), committed, pushed. **Full manual
+      browser end-to-end validation still pending** — no way to create a
+      cheque yet. See `project-status.md`.
+- [ ] **M4.2 Phase 3 — NEXT.** Submit, pending queue, approve (allocation
+      split), reject, annuler, detail page. See the plan above.
+- [ ] **M4.2 list page manual validation** — run once Phase 3's submit form
+      exists and at least one real cheque can be created/seeded.
 - [ ] **M4.3 Deposits — contingent on the `DepoResource` backend
       consultation.** Do not start until that's raised, or until an
       explicit decision narrows scope around it.
 - [ ] **M4.4 Debt Payments — contingent on the placement/permission
       product questions above.**
-- [ ] **FE-1 — test flake, unchanged.** Suite is now at 447 tests across 25
+- [ ] **FE-1 — test flake, unchanged.** Suite is now at 473 tests across 26
       files, stable across two double-runs this session. Recommended
-      before Cheques' own test file adds meaningfully more.
-- [ ] **FE-2 — nested-route guard.** Unchanged; still non-blocking for M4.
-- [ ] **BC-Y, BC-X, BC-N, BC-U, BC-V, BC-S — raise with the backend.**
-      Unchanged.
+      before Phase 3's own mutation tests add meaningfully more.
+- [ ] **FE-2 — nested-route guard.** Unchanged; still non-blocking for M4 —
+      note Cheques' detail page (Phase 3) will be this product's first
+      real test of whether a nested route is actually needed.
+- [ ] **BC-Z, BC-Y, BC-X, BC-N, BC-U, BC-V, BC-S — raise with the
+      backend.** BC-Z is new this session (M4.2 Phase 1, `show()`'s
+      `processed_by` relation bug) — see `project-status.md`.
 - [ ] **ADR-0016 owed work** (M3.5's deferred all-pages bulk-assign step) —
       not urgent, not started.
 - [ ] **Rule-of-Three: cross-domain picker export (at "3") and the
       URL-filter-hook question — still the two live decision points.**
-      M4.2's own agent-picker design may resolve (or further complicate)
-      the first one — see "Known infrastructure risks" above.
+      M4.2 Phase 2's agent filter did **not** move the export tally (it
+      merges existing exports, a distinct pattern — see
+      `project-status.md`); Phase 3's submit-form picker is the next real
+      chance to resolve it.
 - [ ] **Gate G2 formal closure** — unchanged, governance only.
 - [ ] Backend: `view-permissions` permission (B-6 deferred the OR-gate cleanup).
-- [x] M3.1–M3.6 and M4.1 closed out — see `project-status.md`.
+- [x] M3.1–M3.6, M4.1 and M4.2 Phase 1+2 closed out — see `project-status.md`.
 
 ## Session workflow
 

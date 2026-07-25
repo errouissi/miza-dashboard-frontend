@@ -11,6 +11,7 @@ import { managersRoutes } from "@/domains/network/managers";
 import { commercialsRoutes } from "@/domains/network/commercials";
 import { clientsRoutes } from "@/domains/network/clients";
 import { agentOnboardingRoutes } from "@/domains/network/agent-onboarding";
+import { chequesRoutes } from "@/domains/money/cheques";
 import { productsRoutes } from "@/domains/reference/products";
 import { secteursRoutes } from "@/domains/reference/secteurs";
 import { villesRoutes } from "@/domains/reference/villes";
@@ -102,6 +103,7 @@ const domainRoutes: RouteObject[] = withPermissionGuards([
   ...commercialsRoutes,
   ...clientsRoutes,
   ...agentOnboardingRoutes,
+  ...chequesRoutes,
 ]);
 
 /**

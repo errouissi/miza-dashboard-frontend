@@ -106,6 +106,44 @@ export const PERMISSIONS = Object.freeze({
   UPDATE_CLIENT: "update-client",
   MANAGE_CLIENT_STATUS: "manage-client-status",
   ASSIGN_CLIENT: "assign-client",
+
+  /**
+   * Cheque management (roadmap M4.2) — the first Money permission set, and
+   * the first resource outside Network. `ChequeController` carries SIX
+   * distinct server-side checks (`routes/api.php:246-278`), more granular
+   * than any prior resource: submission, three separate list reads, and
+   * three separate status actions are each their own permission, with no
+   * coarse fallback the way reference data has `access-dashboard`.
+   *
+   * `VIEW_CHEQUES` gates the general list (`GET /admin/cheques`) and the
+   * single-record read (`GET /admin/cheques/{id}`) — the route and the
+   * screen this M4.2 phase actually builds.
+   *
+   * `VIEW_PENDING_CHEQUES` is its OWN permission, separate from
+   * `VIEW_CHEQUES` — `GET /admin/cheques/pending` is a distinct route with
+   * a distinct check, so an operator can hold one without the other. Not
+   * wired to a UI control yet: the pending queue (`ApprovalQueuePage`) is a
+   * later M4.2 phase.
+   *
+   * `APPROVE_CHEQUE`/`REJECT_CHEQUE`/`ANNULER_CHEQUE` each gate their own
+   * route (`PUT .../approve`, `.../reject`, `.../annuler`) and are
+   * registered now, together with the read permissions, because the whole
+   * six-permission set was verified from source as one stable vocabulary
+   * during M4's discovery pass — unlike Clients' still-undecided extra
+   * permissions, nothing here is speculative. None of the three action
+   * permissions is wired to a UI control yet (no mutations, no dialogs, in
+   * this phase); registering them now is what lets a later phase gate an
+   * action without touching this file again.
+   *
+   * `CREATE_CHEQUE` gates `POST /admin/cheques` (submission) — registered
+   * now for the same reason, not wired to a form yet.
+   */
+  VIEW_CHEQUES: "view-cheques",
+  VIEW_PENDING_CHEQUES: "view-pending-cheques",
+  CREATE_CHEQUE: "create-cheque",
+  APPROVE_CHEQUE: "approve-cheque",
+  REJECT_CHEQUE: "reject-cheque",
+  ANNULER_CHEQUE: "annuler-cheque",
 } as const satisfies Record<string, string>);
 
 export type PermissionName = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

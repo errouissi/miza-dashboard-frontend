@@ -7,12 +7,14 @@ import {
   UserCog,
   Users,
   Contact,
+  Banknote,
 } from "lucide-react";
 import { PERMISSIONS, type PermissionResolver } from "@/infrastructure/permissions";
 import { ADMINS_PATH } from "@/domains/network/admins";
 import { MANAGERS_PATH } from "@/domains/network/managers";
 import { COMMERCIALS_PATH } from "@/domains/network/commercials";
 import { CLIENTS_PATH } from "@/domains/network/clients";
+import { CHEQUES_PATH } from "@/domains/money/cheques";
 import { PRODUCTS_PATH } from "@/domains/reference/products";
 import { SECTEURS_PATH } from "@/domains/reference/secteurs";
 import { VILLES_PATH } from "@/domains/reference/villes";
@@ -114,6 +116,25 @@ export const NAV_TREE: NavGroup[] = [
         // sits behind a separate ClientController with its own permission set.
         permission: PERMISSIONS.VIEW_CLIENTS,
         icon: Contact,
+      },
+    ],
+  },
+  {
+    // English, not French like "Référentiel"/"Réseau" above — those predate
+    // O-1 (the interface-language decision) being flagged as unsigned;
+    // every M3.x-era addition (Admins/Managers/Commercials/Clients item
+    // labels) already stayed English, and Money continues that, not the
+    // two oldest groups' own convention.
+    label: "Money",
+    items: [
+      {
+        label: "Cheques",
+        to: CHEQUES_PATH,
+        // `view-cheques` — its OWN permission, mirroring the route and the
+        // backend. The five other Cheque permissions gate actions inside
+        // the page, not visibility of the page.
+        permission: PERMISSIONS.VIEW_CHEQUES,
+        icon: Banknote,
       },
     ],
   },

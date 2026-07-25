@@ -11,20 +11,35 @@ _Last updated: 2026-07-25_
 
 **M3 — Network / identity graph — COMPLETE** (all six sub-milestones).
 **M4 — Money is UNDERWAY: M4.1 (infrastructure) is complete; M4.2 (Cheques)
-is next, not started.** A full M4 discovery pass ran before any
-implementation (architecture proposal, API inventory, business rules, risks
-and unknowns, across Cheques/Deposits/Debt Payments) and is the source for
-M4.1's scope and for M4.2's plan in `next-session.md`. M3.x (Admin/Manager/
-Commercial detail pages, ADR-0014) remains the only open M3 item, blocked by
-FE-2 — unaffected by M4.
+Phase 1 (domain model, API, queries) and Phase 2 (permissions, routing,
+list page, DataTable/FilterBar extraction) are both complete and manually/
+implementation-level reviewed. M4.2 Phase 3 (submit, pending queue, approve
+incl. allocation split, reject, annuler, detail page) is next, not
+started.** A full M4 discovery pass ran before any implementation
+(architecture proposal, API inventory, business rules, risks and unknowns,
+across Cheques/Deposits/Debt Payments) and is the source for M4.1's scope
+and for M4.2's plan in `next-session.md`. **Full manual end-to-end
+validation of the Cheques list page is still pending** — there is currently
+no way to create a cheque through the UI or seed one in the dev database
+(Phase 3 builds the submit form), so only implementation-level verification
+(a dedicated MSW-integration test file, a route-authorization coverage fix,
+and a full file-by-file review) has run against it so far. M3.x (Admin/
+Manager/Commercial detail pages, ADR-0014) remains the only open M3 item,
+blocked by FE-2 — unaffected by M4.
 
 ## Current branch
 
-`main`, level with `origin/main` — M4.1 (Money infrastructure) is fully
-committed and pushed this session, manually reviewed and validated first.
+`main`, level with `origin/main` — M4.2 Phase 1+2 (Cheques: domain model,
+API, queries, permissions, routing, list page, DataTable/FilterBar
+extraction) is fully committed and pushed this session, implementation-level
+reviewed first (manual browser validation deferred to Phase 3, see above).
 No uncommitted files remain. See `next-session.md` for the exact commit.
 
 ## Last completed implementation
+
+**M4.2 Phase 1+2 — Cheques (list, read-only) — COMPLETE.** See its own
+section below for the full write-up. The previous entries, kept for
+continuity:
 
 **M4.1 — Money infrastructure — COMPLETE.** See its own section below for
 the full write-up. The previous entries, kept for continuity:
@@ -819,6 +834,141 @@ rendered text, and no test asserted on the replaced `<span>`'s structure or
 class names. **447/447 across 25 files** (was 442/24), run twice standalone
 to rule out FE-1 — stable both times.
 
+## M4.2 — Cheques, Phase 1+2 (list, read-only) (complete)
+
+The first Money resource, and the first resource outside Network. Built in
+two phases, both scoped explicitly, not derived mid-implementation; a
+dedicated implementation-level verification pass ran after Phase 2 and is
+folded into this section rather than given its own heading.
+
+**Phase 1 — domain model, API, queries (no UI, no routes, no permissions).**
+
+- **`Cheque`/`ChequeAllocation`/`ChequeStatus`/`ChequeListParams`**, built
+  from `ChequeController`/the `Cheque`/`ChequeAllocation` models/migrations
+  re-read directly, not inherited from the M4 discovery report's prose.
+- **A correction to M4.1's own stated assumption, caught before it shipped
+  in the model**: `cheques.amount`/`cheque_allocations.amount` are
+  `decimal:2`-cast columns, and Eloquent's decimal cast always serializes as
+  a formatted STRING (`asDecimal()`'s `(string) number_format(...)`), never
+  a JSON number. `MoneyAmount` (M4.1) was built partly anticipating Money's
+  amount fields as its next real caller; they are not eligible. `amount` is
+  typed `string` throughout and rendered verbatim wherever it appears — the
+  same discipline `Manager.avanceTotal`/`Client.solde` already established.
+- **`status`/`status_label` deliberately not modelled from the backend's own
+  accessor** (ADR-0008) — `Cheque::getStatusLabelAttribute()`'s `rejetee`
+  branch returns the raw constant string, not a real label, and every other
+  branch is French-only. `CHEQUE_STATUS_LABELS`/`CHEQUE_STATUS_TONES` are a
+  fresh, English, domain-owned pair, following every prior status enum's
+  precedent — `CHEQUE_STATUS_TONES` mirrors Design System §17's own worked
+  example for Cheques exactly (`en_attente`→warning, `accepter`→success,
+  `rejetee`→danger, `annuler`→muted).
+- **New backend finding, registered below as BC-Z**: `index()` computes a
+  correct `processed_by_name` from a correctly-typed `processedByUser`
+  relation, but `show()` eager-loads a *different*, mismatched relation
+  (`processedBy(): belongsTo(Agent::class, 'processed_by')`, despite
+  `processed_by` storing a **User** id) — Eloquent's array serialization
+  then overwrites the raw `processed_by` FK with that relation's (likely
+  null or wrong) result. Left unmapped until raised with the backend; not
+  something a frontend mapper can paper over.
+- **Query keys stay flat** (`["cheques", ...]`), matching every existing
+  resource's factory (Villes, Secteurs, Products, Admins, Managers,
+  Commercials, Clients — four-for-four of the paginated ones), **not**
+  FTA §8's own worked example, which writes Money keys as
+  `[domain, resource, ...]`. A real discrepancy between the frozen
+  document's prose and unanimous codebase precedent, raised rather than
+  silently resolved either way — `invalidation-map.ts` entries in Phase 3
+  must invalidate the prefix `["cheques"]` accordingly.
+- **`useChequesQuery`/`useChequeQuery`, `LIVE` tier**, `refetchOnWindowFocus:
+  true` — FTA §8 names pending cheques explicitly under this tier, and the
+  plain list is the same class of concurrently-edited data. Read-only; no
+  mutations.
+
+**Phase 2 — permissions, routing, list page, DataTable/FilterBar extraction.**
+
+- **All six Cheque permissions registered** (`view-cheques`,
+  `view-pending-cheques`, `create-cheque`, `approve-cheque`, `reject-cheque`,
+  `annuler-cheque`) — together, ahead of their individual UI controls,
+  because the whole set was verified from source as one stable vocabulary
+  during the M4 discovery pass (unlike Clients' still-undecided extras).
+  Only `VIEW_CHEQUES` gates a control this phase: the route and the list.
+- **`DataTable` and `FilterBar` extracted to `shared/components/business/`**
+  — a real decision point flagged since M3.4, resolved explicitly rather
+  than by accident: the user was asked "extract now, or build Cheques' own
+  inline table/filters" and chose extraction. Both are genuine Rule-of-Three
+  extractions from FOUR working screens' byte-identical markup (Villes,
+  Managers, Commercials, Clients), not invented ahead of evidence.
+  `DataTable` is headless (structure only — no sort/pagination/loading
+  logic, which stay the caller's `ListPage`/state, matching every existing
+  screen). `FilterBar`/`FilterField` extract only the proven wrapper shape,
+  not a config-driven filter system. **Villes/Managers/Commercials/Clients
+  were deliberately NOT retrofitted onto them this phase** — that migration
+  is separate and larger, and out of scope here.
+- **The Cheques list page**: search, status filter, a merged Agent filter,
+  and a submitted-date range, against `useChequesQuery`. `amount` renders
+  **verbatim, not through `MoneyAmount`** — despite the task's literal
+  instruction to reuse it — because Phase 1 corrected the amount-is-a-string
+  assumption `MoneyAmount` was partly built for; the page's own docblock
+  records why. Pagination, loading/error/empty states all reuse the
+  existing `ListPage`/`ListLoadingState`/`ListErrorState`/`ListEmptyState`
+  patterns unchanged.
+- **`ChequeAgentFilter` merges two existing pickers** (`useManagerOptionsQuery`
+  + `useCommercialOptionsQuery`) into one `<select>`, rather than inventing a
+  cross-role search endpoint — no backend endpoint searches both roles at
+  once (verified during M4 discovery). **A third, distinct cross-domain
+  pattern**, not conflated with the picker-*export* tally below (Cheques
+  exports nothing new for a further consumer; it *consumes* two existing
+  exports and merges them in one component) — recorded here as its own
+  instance, the same way `ManagerAreaMultiSelect`'s reuse was at M3.6.
+  **Two disclosed, known gaps, not silently worked around**: the Commercial
+  half is `status=active`-only (M3.5's own scoping decision, inherited
+  as-is), so a blocked/inactive commercial's historical cheques are not
+  findable through this filter; and the Manager half has no `enabled` gate
+  (the same pre-existing, accepted gap M3.6's wizard already carries), so a
+  session holding `view-cheques` without `view-agents` 403s on the Manager
+  half specifically.
+- **New instance of the BC-P defect class, narrower than Managers'/
+  Commercials' own**: `ChequeController::index` uses `whereDate()`
+  (correctly day-inclusive) when only ONE of `date_from`/`date_to` is
+  given, but `whereBetween()` against the raw `created_at` timestamp
+  (excluding most of `date_to`'s own day) when BOTH are given together.
+  "Submitted before" stays the honest label — exact when both filters are
+  set together, harmlessly conservative when `date_to` is used alone.
+- **Routing**: `/money/cheques`, gated on `view-cheques`, no children
+  (ADR-0014/FE-2, same reasoning as every prior domain). **Nav entry
+  added** — the first entry in a new "Money" group, English label
+  (deliberate — see the inline comment on O-1/the M3.x precedent).
+
+**Implementation-level verification pass (post-approval, pre-close-out)** —
+requested explicitly because there is currently no way to create a cheque
+through the UI or seed one, so a real browser end-to-end pass could not run
+yet:
+
+- **One genuine gap found and fixed**: `route-authorization.test.tsx`'s
+  parametrized `domainPaths` array — the mechanism by which every new
+  domain route automatically inherits refuses-without-permission/redirects-
+  when-unauthenticated coverage — did not include `CHEQUES_PATH`. Added; both
+  parametrized cases now run and pass for `/money/cheques`.
+- **A new `cheques-list-page.test.tsx`** (24 tests, MSW-integration style,
+  matching the convention every other list page already has) covering the
+  envelope contract, loading/error/empty states, all four filters and their
+  exact wire parameter names (confirming `statute`, not `status`, is what
+  actually gets sent), the merged agent picker's sort order and gating,
+  pagination, and the row-mapping facts above (`amount` verbatim, all four
+  status labels/tones, `formatIdentifier`/`formatDate` usage).
+- **Full file-by-file review of every Phase 2 file** (plus Phase 1's, since
+  Phase 2 depends on them) found no other genuine defect: no duplicated
+  logic, no speculative abstraction, no permission mistake, no dead code
+  beyond one stray fragment already self-caught and fixed before this
+  review began.
+
+**No backend changes. No mutations, no submit form, no pending queue, no
+approve/reject/annuler, no detail page** — all Phase 3.
+
+**Tests: 26 new** (2 more parametrized `route-authorization` cases +
+24 in the new `cheques-list-page.test.tsx`). **473/473 across 26 files**
+(was 447/25 after M4.1), run twice standalone to rule out FE-1 — stable
+both times.
+
 ## Overall progress
 
 | Milestone | Status |
@@ -840,16 +990,18 @@ to rule out FE-1 — stable both times.
 | **M3.6 — Agent onboarding wizard** | ✅ **complete** — manually validated, three post-validation fix rounds applied |
 | M3.x — Admin + Manager + Commercial detail pages (ADR-0014) | ⬜ pending — **blocked by FE-2** |
 | **M4.1 — Money infrastructure** | ✅ **complete** — manually reviewed and validated |
-| M4.2 — Cheques | ⬜ next, not started |
+| **M4.2 — Cheques, Phase 1+2 (list, read-only)** | ✅ **complete** — implementation-level reviewed; full manual end-to-end validation pending cheque creation (Phase 3) |
+| M4.2 Phase 3 — Cheques submit, pending queue, approve/reject/annuler, detail | ⬜ next, not started |
 | M4.3 — Deposits | ⬜ not started — contingent on the `DepoResource` backend consultation (see Backend dependencies) |
 | M4.4 — Debt Payments | ⬜ not started — contingent on the placement/permission questions (see Backend dependencies) |
 | M5+ — Stock, Grattage, Overview | ⬜ not started |
 
-**Tests: 447/447 across 25 files** (was 407/23 before M3.6; 431/24 at
+**Tests: 473/473 across 26 files** (was 407/23 before M3.6; 431/24 at
 M3.6's initial implementation; 442/24 after M3.6's three post-validation fix
-rounds; now 447/25 after M4.1). Lint · typecheck · format · build all clean,
-re-verified after every round, `pnpm test:ci` run twice standalone each time
-to rule out FE-1 — stable throughout.
+rounds; 447/25 after M4.1; now 473/26 after M4.2 Phase 1+2). Lint ·
+typecheck · format · build all clean, re-verified after every round,
+`pnpm test:ci` run twice standalone each time to rule out FE-1 — stable
+throughout.
 
 ## Shared pattern layer
 
@@ -863,16 +1015,34 @@ did not exist before this milestone:
 
 - `StatusBadge` — six-tone system (Design System §17); `tone`+`label` props
   only, no status vocabulary of its own. Consumed by Managers/Commercials/
-  Clients' list pages via each domain's own `*_STATUS_TONES` map.
+  Clients' list pages via each domain's own `*_STATUS_TONES` map, and now
+  Cheques' (M4.2).
 - `MoneyAmount` — wraps `formatMoney`, adds `tabular-nums` + the negative-
   value danger color. Consumed by Products' list page only — Managers'/
   Commercials'/Clients' pre-formatted money strings deliberately do not use
-  it (see the M4.1 section above).
+  it, and Cheques' `amount` (M4.2) does not either, for the same reason
+  (see the M4.1 and M4.2 sections above).
 - `FileUploadField` — promoted unchanged from `agent-onboarding/`. Consumed
-  by the wizard's Documents/Moto steps; not yet consumed by Money (M4.2+).
+  by the wizard's Documents/Moto steps; not yet consumed by Money (Cheque
+  photo upload is Phase 3).
 
-**Still deliberately not extracted**: `DataTable` · `FilterBar` ·
-`EntityChip` · Resource-definition module · URL-filter hook.
+**Two more `business/` components, new at M4.2 — the first real callers of
+`DataTable`/`FilterBar`, both flagged as "reaches evidence, not yet
+extracted" since M3.4:**
+
+- `DataTable` — headless paginated-table shell (structure only; no sort,
+  pagination or loading/error/empty logic, which stay each caller's own
+  `ListPage`/state). Extracted from the byte-identical markup already
+  proven across Villes/Managers/Commercials/Clients; consumed by Cheques'
+  list page. Those four resources were **not** retrofitted onto it this
+  phase — a separate, larger migration, out of scope.
+- `FilterBar`/`FilterField` — the proven `flex flex-wrap items-end gap-3` /
+  `flex flex-col gap-1.5` wrapper shape only, **not** a config-driven filter
+  system. Consumed by Cheques' list page; the same four resources were not
+  retrofitted.
+
+**Still deliberately not extracted**: `EntityChip` · Resource-definition
+module · URL-filter hook.
 
 **`TextField` stays domain-local to the wizard** — used ~20 times, but
 entirely within one screen (same-screen repetition, not cross-resource
@@ -897,6 +1067,14 @@ This is a different shape of coupling than the picker-export tally above and
 is **not** added to that row — recorded here as its own, first instance, not
 conflated with it.
 
+**A third, distinct cross-domain pattern appeared at M4.2**:
+`ChequeAgentFilter` merges two *existing* picker exports
+(`useManagerOptionsQuery` + `useCommercialOptionsQuery`) into one `<select>`
+inside Cheques, rather than Cheques itself exporting anything new for a
+further downstream consumer. Not the same shape as the export tally below
+(which counts a resource handing its own picker to a sibling) — recorded
+here as its own instance, same treatment as `ManagerAreaMultiSelect` above.
+
 **Rule-of-Three evidence tally, recorded factually.** `StatusBadge`,
 `MoneyAmount` and `FileUploadField` moved from "evidence recorded, not
 acted on" to **extracted** at M4.1 — the first rows in this tally's history
@@ -904,8 +1082,8 @@ to actually cross into `shared/`. Every other row is unchanged from M3.6:
 
 | Component | Evidence | At ADR-0006's stated threshold? |
 | --- | --- | --- |
-| `DataTable` | 4 paginated resources (Villes, Managers, Commercials, Clients) | Reaches "3" — **still not extracted** |
-| `FilterBar` | 4 resources with server-supported search/multi-filter | Reaches "3" — **still not extracted** |
+| `DataTable` | 4 paginated resources (Villes, Managers, Commercials, Clients) | **EXTRACTED at M4.2**, consumed by Cheques' list page only — the 4 resources whose evidence justified it were not retrofitted this phase |
+| `FilterBar` | 4 resources with server-supported search/multi-filter | **EXTRACTED at M4.2**, consumed by Cheques' list page only — same non-retrofit decision as `DataTable` |
 | `StatusBadge` | 3 resources with a real status enum (Managers/Commercials share one vocabulary, Clients a second) | **EXTRACTED at M4.1** — built to Design System §17's full spec, not the 3 call sites' own minimal shape, anticipating Money's richer vocabulary |
 | `MoneyAmount` | Products' `value` is a genuinely numeric column; Managers'/Commercials'/Clients' money fields are deliberately excluded (pre-formatted strings, not raw numbers) | **EXTRACTED at M4.1**, consumed by Products only today — Money's Cheque/Deposit/Debt Payment `amount` fields (M4.2+) are the real 2nd/3rd/4th callers |
 | `EntityChip` | 0 — filter `<select>`s are not the roadmap's sanctioned infinite-query autocomplete | Not reached |
@@ -916,10 +1094,12 @@ to actually cross into `shared/`. Every other row is unchanged from M3.6:
 | **File upload control** (`FileUploadField`) | **EXTRACTED at M4.1** — justified by Money's three NAMED upcoming callers (Cheque photo, Deposit proof, Debt Payment proof, all confirmed from source during M4 discovery), not by current evidence alone; M3.6's own ~11 internal call sites were explicitly insufficient on their own | Promoted ahead of the callers actually landing — a deliberate exception, not a precedent for extracting on named-but-unbuilt callers generally |
 
 **The cross-domain picker-export tally and the URL-filter-hook question
-remain the two open Rule-of-Three decision points**, unresolved by M4.1 —
-whichever session picks up M4.2 should treat the picker-export tally as
-live, since Cheque/Deposit agent pickers may add a fourth instance (see
-`next-session.md`'s M4.2 plan).
+remain the two open Rule-of-Three decision points, still unresolved.**
+M4.2 Phase 1+2 did **not** add a fourth instance to the export tally — the
+Cheques agent filter *merges* two existing exports rather than exporting a
+new one (see the "third, distinct cross-domain pattern" note above) — so the
+tally stays at 3, still the next actual decision point whenever a fourth
+genuine export appears.
 
 ## Current blockers
 
@@ -936,16 +1116,16 @@ live, since Cheque/Deposit agent pickers may add a fourth instance (see
 `block-agent` is now seeded; block and activate work end to end for both
 Managers and Commercials (same permission, same endpoints).
 
-### FE-1 — unchanged, not touched by M3.6
+### FE-1 — unchanged, not touched by M4.2
 
 Five older test files' `findByRole("alert")` calls still run against the 1000 ms
-default timeout while taking 951–1240 ms. Not touched by M3.6 — no new
+default timeout while taking 951–1240 ms. Not touched by M4.2 — no new
 evidence gathered, no fix applied. `pnpm test:ci` was run twice standalone
-after M3.6's initial implementation and after each of its three
-post-validation fix rounds (four checkpoints total) — stable every time,
-no flake observed in any of them. Still recommended before the suite grows
-further; the suite is now at 442 tests across 24 files, 54 more than when
-this was last raised at M3.4.
+after M4.2 Phase 2's implementation and again after its verification pass
+(the new `cheques-list-page.test.tsx` file included its own `role="alert"`
+error-state test) — stable every time, no flake observed. Still recommended
+before the suite grows further; the suite is now at 473 tests across 26
+files, 31 more than when this was last raised at M4.1 (447/25).
 
 **Governance follow-ups — not blockers** (unchanged):
 
@@ -1012,6 +1192,15 @@ validation outcome — it is a source-code fact, not a UI behavior):**
 | --- | --- | --- | --- |
 | — | **verified, positive** | `store()` correctly catches `ValidationException` before its generic handler, and its one manual business-rule check (the essence/moto rule) returns a properly `errors`-keyed 422 — BC-N does **not** apply to it | ✅ no action needed, recorded so a future session does not assume BC-N universally |
 | BC-Y | **limitation, new** | `createMoto()` runs — and uploads its files — *before* `DB::transaction` wraps the agent insert in `store()`. A failed agent insert after a successful moto creation would leave an orphaned `Moto` row and orphaned files | 🟡 open — narrow (agent insert failing after successful moto creation + upload is rare), not something the frontend can route around. Worth a backend consultation item, not a blocker |
+
+**From the M4.2 contract verification, against `ChequeController`, independently
+re-confirmed rather than assumed from the M4 discovery report's own prose:**
+
+| ID | Class | Item | Status |
+| --- | --- | --- | --- |
+| BC-Z | **defect, new** | `show()` eager-loads `processedBy()` (`belongsTo(Agent::class, 'processed_by')`) instead of `index()`'s correctly-typed `processedByUser()` (`belongsTo(User::class, 'processed_by')`), despite `processed_by` always storing a **User** id. Eloquent's array serialization then overwrites the raw `processed_by` FK with this mismatched relation's (likely null or wrong) result | 🟡 open — live-confirmed from source; left unmapped in the frontend rather than papered over. Non-blocking today (who processed a cheque is not yet shown anywhere), but blocks a correct "processed by" field on the future detail page (Phase 3) until fixed |
+| BC-P | **defect** | New instance of the class, narrower than Managers'/Commercials' own: `index()` uses `whereDate()` (correctly day-inclusive) when only ONE of `date_from`/`date_to` is given, but `whereBetween()` against the raw `created_at` timestamp (excluding most of `date_to`'s own day) when BOTH are given together | 🟡 open — "Submitted before" stays the honest label: exact when both filters are set together, harmlessly conservative when `date_to` is used alone |
+| — | **verified, positive** | `cheques.amount`/`cheque_allocations.amount` are `decimal:2`-cast columns, confirmed to serialize as formatted STRINGS on the wire (never a JSON number), consistent with Eloquent's `asDecimal()` cast implementation — not a defect, but corrects an assumption stated in M4.1's own write-up | ✅ no action needed; `MoneyAmount` remains correctly unused for `Cheque.amount`, same discipline as `Manager.avanceTotal`/`Client.solde` |
 
 Carried, unchanged from M3.2:
 
@@ -1098,4 +1287,21 @@ src/domains/
                                    the sole, explicit submission path;
                                    dedicated success screen for one-time
                                    backend-generated credentials, ADR-0017)
+
+src/domains/money/
+└── cheques/               M4.2 Phase 1+2 — LIST ONLY, read-only
+                                   (the first Money resource, the first
+                                   resource outside Network; paginated ·
+                                   search · 4 filters (status, agent, date
+                                   range) · a 4-value status enum · amount
+                                   rendered verbatim as a decimal-cast
+                                   STRING, never through MoneyAmount; agent
+                                   filter merges Managers'/Commercials'
+                                   existing pickers into one <select>, not a
+                                   new export; first real caller of the
+                                   newly-extracted DataTable/FilterBar; NO
+                                   submit form, NO pending queue, NO
+                                   approve/reject/annuler, NO detail page —
+                                   all Phase 3; full manual end-to-end
+                                   validation pending cheque creation)
 ```
