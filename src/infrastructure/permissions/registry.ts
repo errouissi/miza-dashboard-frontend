@@ -126,17 +126,18 @@ export const PERMISSIONS = Object.freeze({
    * later M4.2 phase.
    *
    * `APPROVE_CHEQUE`/`REJECT_CHEQUE`/`ANNULER_CHEQUE` each gate their own
-   * route (`PUT .../approve`, `.../reject`, `.../annuler`) and are
-   * registered now, together with the read permissions, because the whole
-   * six-permission set was verified from source as one stable vocabulary
-   * during M4's discovery pass — unlike Clients' still-undecided extra
-   * permissions, nothing here is speculative. None of the three action
-   * permissions is wired to a UI control yet (no mutations, no dialogs, in
-   * this phase); registering them now is what lets a later phase gate an
-   * action without touching this file again.
+   * route (`PUT .../approve`, `.../reject`, `.../annuler`) and were
+   * registered together with the read permissions at Phase 2, because the
+   * whole six-permission set was verified from source as one stable
+   * vocabulary during M4's discovery pass — unlike Clients' still-undecided
+   * extra permissions, nothing here is speculative. None of these three
+   * action permissions is wired to a UI control yet (no mutations, no
+   * dialogs — a later M4.2 phase); registering them ahead of time is what
+   * lets that later phase gate an action without touching this file again.
    *
-   * `CREATE_CHEQUE` gates `POST /admin/cheques` (submission) — registered
-   * now for the same reason, not wired to a form yet.
+   * `CREATE_CHEQUE` gates `POST /admin/cheques` and is now WIRED (Phase
+   * 3A): the "Create Cheque" button on the list page, and the
+   * `/money/cheques/new` route itself.
    */
   VIEW_CHEQUES: "view-cheques",
   VIEW_PENDING_CHEQUES: "view-pending-cheques",

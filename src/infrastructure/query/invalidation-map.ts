@@ -12,16 +12,15 @@ import type { QueryClient, QueryKey } from "@tanstack/react-query";
  * query-key prefixes, across every domain, each event invalidates — the
  * single, greppable answer to "what happens when a cheque is approved?".
  *
- * ENTRIES ARE DELIBERATELY EMPTY AT M4.1.
- * No mutation in this product yet emits a domain event — Money, the first
- * domain that will (`cheque.approved` → Network's `avanceTotal`), is not
- * built yet either. Registering entries ahead of the mutation that emits
- * them would be inventing a contract ahead of a real caller
- * (`session-bootstrap.md`'s own rule). This file ships now so M4.2's first
- * real mutation has somewhere to register on day one, not so it has to
- * invent this mechanism under deadline.
+ * ENTRIES SHIPPED EMPTY AT M4.1 — Money, the first domain to emit a real
+ * event, was not built yet. `cheque.created` (M4.2 Phase 3A) is the FIRST
+ * real entry: registered from a real mutation (`useCreateChequeMutation`),
+ * not ahead of one (`session-bootstrap.md`'s own rule). `cheque.approved`/
+ * `cheque.rejected`/`cheque.annuled` — which DO cross into Network's
+ * `avanceTotal` — remain unregistered until the mutations that emit them
+ * exist (a later M4.2 phase); do not add them speculatively.
  *
- * The mechanism, the fallback, and its test ship now — mirrors
+ * The mechanism, the fallback, and its test shipped at M4.1 — mirrors
  * `infrastructure/errors/error-code-registry.ts` exactly: an empty, frozen
  * registry, a lookup that degrades safely (an unregistered event
  * invalidates nothing rather than throwing), populated per event as real
@@ -30,9 +29,11 @@ import type { QueryClient, QueryKey } from "@tanstack/react-query";
 
 /**
  * A domain event name, e.g. `"cheque.approved"`. Kept as a plain `string`
- * while the registry is empty — the same looseness `ERROR_CODES` uses for
- * the identical reason (a literal union with zero members is unusable).
- * Narrow it to a real union once the first events are registered.
+ * rather than a literal union — this registry is infrastructure and may
+ * not import a domain's own event-name constants (the dependency direction
+ * is `app -> domains -> shared -> infrastructure`, never the reverse), so
+ * there is no domain-owned union type it could narrow to without inverting
+ * that rule.
  */
 export type DomainEvent = string;
 
@@ -41,9 +42,18 @@ export type DomainEvent = string;
  * cares. A prefix, not a full key: invalidating `['network','managers']`
  * refreshes every Managers view at once (list, and any future detail),
  * exactly as invalidating a resource's own key space already does today.
+ *
+ * `["cheques"]` is a LITERAL, not an import of `chequesKeys.all` — this
+ * file cannot import a domain's key factory (same dependency-direction
+ * reason `DomainEvent` stays a plain `string`, above). It is the flat shape
+ * Cheques' own factory actually uses (`queries/keys.ts`'s own docblock
+ * flags the same discrepancy with FTA §8's `[domain,resource,...]` prose) —
+ * keep the two in sync by hand if that key's shape ever changes.
  */
 const INVALIDATION_MAP: Readonly<Record<DomainEvent, readonly QueryKey[]>> =
-  Object.freeze({});
+  Object.freeze({
+    "cheque.created": [["cheques"]],
+  });
 
 /** The prefixes a given event invalidates, or an empty list for an unregistered one. */
 export function queryKeyPrefixesFor(event: DomainEvent): readonly QueryKey[] {

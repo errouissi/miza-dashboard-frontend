@@ -7,12 +7,13 @@ import {
   type ChequeListParams,
   type ChequeStatus,
 } from "../model/cheque";
+import type { CreateChequeFormValues } from "../model/create-cheque";
 
 /**
  * The Cheques endpoints and their mappers (FTA §7, D-6).
  *
- * PHASE 1 — READ ONLY. `fetchCheques`/`fetchChequeById` only; no
- * store/approve/reject/annuler yet — that is M4.2's own later phase.
+ * PHASE 1 — READ ONLY (`fetchCheques`/`fetchChequeById`). PHASE 3A adds
+ * `createCheque`. Still no approve/reject/annuler — later M4.2 phases.
  *
  * `index()` USES THE SAME `{success, data: <paginator>}` FLAT-PAGINATOR
  * ENVELOPE Managers/Commercials/Clients already return — verified from
@@ -124,4 +125,47 @@ export async function fetchCheques(params: ChequeListParams): Promise<Paginated<
 export async function fetchChequeById(id: number): Promise<Cheque> {
   const { data } = await httpClient.get<ChequeEnvelope>(`/admin/cheques/${id}`);
   return toCheque(data.data);
+}
+
+/**
+ * `store()`'s response envelope — verified from source to be a DIFFERENT
+ * shape from `index()`/`show()`'s: `photo_url` sits as a SIBLING of the raw
+ * cheque object, not spread into it (`'data' => ['cheque' => $cheque,
+ * 'photo_url' => ...]`, vs. `index()`/`show()`'s `[...$cheque->toArray(),
+ * 'photo_url' => ...]`). `toCheque()` expects a flat `ChequeRow`, so the two
+ * must be merged before mapping — passing `data.data.cheque` straight
+ * through would silently drop `photo_url` on the just-created cheque.
+ */
+type CreateChequeEnvelope = {
+  success: boolean;
+  message: string;
+  data: {
+    cheque: ChequeRow;
+    photo_url: string | null;
+  };
+};
+
+/**
+ * Wire field names verified from `ChequeController::store`'s validator, not
+ * guessed. `agent_id` is sent as the select's string id — the backend's
+ * `exists:agents,id` rule accepts a numeric string from a multipart body
+ * the same as it would a JSON number.
+ */
+function buildCreateChequeFormData(values: CreateChequeFormValues): FormData {
+  const formData = new FormData();
+  formData.append("agent_id", values.agentId);
+  formData.append("amount", values.amount.trim());
+  formData.append("num_cheque", values.numCheque.trim());
+  // zod's superRefine already guarantees this is non-null by the time
+  // handleSubmit's onSubmit callback runs.
+  formData.append("photo_cheque", values.photo as File);
+  return formData;
+}
+
+export async function createCheque(values: CreateChequeFormValues): Promise<Cheque> {
+  const { data } = await httpClient.post<CreateChequeEnvelope>(
+    "/admin/cheques",
+    buildCreateChequeFormData(values),
+  );
+  return toCheque({ ...data.data.cheque, photo_url: data.data.photo_url });
 }

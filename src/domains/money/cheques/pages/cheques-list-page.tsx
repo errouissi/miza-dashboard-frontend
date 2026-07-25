@@ -1,4 +1,4 @@
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { isAppError, resolveErrorDisplay } from "@/infrastructure/errors";
 import { PERMISSIONS } from "@/infrastructure/permissions";
 import { usePermission } from "@/shared/hooks";
@@ -16,6 +16,7 @@ import {
 import { Button } from "@/shared/components/ui/button";
 import { ChequeAgentFilter } from "../components/cheque-agent-filter";
 import { useChequesQuery } from "../queries/cheques-queries";
+import { CHEQUES_NEW_PATH } from "../routes";
 import {
   CHEQUE_LIST_DEFAULTS,
   CHEQUE_STATUSES,
@@ -31,9 +32,13 @@ import {
  * The Cheques list (roadmap M4.2) — the first Money screen, and the first
  * resource outside Network.
  *
- * PHASE 2 — READ ONLY. List, filters, pagination. No submit form, no
- * pending queue, no approve/reject/annuler actions or dialogs, no detail
- * page — all later M4.2 phases. There is accordingly no actions column.
+ * PHASE 2 shipped it READ ONLY: list, filters, pagination, no actions
+ * column. PHASE 3A adds exactly one action — a "Create Cheque" button,
+ * gated on `create-cheque`, navigating to `CHEQUES_NEW_PATH` — mirroring
+ * Managers'/Commercials' own "Create..." buttons that navigate to the
+ * Agent Onboarding wizard. Still no pending queue, no approve/reject/
+ * annuler actions or dialogs, no detail page — later M4.2 phases. There is
+ * accordingly still no per-row actions column.
  *
  * `DataTable`/`FilterBar` ARE REAL SHARED COMPONENTS, extracted THIS
  * session from Villes/Managers/Commercials/Clients' identical inline
@@ -101,12 +106,15 @@ function readParams(search: URLSearchParams): ChequeListParams {
 }
 
 export function ChequesListPage() {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const params = readParams(searchParams);
   const chequesQuery = useChequesQuery(params);
 
   const { has } = usePermission();
   const canReadAgents = has(PERMISSIONS.VIEW_AGENTS);
+  /** `create-cheque` gates `POST /admin/cheques` and this route's own page (Phase 3A). */
+  const canCreateCheque = has(PERMISSIONS.CREATE_CHEQUE);
 
   const patchParams = (patch: Partial<ChequeListParams>) => {
     const next = { ...params, ...patch };
@@ -181,6 +189,11 @@ export function ChequesListPage() {
   return (
     <ListPage
       title="Cheques"
+      action={
+        canCreateCheque ? (
+          <Button onClick={() => navigate(CHEQUES_NEW_PATH)}>Create Cheque</Button>
+        ) : null
+      }
       filters={
         <FilterBar>
           <FilterField label="Search" htmlFor="chequeSearch">

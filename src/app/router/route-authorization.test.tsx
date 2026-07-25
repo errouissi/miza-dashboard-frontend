@@ -15,7 +15,7 @@ import { MANAGERS_PATH } from "@/domains/network/managers";
 import { COMMERCIALS_PATH } from "@/domains/network/commercials";
 import { CLIENTS_PATH } from "@/domains/network/clients";
 import { AGENT_ONBOARDING_PATH } from "@/domains/network/agent-onboarding";
-import { CHEQUES_PATH } from "@/domains/money/cheques";
+import { CHEQUES_PATH, CHEQUES_NEW_PATH } from "@/domains/money/cheques";
 import { routes } from "./routes";
 
 /**
@@ -213,8 +213,11 @@ describe("every contributed domain route is guarded", () => {
   // `view-clients` — its own permission, a separate controller entirely.
   // AGENT_ONBOARDING_PATH (M3.6) is guarded by `create-agent` — its own
   // permission, on its own dedicated domain (ADR-0012), not `view-agents`.
-  // CHEQUES_PATH (M4.2) is guarded by `view-cheques` — its own permission,
-  // the first resource outside Network.
+  // CHEQUES_PATH (M4.2 Phase 2) is guarded by `view-cheques` — its own
+  // permission, the first resource outside Network. CHEQUES_NEW_PATH
+  // (M4.2 Phase 3A) is guarded by `create-cheque`, a DIFFERENT permission
+  // from the list route it sits beside — mirroring `POST /admin/cheques`'
+  // own, separate check.
   // `unpermittedSession` holds nothing at all, so it exercises every gate
   // identically.
   const domainPaths = [
@@ -227,6 +230,7 @@ describe("every contributed domain route is guarded", () => {
     CLIENTS_PATH,
     AGENT_ONBOARDING_PATH,
     CHEQUES_PATH,
+    CHEQUES_NEW_PATH,
   ];
 
   it.each(domainPaths)("refuses %s without the permission", async (path) => {

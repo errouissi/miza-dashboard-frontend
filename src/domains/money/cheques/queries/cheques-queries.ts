@@ -1,11 +1,13 @@
-import { useQuery } from "@tanstack/react-query";
-import { STALE_TIMES } from "@/infrastructure/query";
-import { fetchCheques, fetchChequeById } from "../api/cheques-api";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { STALE_TIMES, invalidateForEvent } from "@/infrastructure/query";
+import { createCheque, fetchCheques, fetchChequeById } from "../api/cheques-api";
 import type { ChequeListParams } from "../model/cheque";
+import type { CreateChequeFormValues } from "../model/create-cheque";
 import { chequesKeys } from "./keys";
 
 /**
- * Cheques data hooks (FTA §8). Phase 1 — read-only; no mutations yet.
+ * Cheques data hooks (FTA §8). Phase 1 — read-only. Phase 3A adds the first
+ * mutation, `useCreateChequeMutation`.
  *
  * LIVE tier: FTA §8's own table names "pending cheques" explicitly under
  * this tier, and the plain (unfiltered) list is the same class of data —
@@ -36,5 +38,32 @@ export function useChequeQuery(id: number) {
     queryFn: () => fetchChequeById(id),
     staleTime: STALE_TIMES.LIVE,
     refetchOnWindowFocus: true,
+  });
+}
+
+/**
+ * Cheque creation (roadmap M4.2 Phase 3A) — `POST /admin/cheques`.
+ *
+ * THE FIRST REAL CALLER OF `invalidateForEvent` (D-3, the M4.1
+ * `invalidation-map.ts` scaffold) in this product. Invalidates via the
+ * `"cheque.created"` event rather than a local `queryClient.invalidateQueries({
+ * queryKey: chequesKeys.all })` call, even though the two are equivalent
+ * today — creating a cheque only ever adds a new, `en_attente` row; it does
+ * not touch `agent.solde`/`montant_avance_*` the way approve/annuler will,
+ * so nothing outside Cheques' own key space needs busting yet (unlike the
+ * `cheque.approved`/`cheque.annuled` events `next-session.md` already plans
+ * to also invalidate Network's Managers/Commercials prefixes). Going
+ * through the event mechanism now, for a single-domain effect, is what
+ * proves the mechanism itself before a cross-domain caller depends on it.
+ *
+ * No optimistic update, no automatic retry (FTA D-7, §11) — this is a
+ * financial-record creation; a request that appears to succeed and then
+ * silently reverts is worse than a slow one.
+ */
+export function useCreateChequeMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (values: CreateChequeFormValues) => createCheque(values),
+    onSuccess: () => invalidateForEvent(queryClient, "cheque.created"),
   });
 }
