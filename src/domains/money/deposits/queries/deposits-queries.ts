@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { STALE_TIMES } from "@/infrastructure/query";
-import { fetchDeposits } from "../api/deposits-api";
+import { fetchDeposits, fetchDepositById } from "../api/deposits-api";
 import type { DepositListParams } from "../model/deposit";
 import { depositsKeys } from "./keys";
 
@@ -15,5 +15,23 @@ export function useDepositsQuery(params: DepositListParams) {
     queryFn: () => fetchDeposits(params),
     staleTime: STALE_TIMES.LIVE,
     refetchOnWindowFocus: true,
+  });
+}
+
+/**
+ * A single deposit (M4.3 Phase 2). Same `LIVE` tier as the list.
+ *
+ * `enabled` guards a malformed `:id` route param (a hand-edited URL) from
+ * firing `GET /admin/depos/NaN` — the caller resolves `Number.isInteger`
+ * itself and passes the result in, the same pattern `useChequeQuery`
+ * already established.
+ */
+export function useDepositQuery(id: number, options: { enabled?: boolean } = {}) {
+  return useQuery({
+    queryKey: depositsKeys.detail(id),
+    queryFn: () => fetchDepositById(id),
+    staleTime: STALE_TIMES.LIVE,
+    refetchOnWindowFocus: true,
+    enabled: options.enabled ?? true,
   });
 }

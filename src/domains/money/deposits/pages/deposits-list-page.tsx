@@ -1,4 +1,4 @@
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { isAppError, resolveErrorDisplay } from "@/infrastructure/errors";
 import { PERMISSIONS } from "@/infrastructure/permissions";
 import { usePermission } from "@/shared/hooks";
@@ -17,6 +17,7 @@ import {
 import { Button } from "@/shared/components/ui/button";
 import { DepositAgentFilter } from "../components/deposit-agent-filter";
 import { useDepositsQuery } from "../queries/deposits-queries";
+import { depositDetailPath } from "../routes";
 import {
   DEPOSIT_LIST_DEFAULTS,
   DEPOSIT_METHODS,
@@ -59,6 +60,12 @@ import {
  * `date` (the wire field) IS ALREADY ISO-NORMALIZED BY THE MAPPER
  * (`deposits-api.ts`'s `toIsoDateTime`) before it reaches this page — this
  * page calls the ordinary shared `formatDate`, same as every other list.
+ *
+ * A "View" ACTION COLUMN WAS ADDED AT PHASE 2, navigating to
+ * `DepositDetailPage` (`depositDetailPath(deposit.id)`) — the same retrofit
+ * Cheques' own list page got when its detail page landed. Gated on nothing
+ * beyond this page's own `view-depos`, mirroring the detail route's own
+ * permission exactly (the SAME check, `GET /admin/depos/{depo}`'s own guard).
  */
 
 const SELECT_CLASS =
@@ -97,6 +104,7 @@ function readParams(search: URLSearchParams): DepositListParams {
 }
 
 export function DepositsListPage() {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const params = readParams(searchParams);
   const depositsQuery = useDepositsQuery(params);
@@ -174,6 +182,20 @@ export function DepositsListPage() {
       key: "createdAt",
       header: "Date",
       cell: (deposit) => formatDate(deposit.createdAt),
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      srOnlyHeader: true,
+      cell: (deposit) => (
+        <Button
+          variant="link"
+          size="sm"
+          onClick={() => navigate(depositDetailPath(deposit.id))}
+        >
+          View
+        </Button>
+      ),
     },
   ];
 

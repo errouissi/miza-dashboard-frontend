@@ -54,6 +54,11 @@ function depositRow(
       photo: string | null;
     };
     created_by: string;
+    reject_reason: string | null;
+    validated_by: string | null;
+    validated_at: string | null;
+    bank_name: string | null;
+    proof_type: string;
   }> = {},
 ) {
   return {
@@ -67,6 +72,14 @@ function depositRow(
     date: "2026-02-10 09:00",
     agent: { id: 1, full_name: "Sara Alaoui", account_number: "MG0001", photo: null },
     created_by: "Ahmed Errouissi",
+    // Phase 2's five detail-only fields — always on the wire (one shared
+    // resource, verified from source), included here so this fixture keeps
+    // matching the real contract rather than the Phase-1-era subset.
+    reject_reason: null,
+    validated_by: null,
+    validated_at: null,
+    bank_name: null,
+    proof_type: "bank_receipt",
     ...overrides,
   };
 }
@@ -172,9 +185,15 @@ function commercialsHandler(onRequest?: (url: URL) => void) {
 }
 
 function renderPage(initialPath: string = PATH) {
-  const router = createMemoryRouter([{ path: PATH, element: <DepositsListPage /> }], {
-    initialEntries: [initialPath],
-  });
+  const router = createMemoryRouter(
+    [
+      { path: PATH, element: <DepositsListPage /> },
+      // A stub so the "View" navigation test (Phase 2) lands on a real
+      // route rather than a router-level 404.
+      { path: "/money/deposits/:id", element: <p>Deposit detail</p> },
+    ],
+    { initialEntries: [initialPath] },
+  );
   render(
     <QueryClientProvider client={createQueryClient()}>
       <RouterProvider router={router} />
@@ -559,5 +578,16 @@ describe("pagination", () => {
 
     await screen.findByText("REC-001");
     expect(screen.queryByRole("button", { name: "Next" })).not.toBeInTheDocument();
+  });
+});
+
+describe("navigation to the detail page (Phase 2)", () => {
+  it("navigates to the deposit's detail route on View", async () => {
+    server.use(depositsHandler([depositRow(7)]), managersHandler(), commercialsHandler());
+    const router = renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: "View" }));
+
+    await waitFor(() => expect(router.state.location.pathname).toBe("/money/deposits/7"));
   });
 });

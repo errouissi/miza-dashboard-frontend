@@ -32,9 +32,16 @@ import {
  * `DepoResource` instance sits as the `data` VALUE inside a plain
  * `['message'=>..., 'data'=>new DepoResource($depo)]` array, which is NOT
  * re-wrapped (that only happens when a Resource is the literal top-level
- * return value). Only `index()` is consumed this phase, but `toDeposit()`
- * is written once against the one shared row shape so Detail/Create can
- * reuse it unchanged when their own phases start.
+ * return value). `toDeposit()` is written once against the one shared row
+ * shape — Phase 2 (`fetchDepositById`) is the second real caller, proving
+ * that design; Create's own phase can reuse it unchanged again.
+ *
+ * PHASE 2 — `show()`'s five detail-only fields (`reject_reason`/
+ * `validated_by`/`validated_at`/`bank_name`/`proof_type`) are now mapped
+ * too. They were always present on `index()`'s rows as well (one shared
+ * resource, confirmed above) — Phase 1 just had no reader for them yet;
+ * extending `DepositRow`/`toDeposit()` in place means the list's own rows
+ * carry this richer data for free now, at zero extra cost.
  */
 
 type DepositRow = {
@@ -65,16 +72,34 @@ type DepositRow = {
     photo: string | null;
   };
   created_by: string;
-  // `reject_reason`/`validated_by`/`validated_at`/`bank_name`/`proof_type`
-  // all arrive too (verified from source) — deliberately unmapped until
-  // the detail page (a later M4.3 phase) reads them. See `model/deposit.ts`.
+  reject_reason: string | null;
+  /** A display-name STRING (or `null`), NOT an id/object — `$this->validatedByAdmin->name ?? null`. */
+  validated_by: string | null;
+  /** Same non-ISO `Y-m-d H:i` shape as `date`. Populates for validated OR rejected — see `model/deposit.ts`. */
+  validated_at: string | null;
+  bank_name: string | null;
+  proof_type: string;
 };
 
 type DepositsEnvelope = LaravelPageEnvelope<DepositRow>;
 
-/** `Y-m-d H:i` -> an ISO-8601 date-time string `toDate()` is guaranteed to parse. */
-function toIsoDateTime(wireDate: string): string {
-  return wireDate.replace(" ", "T");
+/** `show()`'s envelope — Laravel's default single-resource `{"data": {...}}` wrapping. */
+type DepositEnvelope = {
+  data: DepositRow;
+};
+
+/**
+ * `Y-m-d H:i` -> an ISO-8601 date-time string `toDate()` is guaranteed to
+ * parse. Guards `null` AND `undefined` (not just the typed `null`) —
+ * external wire data is not guaranteed to match its static type at
+ * runtime, and a `.replace` on `undefined` would throw inside the query
+ * function itself rather than degrading to the absent-dash the rest of
+ * this app already renders for a missing date.
+ */
+function toIsoDateTime(wireDate: string): string;
+function toIsoDateTime(wireDate: string | null | undefined): string | null;
+function toIsoDateTime(wireDate: string | null | undefined): string | null {
+  return wireDate === null || wireDate === undefined ? null : wireDate.replace(" ", "T");
 }
 
 function toDeposit(row: DepositRow): Deposit {
@@ -92,6 +117,11 @@ function toDeposit(row: DepositRow): Deposit {
     agentAccountNumber: row.agent.account_number,
     agentPhotoUrl: row.agent.photo,
     createdBy: row.created_by,
+    rejectReason: row.reject_reason,
+    validatedByName: row.validated_by,
+    validatedAt: toIsoDateTime(row.validated_at),
+    bankName: row.bank_name,
+    proofType: row.proof_type,
   };
 }
 
@@ -116,4 +146,26 @@ export async function fetchDeposits(
   });
 
   return fromLaravelPage(data, toDeposit);
+}
+
+/**
+ * `GET /admin/depos/{id}` (M4.3 Phase 2) — `view-depos`, the SAME
+ * permission as the list. Unwraps Laravel's default single-resource
+ * `{"data": {...}}` wrapping (verified from source: `show()` returns `new
+ * DepoResource(...)` directly as the controller's top-level return value,
+ * and no `JsonResource::withoutWrapping()` call exists anywhere in the
+ * backend).
+ *
+ * `show()` itself has NO try/catch — a missing id fails at Laravel's own
+ * route-model-binding step, before the method body runs, producing the
+ * framework's generic `{"message": "No query results for model [...] N"}`
+ * 404 (not a hand-built `{success:false,...}` envelope the way Cheques'
+ * `show()` returns). Still normalizes to `kind:"notfound"` via
+ * `normalizeError`'s bare-status path — no special handling needed here,
+ * but the raw message is internal/generic, which is why the detail page
+ * renders its own copy rather than this response's `message`.
+ */
+export async function fetchDepositById(id: number): Promise<Deposit> {
+  const { data } = await httpClient.get<DepositEnvelope>(`/admin/depos/${id}`);
+  return toDeposit(data.data);
 }

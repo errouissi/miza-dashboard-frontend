@@ -22,13 +22,17 @@ import type { StatusTone } from "@/shared/components/business/status-badge";
  * own docblock for why the mapper normalizes it before it ever reaches
  * `shared/formatters`.
  *
- * NOT MODELLED THIS PHASE (Phase 1, list-only): `reject_reason`,
- * `validated_by`, `validated_at`, `bank_name`, `proof_type` all exist on the
- * wire now but have no reader yet — no detail page this phase. Adding them
- * to this type ahead of a real caller would be exactly the kind of
- * speculative modelling this codebase's own working principles warn
- * against; they get added when the detail page (a later M4.3 phase) reads
- * them.
+ * `rejectReason`/`validatedByName`/`validatedAt`/`bankName`/`proofType`
+ * (M4.3 Phase 2) — added now that the detail page reads them; Phase 1
+ * deliberately left them off this type until it had a real caller.
+ *
+ * `validatedByName`/`validatedAt` ARE NOT EXCLUSIVE TO A VALIDATED
+ * DEPOSIT — re-verified from source (`DepositService::reject()`, not just
+ * `validate()`): rejecting a deposit ALSO sets `validated_by_admin`/
+ * `validated_at` (the backend's own field names are simply misleading for
+ * that case — they mean "who/when processed this", not literally
+ * "validated"). Both populate for a validated OR a rejected deposit; both
+ * stay `null` only while `pending`.
  */
 
 export const DEPOSIT_STATUSES = ["pending", "validated", "rejected"] as const;
@@ -109,6 +113,26 @@ export type Deposit = {
   agentPhotoUrl: string | null;
   /** `"System"` fallback is baked in server-side when no admin created it. */
   createdBy: string;
+  /** Only ever set by `reject()`. `null` while pending or validated. */
+  rejectReason: string | null;
+  /** See the module docblock — populates for validated OR rejected, not "validated" exclusively. */
+  validatedByName: string | null;
+  /**
+   * ISO-8601-normalized at the mapper boundary, same as `createdAt` (the
+   * wire value is the identical non-ISO `Y-m-d H:i` shape). See the module
+   * docblock for why `null` does not mean "not yet validated" specifically.
+   */
+  validatedAt: string | null;
+  /** Optional at creation. */
+  bankName: string | null;
+  /**
+   * Defaults to `"bank_receipt"` server-side when omitted at creation, and
+   * the DB column is non-nullable — realistically always a real value, but
+   * kept as the plain string the wire sends rather than narrowed to a
+   * union (unlike `method`, this field's exact vocabulary was not
+   * independently re-verified as closed this phase).
+   */
+  proofType: string;
 };
 
 /**

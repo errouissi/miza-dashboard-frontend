@@ -10,32 +10,40 @@ _Last updated: 2026-07-25_
 ## Current milestone
 
 **M3 — Network / identity graph — COMPLETE** (all six sub-milestones).
-**M4 — Money is UNDERWAY: M4.1 (infrastructure), M4.2 Phase 1 (domain
-model, API, queries), M4.2 Phase 2 (permissions, routing, list page,
-DataTable/FilterBar extraction) and M4.2 Phase 3A (cheque creation) are all
-complete. M4.2 Phase 3B (pending queue, detail page) is next, not
-started.** Approve/reject/annuler (with the allocation-split sub-form) are
-not yet scoped to a specific phase letter — see `next-session.md`. A full
-M4 discovery pass ran before any implementation (architecture proposal, API
-inventory, business rules, risks and unknowns, across Cheques/Deposits/Debt
-Payments) and is the source for M4.1's scope and for M4.2's ongoing plan in
-`next-session.md`. **Full manual end-to-end validation of the Cheques list
-AND create pages is still pending** — implementation-level verification
-(dedicated MSW-integration test files, route-authorization coverage,
-full file-by-file review) has run against both, but neither has been
-exercised against the real running backend in a browser yet. M3.x (Admin/
-Manager/Commercial detail pages, ADR-0014) remains the only open M3 item,
-blocked by FE-2 — unaffected by M4.
+**M4 — Money is UNDERWAY: M4.1 (infrastructure) and all of M4.2 — Cheques
+(Phase 1 domain model/API/queries, Phase 2 permissions/routing/list page,
+Phase 3A creation, Phase 3B pending queue + detail page, Phase 3C
+approve/reject/annuler including the allocation-split correction) — are
+now COMPLETE.** The full Cheques workflow exists end to end: submit, list,
+pending queue, detail page, approve (with a rapped/grattage split),
+reject, annuler. A full M4 discovery pass ran before any implementation
+(architecture proposal, API inventory, business rules, risks and unknowns,
+across Cheques/Deposits/Debt Payments) and was the source for M4.1's and
+M4.2's scope; its Deposits/Debt Payments findings are carried in
+`next-session.md`, to be re-verified fresh at M4.3's own discovery pass.
+**Manual end-to-end validation of the full Cheques workflow (list, create,
+pending queue, detail page, approve, reject, annuler) against the real
+running backend is complete this session.** **M4.3 (Deposits) is the next
+milestone — a fresh discovery pass is required before any implementation
+starts**, per this session's own instruction; do not carry forward
+Cheques' plan or assume Deposits mirrors its shape. M3.x (Admin/Manager/
+Commercial detail pages, ADR-0014) remains the only open M3 item, blocked
+by FE-2 — unaffected by M4.
 
 ## Current branch
 
-`main`, level with `origin/main` — M4.2 Phase 3A (Cheques: create-cheque
-form, mutation, cache invalidation via `invalidateForEvent`, routing) is
-fully committed and pushed this session, implementation-level reviewed
-first (manual browser validation still pending, see above). No uncommitted
-files remain. See `next-session.md` for the exact commit.
+`main`, level with `origin/main` — M4.2 Phases 3B and 3C (Cheques: pending
+queue, detail page, approve/reject/annuler including the allocation-split
+correction) are committed and pushed as `bba78d3` (`feat(money): complete
+cheque approval workflow`), 21 files changed, +2435/-33. No uncommitted
+files remain (this documentation pass is the only pending change). See
+`next-session.md` for the exact commit and verification commands.
 
 ## Last completed implementation
+
+**M4.2 Phase 3B + Phase 3C — Cheques (pending queue, detail page,
+approve/reject/annuler) — COMPLETE.** See their own sections below for the
+full write-up. The previous entries, kept for continuity:
 
 **M4.2 Phase 3A — Cheques (creation) — COMPLETE.** See its own section
 below for the full write-up. The previous entries, kept for continuity:
@@ -1083,6 +1091,206 @@ permission-error handling; 2 more parametrized `route-authorization` cases
 for `CHEQUES_NEW_PATH`). **489/489 across 27 files** (was 473/26 after
 Phase 2), run twice standalone to rule out FE-1 — stable both times.
 
+## M4.2 — Cheques, Phase 3B (pending queue + detail page) (complete)
+
+The Pending Cheques queue and the Cheque Detail page — the first detail
+page shipped anywhere in this product (ADR-0014 deferred every Network
+detail page pending FE-2; Cheques is the first resource to actually ship
+one).
+
+**Backend contract re-verified fresh from source before implementing**
+(`ChequeController::pending`/`show`, the routes, the permission registry),
+not carried forward from the earlier M4 discovery pass unchecked. Confirmed
+unchanged from that pass: `GET /admin/cheques/pending` (`view-pending-
+cheques`) accepts NO filters at all — no `$request->validate()` call
+exists in `pending()` — only `page`/`per_page` are ever meaningful; `GET
+/admin/cheques/{id}` (`view-cheques`) eager-loads `agent`, `processedBy`,
+`allocations` and manually adds `photo_url`/`status_label`.
+
+**Two real scope questions were raised and resolved with the user before
+any code was written**, because this session's own task instructions
+diverged from what the frozen architecture doc and the prior session's own
+plan (in `next-session.md`) called for:
+
+1. **Pending Cheques page**: the frozen doc names a shared `ApprovalQueuePage`
+   pattern for this screen ("ListPage variant defaulted to status=pending
+   with inline approve/reject"), and the prior plan called this phase its
+   "first instance." **Decided: reuse `ListPage`/`DataTable` directly, no
+   new shared pattern** — CLAUDE.md's own anti-premature-abstraction rule
+   (Rule-of-Three, "never on reuse count alone") outweighs a doc's naming
+   when there is exactly one real consumer and the endpoint accepts no
+   filters at all (so there is nothing "actionable" a queue-specific shell
+   would add over a plain list, absent the approve/reject buttons this
+   phase deliberately excluded — see Phase 3C).
+2. **Cheque Detail page**: the frozen doc names a shared `DetailPage`
+   pattern too, never built (ADR-0014 deferred it). **Decided: a
+   domain-local page, not a new shared pattern** — same Rule-of-Three
+   reasoning, one consumer today. Extract a shared `DetailPage` once a
+   second resource (Deposits/Debt Payments, or a future Network detail
+   page) genuinely needs the identical header + facts + body shape.
+
+**Implementation:**
+
+- **`PendingChequesPage`** — no `FilterBar` at all (the endpoint supports
+  no filters; exposing controls the API ignores would misrepresent the
+  system, per `session-bootstrap.md`'s own working principle), a "View"
+  action column navigating to the detail route. `usePendingChequesQuery`
+  is `LIVE`-tier, `refetchOnWindowFocus: true` — same tier as the general
+  list (FTA §8 names "pending cheques" explicitly under this tier).
+- **`ChequeDetailPage`** displays every field `show()` returns that the
+  domain model already maps: id, amount (rendered verbatim, never through
+  `MoneyAmount` — same `decimal:2`-cast-string discipline as the list
+  pages), numCheque, status, agentName, photoUrl (an `<img>` when present,
+  nothing fabricated when absent), decisionReason, processedAt, createdAt,
+  allocations (only when populated — `undefined`, never an empty array,
+  stands for "not fetched"). **Deliberately does NOT display a "processed
+  by" name** — BC-Z (`show()` eager-loads the wrong relation for
+  `processed_by`, overwriting the raw FK with a mismatched result) means
+  the field cannot be shown correctly; left unmapped rather than guessed
+  at or shown wrong.
+- **Routing**: `CHEQUES_PENDING_PATH` (`/money/cheques/pending`, gated on
+  its own `view-pending-cheques` permission) and `CHEQUE_DETAIL_PATH`
+  (`/money/cheques/:id`, gated on `view-cheques`, the SAME permission as
+  the list route) — both FLAT SIBLING routes, not nested `children`, the
+  same ADR-0014/FE-2 reasoning `CHEQUES_NEW_PATH` already established. A
+  "View" action was added to the main Cheques list too, so the detail page
+  is reachable from both list screens. A "Pending Cheques" nav entry was
+  added (its own screen, unlike Create/Detail which are reached via
+  in-page buttons/links).
+- **`useChequeQuery` gained an `enabled` option** — guards a malformed
+  `:id` route param (a hand-edited URL) from firing `GET
+  /admin/cheques/NaN`, the same pattern `useCommercialOptionsQuery({
+  enabled })` already established.
+
+**Tests: 44 new** across two new files — `pending-cheques-page.test.tsx`
+(15 tests: rendering, the flat-paginator contract, no-filter-params
+assertion, loading/empty/error states, pagination, View navigation) and
+`cheque-detail-page.test.tsx` (29 tests at this point: every field
+rendered, loading/not-found/error states, an invalid-id guard) — plus
+route-authorization coverage for both new paths and a View-navigation test
+added to the existing Cheques list test file. **520/520 across 29 files**
+(was 489/27 after Phase 3A).
+
+## M4.2 — Cheques, Phase 3C (approve/reject/annuler) (complete)
+
+Approve, Reject and Annuler — the three remaining Cheques status actions,
+completing the workflow. Shipped in **two passes within the same session**,
+because the scope for Approve changed partway through.
+
+**Backend contract re-verified fresh from source** (`ChequeController::
+approve/reject/annuler`, the routes, the permission registry) at the start
+of this phase, and AGAIN, independently, when Approve's scope was
+corrected mid-phase — not assumed from the first pass's own notes.
+
+### Pass 1 — plain confirmations (all three actions)
+
+Two scope questions, both explicitly raised and resolved with the user
+before writing code (the prior session's own plan had explicitly left both
+open, pending confirmation):
+
+1. **Should Approve include the allocation-split sub-form** (rapped vs.
+   grattage) **or ship a plain confirm**, accepting the backend's own
+   legacy default (100% rapped, sent as no `allocations` body at all)?
+   **Decided (Pass 1): plain confirm** — matches "reuse `ConfirmActionDialog`,
+   do not redesign the dialog system," and a dynamic allocation form was a
+   materially larger, separate feature.
+2. **Where should the three action buttons live** — the Cheque Detail page
+   only, or also as inline row actions on the Pending Cheques list (as the
+   frozen doc's `ApprovalQueuePage` description implies)? **Decided: Cheque
+   Detail page only** — keeps the scope contained to the one screen
+   already built to show full context before a financial decision.
+
+**Implementation (Pass 1):** `ApproveChequeDialog`/`RejectChequeDialog`/
+`AnnulerChequeDialog`, each wrapping `useApproveChequeMutation`/
+`useRejectChequeMutation`/`useAnnulerChequeMutation`. `ConfirmActionDialog`
+was extended (not forked) with:
+
+- **`variant`** (`"destructive"` default, unchanged for all 8 existing
+  callers; `"default"` for Approve) — resolves the previously-flagged
+  blocker ("hardcoded `variant="destructive"`... needs a decision before
+  Approve specifically can use it").
+- **`reason`** — a labeled, validated textarea slot (label, value,
+  onChange, field-mapped error), for Reject/Annuler's own required
+  `decision_reason` (`required|string|max:1000` server-side). No prior
+  caller needed a free-text input; recurring identically across two real
+  callers met the "genuinely required" bar for extending the shared
+  component rather than embedding an uncontrolled field in `description`.
+
+Buttons are gated on BOTH permission AND the cheque's current status
+(Approve/Reject only while `en_attente`, Annuler only while `accepter`) —
+the same "don't offer a guaranteed backend no-op" precedent
+`ManagerStatusDialog` already established. `cheque.approved`/
+`cheque.rejected`/`cheque.annuled` were registered in `invalidation-map.ts`:
+`approved`/`annuled` invalidate `["cheques"]` plus both `["managers"]`/
+`["commercials"]` prefixes (approval/annulment write
+`montant_avance_rapped`/`montant_avance_grattage`/`solde`, the same
+columns those lists render as `avanceTotal`); `rejected` invalidates only
+`["cheques"]` (touches no balance column, confirmed from source).
+
+### Pass 2 — Approve's allocation split (scope corrected)
+
+**The user re-verified the backend contract again and found Pass 1's
+"simple confirm" decision for Approve no longer matched the actual
+requirement** — Approve now needed to support the allocation split after
+all. Re-reading `ChequeController::approve`'s validator surfaced the
+load-bearing fact that made this a genuine re-derivation, not just "add
+two inputs":
+
+```
+'allocations'          => 'sometimes|array|min:1|max:2',
+'allocations.*.type'   => 'required_with:allocations|in:rapped,grattage',
+'allocations.*.amount' => 'required_with:allocations|numeric|min:0.01|decimal:0,2',
+```
+
+**`min:0.01` REJECTS a zero-value allocation entry outright (a 422) — it is
+not merely redundant to send one.** A 100%-rapped split is therefore
+`[{type:"rapped", amount}]`, the zero (`grattage`) side OMITTED entirely,
+never sent as `{type:"grattage", amount:0}`.
+
+**Implementation (Pass 2):** `ApproveChequeDialog` rebuilt with a read-only
+cheque amount plus two plain `<Input>`s (Rapped, Grattage — no dynamic
+rows, no add/remove), defaulting to 100% rapped (reproducing the backend's
+own legacy shape when left untouched). Validation is CENTS-SAFE, not
+floating point: `toCents()` converts each amount string to an integer
+number of cents before summing/comparing, mirroring the backend's own
+`bcadd`/`bccomp` exactness rather than risking a binary-floating-point
+mismatch on a financial value. `buildAllocations()` omits whichever side
+is zero. `ConfirmActionDialog` gained two more generic extensions to make
+this possible without forking a parallel dialog:
+
+- **`confirmDisabled`** — a plain boolean the caller computes from its own
+  validation ("rapped + grattage must equal the cheque amount exactly");
+  domain-agnostic on purpose, since a cheque-shaped prop would leak
+  business logic into `shared/`.
+- **`children`** — block-level custom content rendered OUTSIDE
+  `SheetDescription`'s `<p>`, added after a REAL invalid-HTML-nesting
+  console warning surfaced from the first attempt (nesting `<div>`s/`<p>`s
+  inside `description`, which Radix renders as a `<p>`) — not a
+  speculative addition.
+
+`useApproveChequeMutation`'s variables changed from a bare `id` to
+`{id, allocations}`; the mutation itself, and its `"cheque.approved"`
+invalidation, are otherwise unchanged — only the payload shape changed, per
+this pass's own explicit scope.
+
+Along the way, a React `react-hooks/set-state-in-effect` lint error (from
+seeding the two input fields' defaults via `useEffect`) was fixed properly
+— an "adjust state during render" pattern (React's own recommended
+approach for resetting state when a prop's identity changes on an
+already-mounted component) — rather than suppressed.
+
+**Tests:** Approve's test block was rewritten to cover the new behavior:
+defaults to 100% rapped untouched, a valid split, 100% grattage, invalid
+total under the cheque amount, invalid total over it, and a non-numeric
+input — all client-side-disabled before submission, per this phase's own
+"do not allow submission unless the total matches exactly" requirement.
+Reject/Annuler's own tests (reason-required gating, field-mapped 422s,
+success/failure, cache invalidation) were unaffected by the Pass 2
+correction and needed no changes. **548/548 across 29 files** (was 520/29
+after Phase 3B).
+
+**No backend changes.**
+
 ## Overall progress
 
 | Milestone | Status |
@@ -1104,27 +1312,51 @@ Phase 2), run twice standalone to rule out FE-1 — stable both times.
 | **M3.6 — Agent onboarding wizard** | ✅ **complete** — manually validated, three post-validation fix rounds applied |
 | M3.x — Admin + Manager + Commercial detail pages (ADR-0014) | ⬜ pending — **blocked by FE-2** |
 | **M4.1 — Money infrastructure** | ✅ **complete** — manually reviewed and validated |
-| **M4.2 — Cheques, Phase 1+2 (list, read-only)** | ✅ **complete** — implementation-level reviewed; full manual end-to-end validation pending |
-| **M4.2 — Cheques, Phase 3A (creation)** | ✅ **complete** — implementation-level reviewed; full manual end-to-end validation pending |
-| M4.2 Phase 3B — Cheques pending queue, detail page | ⬜ next, not started |
-| M4.2 — Cheques approve/reject/annuler (incl. allocation split) | ⬜ not started — not yet scoped to a specific phase letter |
-| M4.3 — Deposits | ⬜ not started — contingent on the `DepoResource` backend consultation (see Backend dependencies) |
+| **M4.2 — Cheques, Phase 1+2 (list, read-only)** | ✅ **complete** |
+| **M4.2 — Cheques, Phase 3A (creation)** | ✅ **complete** |
+| **M4.2 — Cheques, Phase 3B (pending queue, detail page)** | ✅ **complete** |
+| **M4.2 — Cheques, Phase 3C (approve/reject/annuler, incl. allocation split)** | ✅ **complete** |
+| **M4.2 — Cheques — full workflow** | ✅ **COMPLETE, manually validated end to end against the real running backend** |
+| M4.3 — Deposits | ⬜ **next milestone** — fresh discovery pass required before implementation; the prior `DepoResource` blocker is resolved (see Backend dependencies) |
 | M4.4 — Debt Payments | ⬜ not started — contingent on the placement/permission questions (see Backend dependencies) |
 | M5+ — Stock, Grattage, Overview | ⬜ not started |
 
-**Tests: 489/489 across 27 files** (was 407/23 before M3.6; 431/24 at
+**Tests: 548/548 across 29 files** (was 407/23 before M3.6; 431/24 at
 M3.6's initial implementation; 442/24 after M3.6's three post-validation fix
-rounds; 447/25 after M4.1; 473/26 after M4.2 Phase 1+2; now 489/27 after
-M4.2 Phase 3A). Lint · typecheck · format · build all clean, re-verified
-after every round, `pnpm test:ci` run twice standalone each time to rule
-out FE-1 — stable throughout.
+rounds; 447/25 after M4.1; 473/26 after M4.2 Phase 1+2; 489/27 after M4.2
+Phase 3A; 520/29 after M4.2 Phase 3B; now 548/29 after M4.2 Phase 3C). Lint ·
+typecheck · format · build all clean, re-verified fresh this session.
 
 ## Shared pattern layer
 
-Six `patterns/` components, **unmodified since extraction**:
+Five `patterns/` components, **unmodified since extraction**:
 
-- `ConfirmActionDialog` · `ListPage` · `FormDrawer`
+- `ListPage` · `FormDrawer`
 - `ListLoadingState` · `ListErrorState` · `ListEmptyState`
+
+**`ConfirmActionDialog` was MODIFIED at M4.2 Phase 3C** — the first change
+to any `patterns/` component since extraction. Gained four additive
+props, all optional, none of the prior 8 callers (Villes/Secteurs/Products
+delete, Managers/Commercials/Clients status, Admins toggle/delete) changed
+or retested differently:
+
+- `variant` (`"destructive"` default, unchanged; `"default"` for an
+  affirmative action — Cheques' Approve)
+- `reason` (a labeled, validated required-text field — Cheques'
+  Reject/Annuler)
+- `confirmDisabled` (a generic caller-owned validity gate — Cheques'
+  Approve allocation-split sum check)
+- `children` (block-level custom content rendered outside
+  `SheetDescription`'s `<p>` — Cheques' Approve amount/allocation inputs)
+
+See `project-status.md`'s own M4.2 Phase 3C section above for why each was
+added and in what order.
+
+**`shared/components/ui/textarea.tsx`, new at M4.2 Phase 3C** — the
+missing shadcn primitive (mirrors `Input`'s own styling), needed for
+`ConfirmActionDialog`'s new `reason` field. Not previously generated;
+authored by hand to match the existing generated primitives' shape (no new
+dependency — no Radix package backs a plain `<textarea>`).
 
 **Three `business/` components, new at M4.1** — `shared/components/business/`
 did not exist before this milestone:
@@ -1132,15 +1364,16 @@ did not exist before this milestone:
 - `StatusBadge` — six-tone system (Design System §17); `tone`+`label` props
   only, no status vocabulary of its own. Consumed by Managers/Commercials/
   Clients' list pages via each domain's own `*_STATUS_TONES` map, and now
-  Cheques' (M4.2).
+  Cheques' (M4.2, all list/detail screens).
 - `MoneyAmount` — wraps `formatMoney`, adds `tabular-nums` + the negative-
   value danger color. Consumed by Products' list page only — Managers'/
   Commercials'/Clients' pre-formatted money strings deliberately do not use
   it, and Cheques' `amount` (M4.2) does not either, for the same reason
   (see the M4.1 and M4.2 sections above).
 - `FileUploadField` — promoted unchanged from `agent-onboarding/`. Consumed
-  by the wizard's Documents/Moto steps; not yet consumed by Money (Cheque
-  photo upload is Phase 3).
+  by the wizard's Documents/Moto steps; Cheque photo upload (Phase 3A) used
+  it too. Money's other two named callers (Deposit proof, Debt Payment
+  proof) remain unbuilt.
 
 **Two more `business/` components, new at M4.2 — the first real callers of
 `DataTable`/`FilterBar`, both flagged as "reaches evidence, not yet
@@ -1208,21 +1441,27 @@ to actually cross into `shared/`. Every other row is unchanged from M3.6:
 | **Cross-domain picker export** (`useVilleOptionsQuery` → `useManagerOptionsQuery` → `useCommercialOptionsQuery` → `useSecteursQuery`) | **3** instances: Managers → Commercials (M3.3), Commercials → Clients (M3.5), Secteurs → Agent Onboarding (M3.6). **Unaffected by M4.1** — no new instance added | Reaches "3" — still the next actual decision point, still not resolved |
 | **Row selection / bulk action bar** (M3.5) | **1** — unaffected by M4.1 | Not reached, not close |
 | **File upload control** (`FileUploadField`) | **EXTRACTED at M4.1** — justified by Money's three NAMED upcoming callers (Cheque photo, Deposit proof, Debt Payment proof, all confirmed from source during M4 discovery), not by current evidence alone; M3.6's own ~11 internal call sites were explicitly insufficient on their own | Promoted ahead of the callers actually landing — a deliberate exception, not a precedent for extracting on named-but-unbuilt callers generally |
+| **`ApprovalQueuePage`**, new row at M4.2 Phase 3B/3C | **1** — the frozen architecture doc names this pattern for Cheques' Pending queue, but only one real consumer exists and its endpoint accepts no filters, so nothing "actionable" a shell would add over `ListPage` yet | Not reached — explicitly declined this phase (see Phase 3B's own write-up above), not silently skipped |
+| **`DetailPage`**, new row at M4.2 Phase 3B | **1** — same doc names this pattern too (deferred product-wide by ADR-0014); Cheques' is the first detail page built anywhere, domain-local by decision | Not reached — same explicit-decline treatment as `ApprovalQueuePage` |
 
 **The cross-domain picker-export tally and the URL-filter-hook question
 remain the two open Rule-of-Three decision points, still unresolved.**
-M4.2 Phase 1+2 did **not** add a fourth instance to the export tally — the
-Cheques agent filter *merges* two existing exports rather than exporting a
-new one (see the "third, distinct cross-domain pattern" note above) — so the
-tally stays at 3, still the next actual decision point whenever a fourth
-genuine export appears.
+Neither M4.2 Phase 1+2 nor Phase 3B/3C added a fourth instance to the
+export tally — the Cheques agent filter *merges* two existing exports
+rather than exporting a new one, and none of the Phase 3B/3C screens
+export a picker at all — so the tally stays at 3, still the next actual
+decision point whenever a fourth genuine export appears. **`ApprovalQueuePage`/
+`DetailPage` are a THIRD, newly-tracked decision point** as of this
+session — both at "1" today; Deposits' own pending queue/detail page
+(M4.3) would be the second real consumer for either, worth raising
+explicitly at that milestone's discovery rather than resolving in advance.
 
 ## Current blockers
 
 | ID | Blocker | Blocks |
 | --- | --- | --- |
-| **FE-1** | Test-suite flake, raised at M3.2, **not touched this session** | Recommended before the suite grows further |
-| **FE-2** | `withPermissionGuards` is shallow — a nested route's own `handle.permission` is silently ignored | The **deferred detail-page milestone** (ADR-0014). Still non-blocking — M3.3 ships no nested route either |
+| **FE-1** | Test-suite flake, raised at M3.2, **not touched this session; no flake observed in this session's runs** | Recommended before the suite grows further |
+| **FE-2** | `withPermissionGuards` is shallow — a nested route's own `handle.permission` is silently ignored | The **deferred detail-page milestone** (ADR-0014). Still non-blocking — Cheques' detail page (M4.2 Phase 3B), this product's first real test of whether a nested route was needed, shipped as a FLAT sibling route instead, same as every prior domain. FE-2 remains an open fix, just still off the critical path |
 | **BC-G** | Secteurs/Products/Admins index endpoints unpaginated | `DataTable`/`FilterBar` extraction |
 | **BC-U** | 🟡 The agent **update** endpoint cannot clear or accept null for `num_d_abonnement` or `ville`, though both columns allow null | Nobody can un-set either field via the UI, ever, until the backend validator changes. Unaffected by M3.3: Commercials' update payload never sends `ville` (that field belongs to Managers only), and `manager_id`/`ville_actuelle`/`secteur` are all correctly `nullable` in the validator |
 | **Operational** | Session permissions are cached at login (ADR-0003) and never refreshed. **Whenever a permission is newly seeded or corrected on the backend, an operator already logged in will not see the effect until they log out and back in** — this is how Block/Activate visibility was investigated and cleared this session (see below); not a code defect | Any future backend permission change while operators hold open sessions |
@@ -1232,17 +1471,14 @@ genuine export appears.
 `block-agent` is now seeded; block and activate work end to end for both
 Managers and Commercials (same permission, same endpoints).
 
-### FE-1 — unchanged, not touched by M4.2 Phase 3A
+### FE-1 — unchanged, not touched by M4.2 Phase 3B/3C
 
 Five older test files' `findByRole("alert")` calls still run against the 1000 ms
-default timeout while taking 951–1240 ms. Not touched by Phase 3A — no new
-evidence gathered, no fix applied. `pnpm test:ci` was run twice standalone
-after Phase 3A's implementation (the new `create-cheque-page.test.tsx` file
-included its own error-state tests, mocking `httpClient.post` rejections
-directly rather than via MSW) — stable every time, no flake observed. Still
-recommended before the suite grows further; the suite is now at 489 tests
-across 27 files, 16 more than when this was last raised at M4.2 Phase 2
-(473/26).
+default timeout while taking 951–1240 ms. Not touched by Phase 3B/3C — no
+new evidence gathered, no fix applied. `pnpm test:ci` was run fresh at the
+end of Phase 3C (548/548) with no flake observed. Still recommended before
+the suite grows further; the suite is now at 548 tests across 29 files, 59
+more than when this was last raised at M4.2 Phase 3A (489/27).
 
 **Governance follow-ups — not blockers** (unchanged):
 
@@ -1316,11 +1552,24 @@ re-confirmed rather than assumed from the M4 discovery report's own prose
 
 | ID | Class | Item | Status |
 | --- | --- | --- | --- |
-| BC-Z | **defect, new** | `show()` eager-loads `processedBy()` (`belongsTo(Agent::class, 'processed_by')`) instead of `index()`'s correctly-typed `processedByUser()` (`belongsTo(User::class, 'processed_by')`), despite `processed_by` always storing a **User** id. Eloquent's array serialization then overwrites the raw `processed_by` FK with this mismatched relation's (likely null or wrong) result | 🟡 open — live-confirmed from source; left unmapped in the frontend rather than papered over. Non-blocking today (who processed a cheque is not yet shown anywhere), but blocks a correct "processed by" field on the future detail page (Phase 3B) until fixed |
+| BC-Z | **defect** | `show()` eager-loads `processedBy()` (`belongsTo(Agent::class, 'processed_by')`) instead of `index()`'s correctly-typed `processedByUser()` (`belongsTo(User::class, 'processed_by')`), despite `processed_by` always storing a **User** id. Eloquent's array serialization then overwrites the raw `processed_by` FK with this mismatched relation's (likely null or wrong) result | 🟡 **still open** — re-confirmed unaffected at Phase 3B: the Cheque Detail page deliberately does not display "processed by" at all rather than show the known-wrong value. Raise with the backend before attempting this field again |
 | BC-P | **defect** | New instance of the class, narrower than Managers'/Commercials' own: `index()` uses `whereDate()` (correctly day-inclusive) when only ONE of `date_from`/`date_to` is given, but `whereBetween()` against the raw `created_at` timestamp (excluding most of `date_to`'s own day) when BOTH are given together | 🟡 open — "Submitted before" stays the honest label: exact when both filters are set together, harmlessly conservative when `date_to` is used alone |
 | — | **verified, positive** | `cheques.amount`/`cheque_allocations.amount` are `decimal:2`-cast columns, confirmed to serialize as formatted STRINGS on the wire (never a JSON number), consistent with Eloquent's `asDecimal()` cast implementation — not a defect, but corrects an assumption stated in M4.1's own write-up | ✅ no action needed; `MoneyAmount` remains correctly unused for `Cheque.amount`, same discipline as `Manager.avanceTotal`/`Client.solde` |
 | — | **verified, positive** | `store()`'s validator is exactly `agent_id`/`amount`/`num_cheque`/`photo_cheque` — confirmed against the live validator, the migration and the model's `$fillable` before any code was written, not assumed from the task's own first-draft field list (which named a Bank and an Issue Date field neither the migration, `$fillable`, nor the validator has) | ✅ no action needed; the Create Cheque form was scoped to these four fields, per ADR-0009 |
 | — | **cleanup, new** | `store()`'s response nests `photo_url` as a SIBLING of the raw cheque object (`{cheque: {...}, photo_url: "..."}`), unlike `index()`/`show()`, which spread it INTO the same flat object (`[...$cheque->toArray(), 'photo_url' => ...]`). Two different envelope shapes for logically the same field, across three actions of one controller | 🟢 non-blocking — absorbed once, at the API mapper boundary (`cheques-api.ts`'s `createCheque()` merges the two before mapping), per ADR-0006/D-6's anti-corruption-layer discipline. Worth a backend consultation item (one consistent shape), not a blocker |
+
+**From the M4.2 Phase 3B/3C contract verification, against
+`ChequeController::pending/show/approve/reject/annuler`, independently
+re-confirmed rather than carried forward from the discovery pass or Phase
+3A's own notes unchecked:**
+
+| ID | Class | Item | Status |
+| --- | --- | --- | --- |
+| — | **verified, positive** | `pending()` runs NO `$request->validate()` at all — confirmed from source, not assumed from resemblance to `index()`'s own filtered validator. Only `page`/`per_page` are ever meaningful | ✅ no action needed; `PendingChequesPage` renders no `FilterBar` — exposing controls the endpoint ignores would misrepresent the system |
+| — | **cleanup, new** | `approve()`'s success response nests the cheque under `data.cheque` (plus a sibling `agent_new_montant_avance`), mirroring `store()`'s own shape; `reject()`/`annuler()`'s `data` IS the cheque directly, mirroring `show()`'s shape minus its manually-added `photo_url`/`status_label`. A THIRD distinct envelope shape, across the same controller's five actions | 🟢 non-blocking — all three mutations return `void` and rely on invalidation-triggered refetch rather than parsing any of the three shapes, avoiding the inconsistency entirely rather than adding a fourth ad-hoc merge |
+| — | **verified, positive, load-bearing** | `approve()`'s `allocations.*.amount` validator is `numeric\|min:0.01\|decimal:0,2` — a **zero-value allocation entry is REJECTED (422), not merely redundant to send**. Found on a deliberate re-verification pass, after an initial "simple confirm" implementation had already shipped without this fact mattering | ✅ no action needed; `ApproveChequeDialog` omits whichever side (rapped/grattage) is zero rather than sending `amount: 0` |
+| — | **verified, positive** | `reject()`'s and `annuler()`'s `decision_reason` validation (`required\|string\|max:1000`) runs through Laravel's normal automatic exception handler (not a manual try/catch the way `approve()`'s own allocation validation is) — so a validation failure DOES field-map correctly to `errors.decision_reason`, unlike the swallowed-`ValidationException` pattern (BC-N) several other controllers exhibit | ✅ no action needed; `RejectChequeDialog`/`AnnulerChequeDialog` map this to the `reason` field's own inline error, not a generic banner |
+| — | **verified, positive** | `annuler()`'s negative-balance guard returns `{success:false, message, errors: {<balance_column>: [...]}}` — an `errors` key IS present (so it normalizes to `kind:"validation"`), but keyed by a BALANCE COLUMN name, never `decision_reason` | ✅ no action needed; `AnnulerChequeDialog` detects this case structurally (a validation error not on `decision_reason`) and shows its own domain-owned message, never the raw backend string (`AppError.message` is documented as non-user-facing copy) |
 
 Carried, unchanged from M3.2:
 
@@ -1339,6 +1588,32 @@ Carried, unchanged from M3.2:
 | BC-S | `agents.ville` (Managers) is free-text, no FK to `villes` | 🟡 open — **now a two-instance class** alongside `ville_actuelle` (Commercials) |
 | BC-U | Update endpoint cannot null `num_d_abonnement`/`ville` | 🟡 open |
 | — | `view-permissions` permission (B-6 deferred the OR-gate cleanup) | 🟢 non-blocking |
+
+### Deposits' `DepoResource` — RESOLVED, verified fresh this session
+
+The M4 discovery pass's original finding — "`DepoResource` (the only thing
+`GET /admin/depos` and `GET /admin/depos/{id}` return) omits `type` and
+`status` from the wire entirely... raise with the backend before starting
+M4.3's list screen" — **no longer holds**. Re-read directly from
+`app/Http/Resources/DepoResource.php` this session:
+
+```php
+return [
+    'id' => $this->id,
+    'amount' => (float) $this->amount,
+    'status' => $this->status,
+    'type' => $this->type,
+    ...
+];
+```
+
+Both fields are present. Confirmed via the backend's own `git log` that
+this was a real, dedicated fix: `039685c feat(deposits): expose status and
+type on DepoResource`. This clears the way for a `StatusBadge` column, a
+status filter and the type tab `phase8-architecture.html` calls for on
+Deposits' own list screen — **still re-verify this from source at the
+start of M4.3's own discovery pass** rather than treating this note as a
+substitute for that session's own contract check.
 
 ## Domain inventory
 
@@ -1409,7 +1684,8 @@ src/domains/
                                    backend-generated credentials, ADR-0017)
 
 src/domains/money/
-└── cheques/               M4.2 Phase 1+2+3A — list + create
+└── cheques/               M4.2 — COMPLETE, all phases (1+2+3A+3B+3C),
+                                   manually validated end to end
                                    (the first Money resource, the first
                                    resource outside Network; paginated list ·
                                    search · 4 filters (status, agent, date
@@ -1421,16 +1697,23 @@ src/domains/money/
                                    new export (two separate components: an
                                    optional list filter, a required create
                                    field); first real caller of the
-                                   newly-extracted DataTable/FilterBar; a
-                                   Create Cheque page against a corrected,
-                                   verified 4-field backend contract
-                                   (agent_id/amount/num_cheque/photo_cheque
-                                   only — no Bank, no Issue Date); first
-                                   real caller of invalidateForEvent
-                                   ("cheque.created"); NO pending queue, NO
-                                   approve/reject/annuler, NO detail page,
-                                   NO edit, NO delete, NO bulk actions, NO
-                                   attachments, NO comments — all Phase 3B
-                                   or later; full manual end-to-end
-                                   validation pending for both screens)
+                                   extracted DataTable/FilterBar; a Create
+                                   Cheque page against a corrected, verified
+                                   4-field backend contract (agent_id/amount/
+                                   num_cheque/photo_cheque only — no Bank,
+                                   no Issue Date); a Pending Cheques queue
+                                   (no filters — the endpoint accepts none);
+                                   the first detail page in this product
+                                   (ChequeDetailPage, domain-local, not a
+                                   new shared DetailPage — one consumer);
+                                   Approve (with a rapped/grattage
+                                   allocation split, cents-safe sum
+                                   validation), Reject and Annuler, each its
+                                   own ConfirmActionDialog-based dialog;
+                                   first real caller of invalidateForEvent
+                                   (cheque.created/approved/rejected/annuled,
+                                   all four now registered); NO edit, NO
+                                   delete, NO bulk actions, NO attachments,
+                                   NO comments — none of these were ever in
+                                   scope)
 ```

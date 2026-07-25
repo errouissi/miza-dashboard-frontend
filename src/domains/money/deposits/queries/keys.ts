@@ -10,4 +10,6 @@ export const depositsKeys = {
   all: ["deposits"] as const,
   lists: () => [...depositsKeys.all, "list"] as const,
   list: (params: DepositListParams) => [...depositsKeys.lists(), params] as const,
+  details: () => [...depositsKeys.all, "detail"] as const,
+  detail: (id: number) => [...depositsKeys.details(), id] as const,
 };
