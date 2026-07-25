@@ -169,3 +169,33 @@ export async function fetchDepositById(id: number): Promise<Deposit> {
   const { data } = await httpClient.get<DepositEnvelope>(`/admin/depos/${id}`);
   return toDeposit(data.data);
 }
+
+/**
+ * Validate/reject (M4.3 Phase 3) both return `void` — the SAME convention
+ * `approveCheque`/`rejectCheque` already use. Re-verified fresh from
+ * source this phase (`DepoController::validateDepo`/`reject`, unchanged
+ * since Phase 1/2's own reads):
+ *   - Both are **POST**, not PUT (unlike Cheques' `PUT .../approve` etc.).
+ *   - `validate()`'s success body is `{"message": "..."}` — NO `data` key
+ *     at all, for either deposit type.
+ *   - `reject()`'s success body is the same shape, `{"message": "..."}`.
+ * Neither response is parsed into a `Deposit` — the caller invalidates and
+ * refetches (FTA D-7, no optimistic mutations for financial workflows),
+ * the same discipline `useApproveChequeMutation` already established.
+ */
+
+/** `POST /admin/depos/{id}/validate` — no body. `validate-depo` permission. */
+export async function validateDeposit(id: number): Promise<void> {
+  await httpClient.post(`/admin/depos/${id}/validate`);
+}
+
+/**
+ * `POST /admin/depos/{id}/reject` — `reject_reason` is
+ * `required|string|min:10|max:1000` server-side (verified from source,
+ * `DepoController::reject`) — a MINIMUM length, unlike Cheques'
+ * `decision_reason` (`required|string|max:1000`, no minimum). `reject-depo`
+ * permission.
+ */
+export async function rejectDeposit(id: number, rejectReason: string): Promise<void> {
+  await httpClient.post(`/admin/depos/${id}/reject`, { reject_reason: rejectReason });
+}

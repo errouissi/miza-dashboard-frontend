@@ -1,6 +1,11 @@
-import { useQuery } from "@tanstack/react-query";
-import { STALE_TIMES } from "@/infrastructure/query";
-import { fetchDeposits, fetchDepositById } from "../api/deposits-api";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { STALE_TIMES, invalidateForEvent } from "@/infrastructure/query";
+import {
+  fetchDeposits,
+  fetchDepositById,
+  validateDeposit,
+  rejectDeposit,
+} from "../api/deposits-api";
 import type { DepositListParams } from "../model/deposit";
 import { depositsKeys } from "./keys";
 
@@ -33,5 +38,48 @@ export function useDepositQuery(id: number, options: { enabled?: boolean } = {})
     staleTime: STALE_TIMES.LIVE,
     refetchOnWindowFocus: true,
     enabled: options.enabled ?? true,
+  });
+}
+
+/**
+ * Validate (M4.3 Phase 3) — `POST /admin/depos/{id}/validate`.
+ *
+ * Invalidates via `"deposit.validated"` — `["deposits"]` ONLY. Re-verified
+ * from source before registering this: neither the rapped path
+ * (`agent.solde`/`agent.cash`) nor the grattage path (settles
+ * `GrattageInvoice` rows) ever touches `agent.montant_avance_rapped`/
+ * `montant_avance_grattage` — the ONLY columns Managers'/Commercials' own
+ * `avanceTotal` is computed from (confirmed by reading both domains' own
+ * mappers: neither reads `solde`/`cash` anywhere). Unlike
+ * `cheque.approved`, no Network prefix is invalidated here — this is a
+ * genuine difference in what the two actions actually touch, not an
+ * oversight.
+ *
+ * No optimistic update, no automatic retry (FTA D-7, §11) — same
+ * financial-workflow discipline as every Cheques mutation.
+ */
+export function useValidateDepositMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => validateDeposit(id),
+    onSuccess: () => invalidateForEvent(queryClient, "deposit.validated"),
+  });
+}
+
+/**
+ * Reject (M4.3 Phase 3) — `POST /admin/depos/{id}/reject`. Requires
+ * `reject_reason` (`required|string|min:10|max:1000` server-side); the
+ * caller (`RejectDepositDialog`) collects and mirrors this exactly.
+ *
+ * Invalidates via `"deposit.rejected"` — `["deposits"]` only. Rejecting
+ * touches no balance column and no `GrattageInvoice` status (only an
+ * unlink for grattage) — confirmed from source.
+ */
+export function useRejectDepositMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, rejectReason }: { id: number; rejectReason: string }) =>
+      rejectDeposit(id, rejectReason),
+    onSuccess: () => invalidateForEvent(queryClient, "deposit.rejected"),
   });
 }

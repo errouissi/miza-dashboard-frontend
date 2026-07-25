@@ -34,6 +34,14 @@ describe("invalidation map", () => {
     expect(queryKeyPrefixesFor("cheque.rejected")).toEqual([["cheques"]]);
   });
 
+  it("registers deposit.validated — Deposits' own key space only, no Network prefix (unlike cheque.approved)", () => {
+    expect(queryKeyPrefixesFor("deposit.validated")).toEqual([["deposits"]]);
+  });
+
+  it("registers deposit.rejected — Deposits' own key space only", () => {
+    expect(queryKeyPrefixesFor("deposit.rejected")).toEqual([["deposits"]]);
+  });
+
   it("invalidates nothing, and does not throw, for an unregistered event", async () => {
     const queryClient = new QueryClient();
     const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");

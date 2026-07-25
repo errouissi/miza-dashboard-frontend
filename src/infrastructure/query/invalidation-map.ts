@@ -19,7 +19,9 @@ import type { QueryClient, QueryKey } from "@tanstack/react-query";
  * `cheque.rejected`/`cheque.annuled` (M4.2 Phase 3C) are now registered too,
  * from `useApproveChequeMutation`/`useRejectChequeMutation`/
  * `useAnnulerChequeMutation` — see each entry below for why it invalidates
- * what it does.
+ * what it does. `deposit.validated`/`deposit.rejected` (M4.3 Phase 3) are
+ * the first Deposits entries, from `useValidateDepositMutation`/
+ * `useRejectDepositMutation`.
  *
  * The mechanism, the fallback, and its test shipped at M4.1 — mirrors
  * `infrastructure/errors/error-code-registry.ts` exactly: an empty, frozen
@@ -79,6 +81,26 @@ const INVALIDATION_MAP: Readonly<Record<DomainEvent, readonly QueryKey[]>> =
      * unchanged) — only Cheques' own key space needs busting.
      */
     "cheque.rejected": [["cheques"]],
+    /**
+     * Validating a deposit NEVER touches `agent.montant_avance_rapped`/
+     * `montant_avance_grattage` — verified from source
+     * (`DepoController::validateDepo`, `DepositService::validate`): the
+     * rapped path writes `agent.solde`/`agent.cash` only; the grattage path
+     * only flips `GrattageInvoice` rows to `settled`. Managers'/
+     * Commercials' own `avanceTotal` is computed EXCLUSIVELY from
+     * `montant_avance_*` (confirmed by reading both domains' own API
+     * mappers — neither reads `solde`/`cash` anywhere), so neither is
+     * affected. Unlike `cheque.approved`, NO Network prefix is invalidated
+     * here — a genuine difference in what the two actions touch, not an
+     * oversight.
+     */
+    "deposit.validated": [["deposits"]],
+    /**
+     * Rejecting touches no balance column and no `GrattageInvoice` status
+     * (only an unlink, for grattage) — verified from source
+     * (`DepositService::reject`).
+     */
+    "deposit.rejected": [["deposits"]],
   });
 
 /** The prefixes a given event invalidates, or an empty list for an unregistered one. */

@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { http, HttpResponse, delay } from "msw";
 import { RouterProvider, createMemoryRouter } from "react-router-dom";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { QueryClientProvider } from "@tanstack/react-query";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { server } from "@/test/msw/server";
 import { sessionManager } from "@/infrastructure/auth";
 import { createQueryClient } from "@/infrastructure/query";
@@ -81,7 +81,7 @@ function showHandler(id: number, envelope: ReturnType<typeof showEnvelope>) {
   return http.get(`${API}/admin/depos/${id}`, () => HttpResponse.json(envelope));
 }
 
-function renderPage(initialPath: string) {
+function renderPage(initialPath: string, queryClient: QueryClient = createQueryClient()) {
   const router = createMemoryRouter(
     [
       { path: DETAIL_PATTERN, element: <DepositDetailPage /> },
@@ -90,11 +90,25 @@ function renderPage(initialPath: string) {
     { initialEntries: [initialPath] },
   );
   render(
-    <QueryClientProvider client={createQueryClient()}>
+    <QueryClientProvider client={queryClient}>
       <RouterProvider router={router} />
     </QueryClientProvider>,
   );
-  return router;
+  return { router, queryClient };
+}
+
+function validateHandler(id: number, onRequest?: (body: unknown) => void) {
+  return http.post(`${API}/admin/depos/${id}/validate`, async ({ request }) => {
+    onRequest?.(await request.text());
+    return HttpResponse.json({ message: "Deposit validated and balance updated." });
+  });
+}
+
+function rejectHandler(id: number, onRequest?: (body: unknown) => void) {
+  return http.post(`${API}/admin/depos/${id}/reject`, async ({ request }) => {
+    onRequest?.(await request.json().catch(() => undefined));
+    return HttpResponse.json({ message: "Deposit rejected successfully." });
+  });
 }
 
 beforeEach(() => {
@@ -324,11 +338,382 @@ describe("loading, error and not-found states", () => {
 describe("navigation", () => {
   it("navigates back to the Deposits list", async () => {
     server.use(showHandler(1, showEnvelope({ id: 1 })));
-    const router = renderPage("/money/deposits/1");
+    const { router } = renderPage("/money/deposits/1");
 
     fireEvent.click(await screen.findByRole("button", { name: "Back to Deposits" }));
 
     await waitFor(() => expect(router.state.location.pathname).toBe(DEPOSITS_PATH));
+  });
+});
+
+describe("action visibility — permission AND status gating (M4.3 Phase 3)", () => {
+  it("shows Validate and Reject for a pending deposit when both permissions are held", async () => {
+    signInWith([
+      PERMISSIONS.VIEW_DEPOSITS,
+      PERMISSIONS.VALIDATE_DEPOSIT,
+      PERMISSIONS.REJECT_DEPOSIT,
+    ]);
+    server.use(showHandler(1, showEnvelope({ id: 1, status: "pending" })));
+    renderPage("/money/deposits/1");
+
+    expect(await screen.findByRole("button", { name: "Validate" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reject" })).toBeInTheDocument();
+  });
+
+  it("hides Validate/Reject for a pending deposit when the permission is not held", async () => {
+    signInWith([PERMISSIONS.VIEW_DEPOSITS]);
+    server.use(showHandler(1, showEnvelope({ id: 1, status: "pending" })));
+    renderPage("/money/deposits/1");
+
+    await screen.findByRole("heading", { name: "Deposit #1" });
+    expect(screen.queryByRole("button", { name: "Validate" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reject" })).not.toBeInTheDocument();
+  });
+
+  it("hides both actions for a validated deposit, even with both permissions held", async () => {
+    signInWith([
+      PERMISSIONS.VIEW_DEPOSITS,
+      PERMISSIONS.VALIDATE_DEPOSIT,
+      PERMISSIONS.REJECT_DEPOSIT,
+    ]);
+    server.use(showHandler(1, showEnvelope({ id: 1, status: "validated" })));
+    renderPage("/money/deposits/1");
+
+    await screen.findByRole("heading", { name: "Deposit #1" });
+    expect(screen.queryByRole("button", { name: "Validate" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reject" })).not.toBeInTheDocument();
+  });
+
+  it("hides both actions for a rejected deposit, even with both permissions held", async () => {
+    signInWith([
+      PERMISSIONS.VIEW_DEPOSITS,
+      PERMISSIONS.VALIDATE_DEPOSIT,
+      PERMISSIONS.REJECT_DEPOSIT,
+    ]);
+    server.use(showHandler(1, showEnvelope({ id: 1, status: "rejected" })));
+    renderPage("/money/deposits/1");
+
+    await screen.findByRole("heading", { name: "Deposit #1" });
+    expect(screen.queryByRole("button", { name: "Validate" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reject" })).not.toBeInTheDocument();
+  });
+});
+
+describe("Validate", () => {
+  beforeEach(() => {
+    signInWith([PERMISSIONS.VIEW_DEPOSITS, PERMISSIONS.VALIDATE_DEPOSIT]);
+  });
+
+  it("opens a confirmation dialog, sends no body", async () => {
+    let body: unknown;
+    server.use(
+      showHandler(1, showEnvelope({ id: 1, status: "pending" })),
+      validateHandler(1, (b) => (body = b)),
+    );
+    renderPage("/money/deposits/1");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Validate" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Validate" }));
+
+    await waitFor(() => expect(body).toBe(""));
+  });
+
+  it("disables the confirm button while pending, preventing a duplicate submission", async () => {
+    server.use(
+      showHandler(1, showEnvelope({ id: 1, status: "pending" })),
+      http.post(`${API}/admin/depos/1/validate`, async () => {
+        await delay(50);
+        return HttpResponse.json({ message: "Deposit validated and balance updated." });
+      }),
+    );
+    renderPage("/money/deposits/1");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Validate" }));
+    const dialog = await screen.findByRole("dialog");
+    const confirmButton = within(dialog).getByRole("button", { name: "Validate" });
+    fireEvent.click(confirmButton);
+
+    expect(
+      await within(dialog).findByRole("button", { name: "Validating…" }),
+    ).toBeDisabled();
+    // A second click while pending must not fire a second request — the
+    // button is disabled, so `fireEvent.click` is a no-op here; the real
+    // assertion is the disabled state above plus the single successful
+    // request this test's handler only ever expects once.
+  });
+
+  it("closes the dialog and refetches the deposit as Validated on success", async () => {
+    // A STATEFUL mock, not a static handler — invalidation only proves
+    // anything if the refetch it triggers can observe a real state change,
+    // the same discipline `cheque-detail-page.test.tsx`'s own Approve test
+    // already established.
+    let status: "pending" | "validated" = "pending";
+    server.use(
+      http.get(`${API}/admin/depos/1`, () =>
+        HttpResponse.json(showEnvelope({ id: 1, status })),
+      ),
+      http.post(`${API}/admin/depos/1/validate`, () => {
+        status = "validated";
+        return HttpResponse.json({ message: "Deposit validated and balance updated." });
+      }),
+    );
+    renderPage("/money/deposits/1");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Validate" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Validate" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(await screen.findAllByText("Validated")).not.toHaveLength(0);
+  });
+
+  it("keeps the dialog open and shows an error on failure, without losing the deposit", async () => {
+    server.use(
+      showHandler(1, showEnvelope({ id: 1, status: "pending" })),
+      http.post(`${API}/admin/depos/1/validate`, () =>
+        HttpResponse.json({ error: "This deposit is not pending." }, { status: 400 }),
+      ),
+    );
+    renderPage("/money/deposits/1");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Validate" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Validate" }));
+
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(
+      /could not be validated/i,
+    );
+    expect(dialog).toBeInTheDocument();
+  });
+
+  it("invalidates only the deposits cache on success — no Network prefix (verified: neither path touches montant_avance_*)", async () => {
+    const queryClient = createQueryClient();
+    queryClient.setQueryData(["managers", "list", {}], { fake: true });
+    queryClient.setQueryData(["commercials", "list", {}], { fake: true });
+    queryClient.setQueryData(["deposits", "list", {}], { fake: true });
+    server.use(
+      showHandler(1, showEnvelope({ id: 1, status: "pending" })),
+      validateHandler(1),
+    );
+    renderPage("/money/deposits/1", queryClient);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Validate" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Validate" }));
+
+    await waitFor(() =>
+      expect(queryClient.getQueryState(["deposits", "list", {}])?.isInvalidated).toBe(
+        true,
+      ),
+    );
+    expect(queryClient.getQueryState(["managers", "list", {}])?.isInvalidated).toBe(
+      false,
+    );
+    expect(queryClient.getQueryState(["commercials", "list", {}])?.isInvalidated).toBe(
+      false,
+    );
+  });
+});
+
+describe("Reject", () => {
+  beforeEach(() => {
+    signInWith([PERMISSIONS.VIEW_DEPOSITS, PERMISSIONS.REJECT_DEPOSIT]);
+  });
+
+  it("disables Reject in the dialog until the reason reaches the backend's own 10-character minimum", async () => {
+    server.use(showHandler(1, showEnvelope({ id: 1, status: "pending" })));
+    renderPage("/money/deposits/1");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Reject" }));
+    const dialog = await screen.findByRole("dialog");
+    const confirmButton = within(dialog).getByRole("button", { name: "Reject" });
+    const reasonField = within(dialog).getByLabelText("Reason");
+
+    expect(confirmButton).toBeDisabled();
+
+    fireEvent.change(reasonField, { target: { value: "short" } });
+    expect(confirmButton).toBeDisabled();
+    expect(
+      within(dialog).getByText("Reason must be at least 10 characters."),
+    ).toBeInTheDocument();
+
+    fireEvent.change(reasonField, { target: { value: "This reason is long enough." } });
+    expect(confirmButton).toBeEnabled();
+  });
+
+  it("disables Reject when the reason exceeds the backend's own 1000-character maximum", async () => {
+    server.use(showHandler(1, showEnvelope({ id: 1, status: "pending" })));
+    renderPage("/money/deposits/1");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Reject" }));
+    const dialog = await screen.findByRole("dialog");
+    const confirmButton = within(dialog).getByRole("button", { name: "Reject" });
+
+    fireEvent.change(within(dialog).getByLabelText("Reason"), {
+      target: { value: "x".repeat(1001) },
+    });
+
+    expect(confirmButton).toBeDisabled();
+    expect(
+      within(dialog).getByText("Reason must be 1000 characters or fewer."),
+    ).toBeInTheDocument();
+  });
+
+  it("sends the entered reason as reject_reason", async () => {
+    let body: unknown;
+    server.use(
+      showHandler(1, showEnvelope({ id: 1, status: "pending" })),
+      rejectHandler(1, (b) => (body = b)),
+    );
+    renderPage("/money/deposits/1");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Reject" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("Reason"), {
+      target: { value: "Illegible receipt image" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Reject" }));
+
+    await waitFor(() =>
+      expect(body).toEqual({ reject_reason: "Illegible receipt image" }),
+    );
+  });
+
+  it("disables the confirm button while pending, preventing a duplicate submission", async () => {
+    server.use(
+      showHandler(1, showEnvelope({ id: 1, status: "pending" })),
+      http.post(`${API}/admin/depos/1/reject`, async () => {
+        await delay(50);
+        return HttpResponse.json({ message: "Deposit rejected successfully." });
+      }),
+    );
+    renderPage("/money/deposits/1");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Reject" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("Reason"), {
+      target: { value: "Illegible receipt image" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Reject" }));
+
+    expect(
+      await within(dialog).findByRole("button", { name: "Rejecting…" }),
+    ).toBeDisabled();
+  });
+
+  it("closes the dialog and refetches the deposit as Rejected on success", async () => {
+    let status: "pending" | "rejected" = "pending";
+    let rejectReason: string | null = null;
+    server.use(
+      http.get(`${API}/admin/depos/1`, () =>
+        HttpResponse.json(showEnvelope({ id: 1, status, reject_reason: rejectReason })),
+      ),
+      http.post(`${API}/admin/depos/1/reject`, async ({ request }) => {
+        const parsed = (await request.json()) as { reject_reason: string };
+        status = "rejected";
+        rejectReason = parsed.reject_reason;
+        return HttpResponse.json({ message: "Deposit rejected successfully." });
+      }),
+    );
+    renderPage("/money/deposits/1");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Reject" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("Reason"), {
+      target: { value: "Illegible receipt image" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Reject" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(await screen.findByText("Illegible receipt image")).toBeInTheDocument();
+  });
+
+  it("maps a field-level 422 on reject_reason to the reason field, not a generic banner", async () => {
+    server.use(
+      showHandler(1, showEnvelope({ id: 1, status: "pending" })),
+      http.post(`${API}/admin/depos/1/reject`, () =>
+        HttpResponse.json(
+          {
+            message: "The given data was invalid.",
+            errors: {
+              reject_reason: ["The reject reason must be at least 10 characters."],
+            },
+          },
+          { status: 422 },
+        ),
+      ),
+    );
+    renderPage("/money/deposits/1");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Reject" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("Reason"), {
+      target: { value: "Illegible receipt image" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Reject" }));
+
+    expect(
+      await within(dialog).findByText(
+        "The reject reason must be at least 10 characters.",
+      ),
+    ).toBeInTheDocument();
+    expect(within(dialog).queryByText(/could not be rejected/i)).not.toBeInTheDocument();
+  });
+
+  it("shows a generic error, not the raw backend text, on an unexpected failure", async () => {
+    server.use(
+      showHandler(1, showEnvelope({ id: 1, status: "pending" })),
+      http.post(`${API}/admin/depos/1/reject`, () =>
+        HttpResponse.json(
+          { error: "Only pending deposits can be rejected." },
+          { status: 400 },
+        ),
+      ),
+    );
+    renderPage("/money/deposits/1");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Reject" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("Reason"), {
+      target: { value: "Illegible receipt image" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Reject" }));
+
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(
+      /could not be rejected/i,
+    );
+  });
+
+  it("invalidates only the deposits cache on success", async () => {
+    const queryClient = createQueryClient();
+    queryClient.setQueryData(["managers", "list", {}], { fake: true });
+    queryClient.setQueryData(["commercials", "list", {}], { fake: true });
+    queryClient.setQueryData(["deposits", "list", {}], { fake: true });
+    server.use(
+      showHandler(1, showEnvelope({ id: 1, status: "pending" })),
+      rejectHandler(1),
+    );
+    renderPage("/money/deposits/1", queryClient);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Reject" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("Reason"), {
+      target: { value: "Illegible receipt image" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Reject" }));
+
+    await waitFor(() =>
+      expect(queryClient.getQueryState(["deposits", "list", {}])?.isInvalidated).toBe(
+        true,
+      ),
+    );
+    expect(queryClient.getQueryState(["managers", "list", {}])?.isInvalidated).toBe(
+      false,
+    );
+    expect(queryClient.getQueryState(["commercials", "list", {}])?.isInvalidated).toBe(
+      false,
+    );
   });
 });
 

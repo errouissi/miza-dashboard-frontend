@@ -1,11 +1,16 @@
+import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { isAppError, resolveErrorDisplay } from "@/infrastructure/errors";
+import { PERMISSIONS } from "@/infrastructure/permissions";
+import { usePermission } from "@/shared/hooks";
 import { formatDate, formatDateTime, formatIdentifier } from "@/shared/formatters";
 import { StatusBadge } from "@/shared/components/business/status-badge";
 import { MoneyAmount } from "@/shared/components/business/money-amount";
 import { Button } from "@/shared/components/ui/button";
 import { Skeleton } from "@/shared/components/ui/skeleton";
 import { ListErrorState } from "@/shared/components/patterns/list-states";
+import { ValidateDepositDialog } from "../components/validate-deposit-dialog";
+import { RejectDepositDialog } from "../components/reject-deposit-dialog";
 import { useDepositQuery } from "../queries/deposits-queries";
 import { DEPOSITS_PATH } from "../routes";
 import {
@@ -57,12 +62,32 @@ import {
  *
  * `type`/`method` RENDER AS PLAIN TEXT, NOT `StatusBadge` — same reasoning
  * as the list page.
+ *
+ * ACTIONS (M4.3 Phase 3) — Validate/Reject live HERE ONLY, not on the list
+ * page (your own confirmed scope). Each button is gated on BOTH its own
+ * permission AND the deposit's current status — BOTH actions only while
+ * `pending`, for BOTH deposit types (`canBeProcessed()` is a single,
+ * type-agnostic check server-side — verified from source, unlike Cheques'
+ * own three-way pending/approved split for approve/reject/annuler).
+ * Validated and rejected deposits hide both buttons, mirroring
+ * `ManagerStatusDialog`'s own "don't offer a guaranteed backend no-op"
+ * precedent Cheques' own dialogs already established.
+ *
+ * NO TOAST/NOTIFICATION LIBRARY EXISTS IN THIS CODEBASE (re-confirmed this
+ * phase, same finding `create-cheque-page.tsx`'s own docblock already
+ * made) — success feedback is the SAME existing pattern every mutation in
+ * this app already uses: the dialog closes, the invalidated query
+ * refetches, and the new status (`StatusBadge` here, plus the newly
+ * revealed "Processed" section) IS the confirmation, exactly like
+ * `ChequeDetailPage`'s own approve/reject/annuler dialogs.
  */
 export function DepositDetailPage() {
   const navigate = useNavigate();
   const params = useParams<{ id: string }>();
   const rawId = Number(params.id);
   const id = Number.isInteger(rawId) && rawId > 0 ? rawId : undefined;
+  const { has } = usePermission();
+  const [activeAction, setActiveAction] = useState<"validate" | "reject" | null>(null);
 
   const depositQuery = useDepositQuery(id ?? -1, { enabled: id !== undefined });
 
@@ -120,6 +145,9 @@ export function DepositDetailPage() {
     deposit.status !== "pending" && (deposit.validatedByName || deposit.validatedAt);
   const showRejectReason = deposit.status === "rejected" && deposit.rejectReason;
 
+  const canValidate = has(PERMISSIONS.VALIDATE_DEPOSIT) && deposit.status === "pending";
+  const canReject = has(PERMISSIONS.REJECT_DEPOSIT) && deposit.status === "pending";
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between gap-4">
@@ -130,9 +158,19 @@ export function DepositDetailPage() {
             label={DEPOSIT_STATUS_LABELS[deposit.status]}
           />
         </div>
-        <Button variant="outline" onClick={() => navigate(DEPOSITS_PATH)}>
-          Back to Deposits
-        </Button>
+        <div className="flex gap-2">
+          {canValidate ? (
+            <Button onClick={() => setActiveAction("validate")}>Validate</Button>
+          ) : null}
+          {canReject ? (
+            <Button variant="destructive" onClick={() => setActiveAction("reject")}>
+              Reject
+            </Button>
+          ) : null}
+          <Button variant="outline" onClick={() => navigate(DEPOSITS_PATH)}>
+            Back to Deposits
+          </Button>
+        </div>
       </div>
 
       <dl className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
@@ -222,6 +260,15 @@ export function DepositDetailPage() {
           <p className="text-sm">{deposit.rejectReason}</p>
         </div>
       ) : null}
+
+      <ValidateDepositDialog
+        deposit={activeAction === "validate" ? deposit : undefined}
+        onOpenChange={(open) => setActiveAction(open ? "validate" : null)}
+      />
+      <RejectDepositDialog
+        deposit={activeAction === "reject" ? deposit : undefined}
+        onOpenChange={(open) => setActiveAction(open ? "reject" : null)}
+      />
     </div>
   );
 }
