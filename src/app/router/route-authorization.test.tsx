@@ -21,6 +21,7 @@ import {
   CHEQUES_PENDING_PATH,
   chequeDetailPath,
 } from "@/domains/money/cheques";
+import { DEPOSITS_PATH } from "@/domains/money/deposits";
 import { routes } from "./routes";
 
 /**
@@ -229,6 +230,9 @@ describe("every contributed domain route is guarded", () => {
   // permission as the list route, mirroring `GET /admin/cheques/{id}`'s own
   // check — exercised via a concrete id since the route itself is the
   // dynamic pattern `/money/cheques/:id`.
+  // DEPOSITS_PATH (M4.3 Phase 1) is guarded by `view-depos` — its own
+  // permission, the second Money resource, mirroring `GET /admin/depos`'s
+  // own separate check.
   // `unpermittedSession` holds nothing at all, so it exercises every gate
   // identically.
   const domainPaths = [
@@ -244,6 +248,7 @@ describe("every contributed domain route is guarded", () => {
     CHEQUES_NEW_PATH,
     CHEQUES_PENDING_PATH,
     chequeDetailPath(1),
+    DEPOSITS_PATH,
   ];
 
   it.each(domainPaths)("refuses %s without the permission", async (path) => {

@@ -9,6 +9,7 @@ import {
   Contact,
   Banknote,
   Clock,
+  Landmark,
 } from "lucide-react";
 import { PERMISSIONS, type PermissionResolver } from "@/infrastructure/permissions";
 import { ADMINS_PATH } from "@/domains/network/admins";
@@ -16,6 +17,7 @@ import { MANAGERS_PATH } from "@/domains/network/managers";
 import { COMMERCIALS_PATH } from "@/domains/network/commercials";
 import { CLIENTS_PATH } from "@/domains/network/clients";
 import { CHEQUES_PATH, CHEQUES_PENDING_PATH } from "@/domains/money/cheques";
+import { DEPOSITS_PATH } from "@/domains/money/deposits";
 import { PRODUCTS_PATH } from "@/domains/reference/products";
 import { SECTEURS_PATH } from "@/domains/reference/secteurs";
 import { VILLES_PATH } from "@/domains/reference/villes";
@@ -146,6 +148,15 @@ export const NAV_TREE: NavGroup[] = [
         // separate backend check.
         permission: PERMISSIONS.VIEW_PENDING_CHEQUES,
         icon: Clock,
+      },
+      {
+        label: "Deposits",
+        to: DEPOSITS_PATH,
+        // `view-depos` (M4.3 Phase 1) — its OWN permission, mirroring the
+        // route and the backend. The three other Deposit permissions gate
+        // actions inside a future detail page, not visibility of this list.
+        permission: PERMISSIONS.VIEW_DEPOSITS,
+        icon: Landmark,
       },
     ],
   },

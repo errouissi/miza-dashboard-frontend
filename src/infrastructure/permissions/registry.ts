@@ -145,6 +145,35 @@ export const PERMISSIONS = Object.freeze({
   APPROVE_CHEQUE: "approve-cheque",
   REJECT_CHEQUE: "reject-cheque",
   ANNULER_CHEQUE: "annuler-cheque",
+
+  /**
+   * Deposit management (roadmap M4.3) — the second Money permission set.
+   * `DepoController` carries four distinct server-side checks
+   * (`routes/api.php:373-390`): one list/detail read and three status
+   * actions, verified fresh from source this phase (the backend changed
+   * since the M4.3 discovery pass — `index()`/`show()`/`store()` were
+   * unified onto one `DepoResource` shape in the meantime).
+   *
+   * `VIEW_DEPOSITS` gates the general list (`GET /admin/depos`) and the
+   * single-record read (`GET /admin/depos/{depo}`) — the route and screen
+   * this M4.3 phase actually builds. Unlike Cheques, there is no separate
+   * "pending" permission or route: `index()` has no dedicated pending-queue
+   * endpoint, so a future pending view would just be this same list,
+   * pre-filtered, behind this same permission.
+   *
+   * `CREATE_DEPOSIT`/`VALIDATE_DEPOSIT`/`REJECT_DEPOSIT` each gate their own
+   * route (`POST .../`, `POST .../validate`, `POST .../reject`) and are
+   * registered now, together with the read permission, because the whole
+   * four-permission set was verified from source as one stable vocabulary
+   * this phase — the same reasoning Cheques' own six-permission set was
+   * registered together at its Phase 2, ahead of the mutations that use
+   * them. None of these three is wired to a UI control yet (no detail page,
+   * no dialogs — later M4.3 phases).
+   */
+  VIEW_DEPOSITS: "view-depos",
+  CREATE_DEPOSIT: "create-depo",
+  VALIDATE_DEPOSIT: "validate-depo",
+  REJECT_DEPOSIT: "reject-depo",
 } as const satisfies Record<string, string>);
 
 export type PermissionName = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
