@@ -114,6 +114,98 @@ export const ERROR_CODES: Readonly<Record<string, ErrorCodeEntry>> = Object.free
     message: "This line could not be found.",
     tone: "danger",
   },
+
+  /**
+   * AGENT TRANSFERS (roadmap M5, Phase 2) — 15 codes, verified fresh from
+   * source (`AgentTransferExceptionRenderer`). Registered EXPLICITLY, one
+   * by one, NOT derived by a mechanical `RETURN_` -> `TRANSFER_` rename:
+   * the two resources' code vocabularies were seeded independently and
+   * genuinely diverge — `TRANSFER_RECIPIENT_MANAGER_ROLE_INVALID` carries
+   * a `RECIPIENT_` infix its Return equivalent (`RETURN_MANAGER_ROLE_
+   * INVALID`) does not have. A find-replace would have silently produced
+   * five wrong strings.
+   *
+   * TWO CODES HAVE NO RETURN EQUIVALENT AT ALL:
+   *   `AGENT_TRANSFER_EXCEEDS_CAPACITY` — a REAL, LIVE capacity gate
+   *     (`StockService::validateTransfer`'s own formula: available =
+   *     montant_avance_grattage − (validated transfers in − validated
+   *     returns out)), unlike Return's floor-only stock check. Note the
+   *     PREFIX ITSELF diverges (`AGENT_TRANSFER_`, not `TRANSFER_`) —
+   *     copied verbatim from source, not normalized.
+   *   `TRANSFER_RECIPIENT_HAS_OUTSTANDING_OBLIGATION` — this IS the
+   *     Grattage restock gate (Operational Restrictions, Phase 5.10 §2.9),
+   *     surfacing here REACTIVELY because `StockService::validateTransfer`
+   *     already enforces it server-side. The PROACTIVE version (a shared
+   *     hook Stock's own forms consult before submitting) is an explicit
+   *     M6 Grattage deliverable per the frozen roadmap, not built here —
+   *     no `recovery` path is registered for it yet for the same reason
+   *     `RETURN_RECIPIENT_*`'s own codes have none: the flow it would link
+   *     to (Grattage) does not exist as a frontend route yet.
+   */
+  TRANSFER_NOT_DRAFT: {
+    message: "This transfer has already been processed.",
+    tone: "warning",
+  },
+  TRANSFER_HAS_NO_LINES: {
+    message: "Add at least one line before validating this transfer.",
+    tone: "warning",
+  },
+  TRANSFER_NOT_EDITABLE: {
+    message: "This transfer can no longer be edited.",
+    tone: "warning",
+  },
+  AGENT_TRANSFER_EXCEEDS_CAPACITY: {
+    message:
+      "This transfer's amount exceeds the commercial's remaining grattage capacity.",
+    tone: "danger",
+  },
+  TRANSFER_RECIPIENT_HAS_OUTSTANDING_OBLIGATION: {
+    message:
+      "The selected commercial has an outstanding grattage obligation and cannot receive new stock yet.",
+    tone: "danger",
+  },
+  TRANSFER_STOCK_INSUFFICIENT: {
+    message:
+      "The manager does not hold enough stock of this product to transfer the requested quantity.",
+    tone: "danger",
+  },
+  TRANSFER_RECIPIENT_BINDING_MISMATCH: {
+    message: "This commercial no longer belongs to the selected manager.",
+    tone: "danger",
+  },
+  TRANSFER_RECIPIENT_MANAGER_ROLE_INVALID: {
+    message: "The selected recipient is not a manager.",
+    tone: "danger",
+  },
+  TRANSFER_RECIPIENT_COMMERCIAL_ROLE_INVALID: {
+    message: "The selected agent is not a commercial.",
+    tone: "danger",
+  },
+  TRANSFER_RECIPIENT_MANAGER_INACTIVE: {
+    message: "The selected manager is no longer active.",
+    tone: "danger",
+  },
+  TRANSFER_RECIPIENT_COMMERCIAL_INACTIVE: {
+    message: "The selected commercial is no longer active.",
+    tone: "danger",
+  },
+  TRANSFER_LINE_DUPLICATE_PRODUCT: {
+    message:
+      "This product is already on this transfer. Edit the existing line instead of adding a new one.",
+    tone: "warning",
+  },
+  TRANSFER_NUMBER_DUPLICATE: {
+    message: "This transfer number is already in use.",
+    tone: "warning",
+  },
+  TRANSFER_NOT_FOUND: {
+    message: "This transfer could not be found.",
+    tone: "danger",
+  },
+  TRANSFER_LINE_NOT_FOUND: {
+    message: "This line could not be found.",
+    tone: "danger",
+  },
 });
 
 /** Unregistered codes are still failures, and a failure is never "info". */

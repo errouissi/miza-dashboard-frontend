@@ -12,6 +12,7 @@ import {
   Landmark,
   Wallet,
   Undo2,
+  ArrowLeftRight,
 } from "lucide-react";
 import { PERMISSIONS, type PermissionResolver } from "@/infrastructure/permissions";
 import { ADMINS_PATH } from "@/domains/network/admins";
@@ -22,6 +23,7 @@ import { CHEQUES_PATH, CHEQUES_PENDING_PATH } from "@/domains/money/cheques";
 import { DEPOSITS_PATH } from "@/domains/money/deposits";
 import { DEBT_PAYMENTS_PATH } from "@/domains/money/debt-payments";
 import { AGENT_STOCK_RETURNS_PATH } from "@/domains/stock/agent-stock-returns";
+import { AGENT_TRANSFERS_PATH } from "@/domains/stock/agent-transfers";
 import { PRODUCTS_PATH } from "@/domains/reference/products";
 import { SECTEURS_PATH } from "@/domains/reference/secteurs";
 import { VILLES_PATH } from "@/domains/reference/villes";
@@ -189,6 +191,18 @@ export const NAV_TREE: NavGroup[] = [
         // already follows.
         permission: PERMISSIONS.VIEW_AGENT_STOCK_RETURN,
         icon: Undo2,
+      },
+      {
+        label: "Agent Transfers",
+        to: AGENT_TRANSFERS_PATH,
+        // `view-agent-transfers` (roadmap M5, Phase 2) — its OWN
+        // permission, PLURAL (a genuine divergence from Return's own
+        // singular `view-agent-stock-return`, verified from source). The
+        // other seven Agent Transfer permissions gate actions inside the
+        // page, not visibility of the list — same convention Return's own
+        // nav entry already follows.
+        permission: PERMISSIONS.VIEW_AGENT_TRANSFERS,
+        icon: ArrowLeftRight,
       },
     ],
   },

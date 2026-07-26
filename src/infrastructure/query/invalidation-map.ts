@@ -136,6 +136,26 @@ const INVALIDATION_MAP: Readonly<Record<DomainEvent, readonly QueryKey[]>> =
      * exist.
      */
     "agent-stock-return.validated": [["agent-stock-returns"]],
+    /**
+     * Agent Transfers (roadmap M5, Phase 2). A draft touches no balance
+     * and no stock row — materialization only happens at validate time.
+     * `["agent-transfers"]` only.
+     */
+    "agent-transfer.created": [["agent-transfers"]],
+    /**
+     * Any of the three line mutations (add/update/remove) recomputes the
+     * parent's `montant` — the same key space, no cross-domain effect.
+     */
+    "agent-transfer.line-changed": [["agent-transfers"]],
+    /**
+     * Validating writes ONLY `stocks`/`stock_movements` rows (re-verified
+     * from source this phase, `StockService::validateTransfer` Step 8) —
+     * NOT `Agent.montant_avance_grattage` or any other balance column
+     * Managers'/Commercials' own lists render. `["agent-transfers"]` only;
+     * revisit once a Stock ledger view or the Grattage restock-gate hook
+     * (both M6) exist.
+     */
+    "agent-transfer.validated": [["agent-transfers"]],
   });
 
 /** The prefixes a given event invalidates, or an empty list for an unregistered one. */

@@ -68,6 +68,22 @@ describe("invalidation map", () => {
     ]);
   });
 
+  it("registers agent-transfer.created — Agent Transfers' own key space only", () => {
+    expect(queryKeyPrefixesFor("agent-transfer.created")).toEqual([["agent-transfers"]]);
+  });
+
+  it("registers agent-transfer.line-changed — Agent Transfers' own key space only", () => {
+    expect(queryKeyPrefixesFor("agent-transfer.line-changed")).toEqual([
+      ["agent-transfers"],
+    ]);
+  });
+
+  it("registers agent-transfer.validated — no cross-domain prefix (writes only stocks/stock_movements, not Agent balance columns)", () => {
+    expect(queryKeyPrefixesFor("agent-transfer.validated")).toEqual([
+      ["agent-transfers"],
+    ]);
+  });
+
   it("invalidates nothing, and does not throw, for an unregistered event", async () => {
     const queryClient = new QueryClient();
     const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");

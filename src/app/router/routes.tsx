@@ -15,6 +15,7 @@ import { chequesRoutes } from "@/domains/money/cheques";
 import { depositsRoutes } from "@/domains/money/deposits";
 import { debtPaymentsRoutes } from "@/domains/money/debt-payments";
 import { agentStockReturnsRoutes } from "@/domains/stock/agent-stock-returns";
+import { agentTransfersRoutes } from "@/domains/stock/agent-transfers";
 import { productsRoutes } from "@/domains/reference/products";
 import { secteursRoutes } from "@/domains/reference/secteurs";
 import { villesRoutes } from "@/domains/reference/villes";
@@ -110,6 +111,7 @@ const domainRoutes: RouteObject[] = withPermissionGuards([
   ...depositsRoutes,
   ...debtPaymentsRoutes,
   ...agentStockReturnsRoutes,
+  ...agentTransfersRoutes,
 ]);
 
 /**

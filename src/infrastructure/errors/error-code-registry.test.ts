@@ -87,3 +87,82 @@ describe("Agent Stock Return codes (roadmap M5, Phase 1) — the first real popu
     }
   });
 });
+
+describe("Agent Transfer codes (roadmap M5, Phase 2) — registered explicitly, not derived from Return's", () => {
+  // `.includes("TRANSFER")`, not `.startsWith("TRANSFER_")` — one code
+  // (`AGENT_TRANSFER_EXCEEDS_CAPACITY`) genuinely uses a different prefix,
+  // confirmed from source, not a typo to normalize away.
+  it("registers exactly the 15 codes AgentTransferExceptionRenderer emits", () => {
+    const transferCodes = Object.keys(ERROR_CODES).filter((code) =>
+      code.includes("TRANSFER"),
+    );
+
+    expect(transferCodes.sort()).toEqual(
+      [
+        "TRANSFER_NOT_DRAFT",
+        "TRANSFER_HAS_NO_LINES",
+        "TRANSFER_NOT_EDITABLE",
+        "AGENT_TRANSFER_EXCEEDS_CAPACITY",
+        "TRANSFER_RECIPIENT_HAS_OUTSTANDING_OBLIGATION",
+        "TRANSFER_STOCK_INSUFFICIENT",
+        "TRANSFER_RECIPIENT_BINDING_MISMATCH",
+        "TRANSFER_RECIPIENT_MANAGER_ROLE_INVALID",
+        "TRANSFER_RECIPIENT_COMMERCIAL_ROLE_INVALID",
+        "TRANSFER_RECIPIENT_MANAGER_INACTIVE",
+        "TRANSFER_RECIPIENT_COMMERCIAL_INACTIVE",
+        "TRANSFER_LINE_DUPLICATE_PRODUCT",
+        "TRANSFER_NUMBER_DUPLICATE",
+        "TRANSFER_NOT_FOUND",
+        "TRANSFER_LINE_NOT_FOUND",
+      ].sort(),
+    );
+  });
+
+  // Confirms the two codes have GENUINELY DIFFERENT strings from their
+  // nearest Return equivalent, not a mechanical rename — the concrete
+  // regression this test guards against.
+  it("does not confuse TRANSFER_RECIPIENT_MANAGER_ROLE_INVALID with Return's own (unprefixed) equivalent", () => {
+    expect(ERROR_CODES["TRANSFER_RECIPIENT_MANAGER_ROLE_INVALID"]).toBeDefined();
+    expect(ERROR_CODES["TRANSFER_MANAGER_ROLE_INVALID"]).toBeUndefined();
+  });
+
+  it("resolves the capacity-exceeded code to real copy", () => {
+    const display = resolveErrorDisplay(
+      new AppError({
+        kind: "domain",
+        code: "AGENT_TRANSFER_EXCEEDS_CAPACITY",
+        requestId: "req-2",
+      }),
+    );
+
+    expect(display.message).toBe(
+      "This transfer's amount exceeds the commercial's remaining grattage capacity.",
+    );
+    expect(display.tone).toBe("danger");
+  });
+
+  it("resolves the outstanding-obligation (restock gate) code to real copy, with no recovery path yet", () => {
+    const display = resolveErrorDisplay(
+      new AppError({
+        kind: "domain",
+        code: "TRANSFER_RECIPIENT_HAS_OUTSTANDING_OBLIGATION",
+        requestId: "req-3",
+      }),
+    );
+
+    expect(display.message).toBe(
+      "The selected commercial has an outstanding grattage obligation and cannot receive new stock yet.",
+    );
+    expect(display.recovery).toBeUndefined();
+  });
+
+  it("has no registered recovery path for any TRANSFER_*/AGENT_TRANSFER_* code yet", () => {
+    const transferEntries = Object.entries(ERROR_CODES).filter(([code]) =>
+      code.includes("TRANSFER"),
+    );
+
+    for (const [, entry] of transferEntries) {
+      expect(entry.recovery).toBeUndefined();
+    }
+  });
+});

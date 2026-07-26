@@ -219,6 +219,33 @@ export const PERMISSIONS = Object.freeze({
   CREATE_AGENT_STOCK_RETURN_LINE: "create-agent-stock-return-line",
   UPDATE_AGENT_STOCK_RETURN_LINE: "update-agent-stock-return-line",
   DELETE_AGENT_STOCK_RETURN_LINE: "delete-agent-stock-return-line",
+
+  /**
+   * Agent Transfers (roadmap M5, Phase 2) — eight permissions, verified
+   * fresh from source (`App\Authorization\AgentTransferPermissions::ALL`).
+   * Same FormRequest-gated posture as Agent Stock Returns (no route
+   * middleware).
+   *
+   * `VIEW_AGENT_TRANSFERS` IS PLURAL (`view-agent-transfers`) — copied
+   * verbatim from the backend constant. NOT a mechanical rename of Agent
+   * Stock Return's own singular `view-agent-stock-return`: the two
+   * resources' permission vocabularies were independently seeded and
+   * genuinely differ in pluralization. A test pins the exact string.
+   *
+   * `VALIDATE_AGENT_TRANSFER` is excluded from the backend's own
+   * `ADMIN_GRANTS` (super-admin only, verified from source) — Transfer
+   * validation is an irreversible stock-materialization act (manager
+   * floor debit + commercial credit), the same posture every other
+   * validate/approve permission in this registry already has.
+   */
+  VIEW_AGENT_TRANSFERS: "view-agent-transfers",
+  CREATE_AGENT_TRANSFER: "create-agent-transfer",
+  UPDATE_AGENT_TRANSFER: "update-agent-transfer",
+  DELETE_AGENT_TRANSFER: "delete-agent-transfer",
+  VALIDATE_AGENT_TRANSFER: "validate-agent-transfer",
+  CREATE_AGENT_TRANSFER_LINE: "create-agent-transfer-line",
+  UPDATE_AGENT_TRANSFER_LINE: "update-agent-transfer-line",
+  DELETE_AGENT_TRANSFER_LINE: "delete-agent-transfer-line",
 } as const satisfies Record<string, string>);
 
 export type PermissionName = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

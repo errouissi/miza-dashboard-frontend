@@ -35,6 +35,11 @@ import {
   AGENT_STOCK_RETURN_NEW_PATH,
   agentStockReturnDetailPath,
 } from "@/domains/stock/agent-stock-returns";
+import {
+  AGENT_TRANSFERS_PATH,
+  AGENT_TRANSFER_NEW_PATH,
+  agentTransferDetailPath,
+} from "@/domains/stock/agent-transfers";
 import { routes } from "./routes";
 
 /**
@@ -268,6 +273,12 @@ describe("every contributed domain route is guarded", () => {
   // (`authorize()`), not route middleware, a genuine departure from every
   // domain above, but this frontend guard still exercises the same
   // permission strings regardless of which layer enforces them server-side.
+  // AGENT_TRANSFERS_PATH/AGENT_TRANSFER_NEW_PATH/
+  // `agentTransferDetailPath(1)` (roadmap M5, Phase 2 — the second Stock
+  // resource) are guarded by `view-agent-transfers` (PLURAL — a genuine
+  // divergence from Return's own singular permission, verified from
+  // source)/`create-agent-transfer`/`view-agent-transfers` respectively —
+  // same FormRequest-gated posture as Return, not route middleware.
   // `unpermittedSession` holds nothing at all, so it exercises every gate
   // identically.
   const domainPaths = [
@@ -291,6 +302,9 @@ describe("every contributed domain route is guarded", () => {
     AGENT_STOCK_RETURNS_PATH,
     AGENT_STOCK_RETURN_NEW_PATH,
     agentStockReturnDetailPath(1),
+    AGENT_TRANSFERS_PATH,
+    AGENT_TRANSFER_NEW_PATH,
+    agentTransferDetailPath(1),
   ];
 
   it.each(domainPaths)("refuses %s without the permission", async (path) => {
