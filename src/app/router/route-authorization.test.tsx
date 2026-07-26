@@ -21,7 +21,11 @@ import {
   CHEQUES_PENDING_PATH,
   chequeDetailPath,
 } from "@/domains/money/cheques";
-import { DEPOSITS_PATH, depositDetailPath } from "@/domains/money/deposits";
+import {
+  DEPOSITS_PATH,
+  DEPOSIT_NEW_PATH,
+  depositDetailPath,
+} from "@/domains/money/deposits";
 import { routes } from "./routes";
 
 /**
@@ -236,7 +240,10 @@ describe("every contributed domain route is guarded", () => {
   // SAME `view-depos` — mirroring `GET /admin/depos/{depo}`'s own check,
   // which shares its permission with the list, unlike Cheques' detail
   // route (also `view-cheques`, but a genuinely separate backend check from
-  // its own list).
+  // its own list). DEPOSIT_NEW_PATH (Phase 4) is guarded by `create-depo` —
+  // a DIFFERENT permission from the list route it sits beside, mirroring
+  // `POST /admin/depos`'s own, separate check — the same pattern
+  // CHEQUES_NEW_PATH already established for Cheques.
   // `unpermittedSession` holds nothing at all, so it exercises every gate
   // identically.
   const domainPaths = [
@@ -253,6 +260,7 @@ describe("every contributed domain route is guarded", () => {
     CHEQUES_PENDING_PATH,
     chequeDetailPath(1),
     DEPOSITS_PATH,
+    DEPOSIT_NEW_PATH,
     depositDetailPath(1),
   ];
 

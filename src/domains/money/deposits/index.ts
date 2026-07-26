@@ -1,5 +1,6 @@
 export {
   DEPOSITS_PATH,
+  DEPOSIT_NEW_PATH,
   DEPOSIT_DETAIL_PATH,
   depositDetailPath,
   depositsRoutes,

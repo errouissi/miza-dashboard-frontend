@@ -45,7 +45,7 @@ function showEnvelope(
     validated_by: string | null;
     validated_at: string | null;
     bank_name: string | null;
-    proof_type: string;
+    proof_type: "bank_receipt" | "whatsapp_confirmation";
     agent: {
       id: number;
       full_name: string;
@@ -170,13 +170,13 @@ describe("rendering every field show() returns", () => {
     expect(await screen.findByText("Attijariwafa")).toBeInTheDocument();
   });
 
-  it("renders proof_type directly, no placeholder needed", async () => {
+  it("renders the proof type label", async () => {
     server.use(
       showHandler(1, showEnvelope({ id: 1, proof_type: "whatsapp_confirmation" })),
     );
     renderPage("/money/deposits/1");
 
-    expect(await screen.findByText("whatsapp_confirmation")).toBeInTheDocument();
+    expect(await screen.findByText("WhatsApp confirmation")).toBeInTheDocument();
   });
 
   it("renders the proof image when proof_url is present", async () => {

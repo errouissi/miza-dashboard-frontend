@@ -15,6 +15,7 @@ import { useDepositQuery } from "../queries/deposits-queries";
 import { DEPOSITS_PATH } from "../routes";
 import {
   DEPOSIT_METHOD_LABELS,
+  DEPOSIT_PROOF_TYPE_LABELS,
   DEPOSIT_STATUS_LABELS,
   DEPOSIT_STATUS_TONES,
   DEPOSIT_TYPE_LABELS,
@@ -223,7 +224,7 @@ export function DepositDetailPage() {
         </div>
         <div>
           <dt className="text-muted-foreground text-sm">Proof type</dt>
-          <dd className="text-sm">{deposit.proofType}</dd>
+          <dd className="text-sm">{DEPOSIT_PROOF_TYPE_LABELS[deposit.proofType]}</dd>
         </div>
       </dl>
 

@@ -42,6 +42,10 @@ describe("invalidation map", () => {
     expect(queryKeyPrefixesFor("deposit.rejected")).toEqual([["deposits"]]);
   });
 
+  it("registers deposit.created — Deposits' own key space only", () => {
+    expect(queryKeyPrefixesFor("deposit.created")).toEqual([["deposits"]]);
+  });
+
   it("invalidates nothing, and does not throw, for an unregistered event", async () => {
     const queryClient = new QueryClient();
     const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");

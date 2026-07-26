@@ -91,6 +91,23 @@ export const DEPOSIT_METHOD_LABELS: Record<DepositMethod, string> = {
   other: "Other",
 };
 
+/**
+ * `proof_type` — NOW independently re-verified as a genuine, closed enum
+ * (M4.3 Phase 4): `DepoController::store`'s own validator is
+ * `nullable|in:bank_receipt,whatsapp_confirmation`, defaulting to
+ * `'bank_receipt'` when omitted. Phase 2 deliberately left this as a plain
+ * `string` because only the READ side had been checked at the time; the
+ * CREATE validator is what actually closes the vocabulary, so it is
+ * narrowed now that it is genuinely justified, not sooner.
+ */
+export const DEPOSIT_PROOF_TYPES = ["bank_receipt", "whatsapp_confirmation"] as const;
+export type DepositProofType = (typeof DEPOSIT_PROOF_TYPES)[number];
+
+export const DEPOSIT_PROOF_TYPE_LABELS: Record<DepositProofType, string> = {
+  bank_receipt: "Bank receipt",
+  whatsapp_confirmation: "WhatsApp confirmation",
+};
+
 export type Deposit = {
   id: number;
   /** A real number — see the module docblock. Safe for `<MoneyAmount>`. */
@@ -125,14 +142,8 @@ export type Deposit = {
   validatedAt: string | null;
   /** Optional at creation. */
   bankName: string | null;
-  /**
-   * Defaults to `"bank_receipt"` server-side when omitted at creation, and
-   * the DB column is non-nullable — realistically always a real value, but
-   * kept as the plain string the wire sends rather than narrowed to a
-   * union (unlike `method`, this field's exact vocabulary was not
-   * independently re-verified as closed this phase).
-   */
-  proofType: string;
+  /** Narrowed to `DepositProofType` — see this type's own docblock above. */
+  proofType: DepositProofType;
 };
 
 /**

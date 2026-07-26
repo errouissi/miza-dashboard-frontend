@@ -101,6 +101,14 @@ const INVALIDATION_MAP: Readonly<Record<DomainEvent, readonly QueryKey[]>> =
      * (`DepositService::reject`).
      */
     "deposit.rejected": [["deposits"]],
+    /**
+     * Creating a deposit only ever adds a new `pending` row — same
+     * reasoning `cheque.created` already established. The legacy
+     * rapped+cash-method side effect (`currentAdmin->debt`) touches
+     * `User.debt`, a column no Network list renders (re-verified from
+     * source this phase, `DepoController::store`).
+     */
+    "deposit.created": [["deposits"]],
   });
 
 /** The prefixes a given event invalidates, or an empty list for an unregistered one. */

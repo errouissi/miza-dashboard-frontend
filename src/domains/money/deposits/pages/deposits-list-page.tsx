@@ -17,7 +17,7 @@ import {
 import { Button } from "@/shared/components/ui/button";
 import { DepositAgentFilter } from "../components/deposit-agent-filter";
 import { useDepositsQuery } from "../queries/deposits-queries";
-import { depositDetailPath } from "../routes";
+import { DEPOSIT_NEW_PATH, depositDetailPath } from "../routes";
 import {
   DEPOSIT_LIST_DEFAULTS,
   DEPOSIT_METHODS,
@@ -66,6 +66,10 @@ import {
  * Cheques' own list page got when its detail page landed. Gated on nothing
  * beyond this page's own `view-depos`, mirroring the detail route's own
  * permission exactly (the SAME check, `GET /admin/depos/{depo}`'s own guard).
+ *
+ * PHASE 4 ADDS ONE PAGE-LEVEL ACTION — a "Create Deposit" button, gated on
+ * `create-depo`, navigating to `DEPOSIT_NEW_PATH` — the same retrofit
+ * Cheques' own list page got at its Phase 3A.
  */
 
 const SELECT_CLASS =
@@ -111,6 +115,8 @@ export function DepositsListPage() {
 
   const { has } = usePermission();
   const canReadAgents = has(PERMISSIONS.VIEW_AGENTS);
+  /** `create-depo` gates `POST /admin/depos` and this route's own page (Phase 4). */
+  const canCreateDeposit = has(PERMISSIONS.CREATE_DEPOSIT);
 
   const patchParams = (patch: Partial<DepositListParams>) => {
     const next = { ...params, ...patch };
@@ -202,6 +208,11 @@ export function DepositsListPage() {
   return (
     <ListPage
       title="Deposits"
+      action={
+        canCreateDeposit ? (
+          <Button onClick={() => navigate(DEPOSIT_NEW_PATH)}>Create Deposit</Button>
+        ) : null
+      }
       filters={
         <FilterBar>
           <FilterField label="Search" htmlFor="depositSearch">

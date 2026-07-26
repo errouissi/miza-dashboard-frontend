@@ -1,12 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { STALE_TIMES, invalidateForEvent } from "@/infrastructure/query";
 import {
+  createDeposit,
+  fetchAgentCash,
   fetchDeposits,
   fetchDepositById,
+  fetchGrattageOutstanding,
   validateDeposit,
   rejectDeposit,
 } from "../api/deposits-api";
 import type { DepositListParams } from "../model/deposit";
+import type { CreateDepositFormValues } from "../model/create-deposit";
 import { depositsKeys } from "./keys";
 
 /**
@@ -81,5 +85,69 @@ export function useRejectDepositMutation() {
     mutationFn: ({ id, rejectReason }: { id: number; rejectReason: string }) =>
       rejectDeposit(id, rejectReason),
     onSuccess: () => invalidateForEvent(queryClient, "deposit.rejected"),
+  });
+}
+
+/**
+ * Create (M4.3 Phase 4) — `POST /admin/depos`. Invalidates via
+ * `"deposit.created"` — `["deposits"]` ONLY, same reasoning
+ * `useCreateChequeMutation` already established for its own creation event:
+ * a new deposit only ever adds a `pending` row. The legacy rapped+cash-method
+ * side effect (`DepoController::store` adds to `currentAdmin->debt`) touches
+ * `User.debt`, a column no Network list renders — re-verified from source
+ * this phase, not assumed by analogy.
+ *
+ * No optimistic update, no automatic retry (FTA D-7, §11) — same
+ * financial-workflow discipline as every other mutation in this domain.
+ */
+export function useCreateDepositMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (values: CreateDepositFormValues) => createDeposit(values),
+    onSuccess: () => invalidateForEvent(queryClient, "deposit.created"),
+  });
+}
+
+/**
+ * `GET /admin/agents/{id}` (M4.3 Phase 4) — Create Deposit's own read of the
+ * agent's current `cash`, used to system-populate Amount on the `rapped`
+ * branch. `LIVE` tier: this value can change between page load and submit
+ * (another admin recording cheques/deposits against the same agent), and
+ * `refetchOnWindowFocus` keeps it reasonably fresh — though, per the API
+ * module's own docblock, this read is a UX hint only; the backend
+ * re-verifies at submission time regardless.
+ *
+ * `enabled` gates on BOTH a chosen agent (`agentId` non-empty) AND
+ * `type === "rapped"` — the caller does not fire this query at all while
+ * viewing the grattage branch.
+ */
+export function useAgentCashQuery(agentId: string, options: { enabled?: boolean } = {}) {
+  return useQuery({
+    queryKey: depositsKeys.agentCash(agentId),
+    queryFn: () => fetchAgentCash(agentId),
+    staleTime: STALE_TIMES.LIVE,
+    refetchOnWindowFocus: true,
+    enabled: options.enabled ?? true,
+  });
+}
+
+/**
+ * `GET /admin/agents/{id}/grattage-outstanding` (M4.3 Phase 4) — Create
+ * Deposit's own read used to system-populate Amount on the `grattage`
+ * branch. Same `LIVE` tier and same "UX hint only" caveat as
+ * `useAgentCashQuery` — see `fetchGrattageOutstanding`'s own docblock.
+ *
+ * `enabled` gates on a chosen agent AND `type === "grattage"`.
+ */
+export function useGrattageOutstandingQuery(
+  agentId: string,
+  options: { enabled?: boolean } = {},
+) {
+  return useQuery({
+    queryKey: depositsKeys.grattageOutstanding(agentId),
+    queryFn: () => fetchGrattageOutstanding(agentId),
+    staleTime: STALE_TIMES.LIVE,
+    refetchOnWindowFocus: true,
+    enabled: options.enabled ?? true,
   });
 }

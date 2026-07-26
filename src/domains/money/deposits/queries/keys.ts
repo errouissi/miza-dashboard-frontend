@@ -12,4 +12,13 @@ export const depositsKeys = {
   list: (params: DepositListParams) => [...depositsKeys.lists(), params] as const,
   details: () => [...depositsKeys.all, "detail"] as const,
   detail: (id: number) => [...depositsKeys.details(), id] as const,
+  /**
+   * `fetchAgentCash`/`fetchGrattageOutstanding` (M4.3 Phase 4) — Create
+   * Deposit's own reads, keyed by agent id. Kept under `depositsKeys`, NOT
+   * a Network-domain key, per the confirmed decision to keep both reads
+   * inside the Deposits domain (no cross-domain query-key coupling either).
+   */
+  agentCash: (agentId: string) => [...depositsKeys.all, "agentCash", agentId] as const,
+  grattageOutstanding: (agentId: string) =>
+    [...depositsKeys.all, "grattageOutstanding", agentId] as const,
 };

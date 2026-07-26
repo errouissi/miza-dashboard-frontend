@@ -4,9 +4,11 @@ import {
   type Deposit,
   type DepositListParams,
   type DepositMethod,
+  type DepositProofType,
   type DepositStatus,
   type DepositType,
 } from "../model/deposit";
+import type { CreateDepositFormValues } from "../model/create-deposit";
 
 /**
  * The Deposits endpoints and their mapper (FTA §7, D-6). Phase 1 —
@@ -78,7 +80,7 @@ type DepositRow = {
   /** Same non-ISO `Y-m-d H:i` shape as `date`. Populates for validated OR rejected — see `model/deposit.ts`. */
   validated_at: string | null;
   bank_name: string | null;
-  proof_type: string;
+  proof_type: DepositProofType;
 };
 
 type DepositsEnvelope = LaravelPageEnvelope<DepositRow>;
@@ -198,4 +200,124 @@ export async function validateDeposit(id: number): Promise<void> {
  */
 export async function rejectDeposit(id: number, rejectReason: string): Promise<void> {
   await httpClient.post(`/admin/depos/${id}/reject`, { reject_reason: rejectReason });
+}
+
+/**
+ * Create (M4.3 Phase 4) — `POST /admin/depos`. FIELDS RE-VERIFIED FRESH FROM
+ * `DepoController::store`'s OWN VALIDATOR this phase (see
+ * `model/create-deposit.ts`'s own docblock for the exact rule list).
+ *
+ * `store()`'s success envelope is FLAT — `{"message": "Deposit created",
+ * "data": new DepoResource($depo)}` — the SAME shape as `show()`'s `data`,
+ * unlike Cheques' own `store()` (which nests `{cheque, photo_url}`). No
+ * merge step is needed here the way `createCheque` needs one; `toDeposit()`
+ * is called directly against `data.data`.
+ *
+ * `amount` IS SENT VERBATIM, EXACTLY AS THE PAGE RESOLVED IT — the caller
+ * (`CreateDepositPage`) is what guarantees this already matches the agent's
+ * `cash` (rapped) or outstanding grattage total (grattage); this function
+ * does not re-derive or re-validate that match.
+ *
+ * TWO DISTINCT FAILURE ENVELOPES exist past the point validation succeeds
+ * (verified from source): the rapped cash-mismatch check and both grattage
+ * reconciliation exceptions all return `{"error": "..."}` at 422 — NOT
+ * Laravel's standard `{message, errors}` shape. `normalizeError` already
+ * has a documented fallback for exactly this (`DepoController`/
+ * `DebtPaymentController` never emit `message` on failure, only `error`),
+ * so this stays a plain re-throw — no special handling needed here. The
+ * PAGE is what turns a `kind !== "validation"` 422 into its own copy,
+ * never this response's raw `error` text (FTA §17).
+ */
+function buildCreateDepositFormData(values: CreateDepositFormValues): FormData {
+  const formData = new FormData();
+  formData.append("agent_id", values.agentId);
+  formData.append("deposit_method", values.depositMethod);
+  formData.append("amount", values.amount.trim());
+  formData.append("type", values.type);
+  formData.append("proof_type", values.proofType);
+  // zod's superRefine already guarantees this is non-null by the time
+  // handleSubmit's onSubmit callback runs.
+  formData.append("proof_image", values.photo as File);
+  if (values.receiptNumber.trim()) {
+    formData.append("receipt_number", values.receiptNumber.trim());
+  }
+  if (values.bankName.trim()) {
+    formData.append("bank_name", values.bankName.trim());
+  }
+  return formData;
+}
+
+/** `store()`'s envelope — flat, matching `show()`'s `data` shape verbatim. */
+type CreateDepositEnvelope = {
+  message: string;
+  data: DepositRow;
+};
+
+export async function createDeposit(values: CreateDepositFormValues): Promise<Deposit> {
+  const { data } = await httpClient.post<CreateDepositEnvelope>(
+    "/admin/depos",
+    buildCreateDepositFormData(values),
+  );
+  return toDeposit(data.data);
+}
+
+/**
+ * `GET /admin/agents/{id}` (`view-agents`) — re-verified fresh from source
+ * this phase (`AgentController::show`): `$agent->toArray()`, `$hidden` is
+ * only `['password']`, so `cash` (a `decimal:2`-cast STRING, same
+ * convention as `Cheque.amount`) genuinely serializes. Envelope is
+ * `{success, role, agent: {...}}` — NOT the `{data: {...}}` wrapping
+ * `DepoResource` uses; this is a raw `toArray()` dump, a different
+ * controller entirely.
+ *
+ * A UX HINT ONLY, never authoritative — `DepoController::store`'s own
+ * rapped-branch cash-match check (`bccomp($validated['amount'],
+ * $agent->cash, 2)`) is what actually enforces the match, reading the
+ * agent's cash fresh at submission time. This read can go stale between
+ * the operator opening the form and submitting it; that is fine, because
+ * nothing here is trusted as a guarantee.
+ */
+type AgentCashEnvelope = {
+  success: boolean;
+  agent: { cash: string };
+};
+
+export async function fetchAgentCash(agentId: string): Promise<string> {
+  const { data } = await httpClient.get<AgentCashEnvelope>(`/admin/agents/${agentId}`);
+  return data.agent.cash;
+}
+
+/**
+ * `GET /admin/agents/{id}/grattage-outstanding` (`access-dashboard`) —
+ * re-verified fresh from source this phase (`AgentController
+ * ::grattageOutstanding`, Phase 5.10 Commit 5): `summary.required_total` is
+ * a `bcadd`-accumulated STRING (e.g. `"0.00"`), never a float.
+ *
+ * SAME "UX HINT ONLY" CAVEAT AS `fetchAgentCash` — the backend's own
+ * `DepositService::createGrattageReconciliation` recomputes the real
+ * outstanding total UNDER LOCK at submission time (Phase 5.10 Commit 6);
+ * this unlocked read can be stale between load and submit, and the
+ * `DepositReconciliationAmountMismatch`/`NoOutstandingObligation`
+ * exceptions exist precisely to catch that gap server-side.
+ */
+type GrattageOutstandingEnvelope = {
+  success: boolean;
+  data: {
+    summary: {
+      required_total: string;
+      invoice_count: number;
+    };
+  };
+};
+
+export async function fetchGrattageOutstanding(
+  agentId: string,
+): Promise<{ requiredTotal: string; invoiceCount: number }> {
+  const { data } = await httpClient.get<GrattageOutstandingEnvelope>(
+    `/admin/agents/${agentId}/grattage-outstanding`,
+  );
+  return {
+    requiredTotal: data.data.summary.required_total,
+    invoiceCount: data.data.summary.invoice_count,
+  };
 }
