@@ -116,6 +116,26 @@ const INVALIDATION_MAP: Readonly<Record<DomainEvent, readonly QueryKey[]>> =
      * Debt Payments' own key space needs busting.
      */
     "debt-payment.created": [["debt-payments"]],
+    /**
+     * Agent Stock Returns (roadmap M5, Phase 1 — the first Stock resource).
+     * A draft touches no balance and no stock row — materialization only
+     * happens at validate time. `["agent-stock-returns"]` only.
+     */
+    "agent-stock-return.created": [["agent-stock-returns"]],
+    /**
+     * Any of the three line mutations (add/update/remove) recomputes the
+     * parent's `montant` — the same key space, no cross-domain effect.
+     */
+    "agent-stock-return.line-changed": [["agent-stock-returns"]],
+    /**
+     * Validating materializes stock movements (commercial debited, manager
+     * credited) — but NO frontend query anywhere reads a stock quantity
+     * yet (no `StockController`, verified from source this phase, and no
+     * consumer in this codebase). `["agent-stock-returns"]` only; revisit
+     * once a Stock ledger view or the Grattage restock-gate hook (both M6)
+     * exist.
+     */
+    "agent-stock-return.validated": [["agent-stock-returns"]],
   });
 
 /** The prefixes a given event invalidates, or an empty list for an unregistered one. */

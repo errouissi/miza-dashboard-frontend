@@ -48,3 +48,19 @@ export type ProductListParams = {
 
 /** `value` is `integer|min:0` server-side — zero is permitted, decimals are not. */
 export const MIN_VALUE = 0;
+
+/**
+ * A product, reduced to what a line-item picker needs (roadmap M5, Phase
+ * 1) — the first cross-domain caller of Products' own public surface.
+ * Sliced from the same unfiltered `fetchProducts()` read every reference
+ * screen already uses; no new endpoint. Every `product_id` FormRequest rule
+ * across all four Stock movement types (`exists:products,id`, verified
+ * fresh from source) accepts any product regardless of `operator` — so this
+ * picker deliberately does not filter by operator either, mirroring the
+ * backend's own unrestricted `exists` rule rather than inventing a
+ * narrower picker the validator does not ask for.
+ */
+export type ProductOption = {
+  id: number;
+  name: string;
+};

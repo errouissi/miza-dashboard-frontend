@@ -3,6 +3,7 @@ import { STALE_TIMES } from "@/infrastructure/query";
 import {
   createProduct,
   deleteProduct,
+  fetchProductOptions,
   fetchProducts,
   updateProduct,
   type ProductInput,
@@ -20,6 +21,23 @@ export function useProductsQuery(params: ProductListParams) {
   return useQuery({
     queryKey: productsKeys.list(params),
     queryFn: () => fetchProducts(params),
+    staleTime: STALE_TIMES.STATIC,
+  });
+}
+
+/**
+ * The product set for a line-item picker (roadmap M5, Phase 1) — same
+ * `STATIC` tier as the list itself. No `enabled` gate: `access-dashboard`
+ * (this endpoint's own permission) is the same broad gate every reference
+ * screen already sits behind — the same disclosed-gap posture
+ * `useManagerOptionsQuery` already carries (a session holding a Stock
+ * permission without `access-dashboard` would 403 on this picker
+ * specifically), not re-derived as a new finding.
+ */
+export function useProductOptionsQuery() {
+  return useQuery({
+    queryKey: productsKeys.options(),
+    queryFn: fetchProductOptions,
     staleTime: STALE_TIMES.STATIC,
   });
 }

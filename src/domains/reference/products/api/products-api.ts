@@ -1,5 +1,10 @@
 import { httpClient } from "@/infrastructure/http";
-import type { Operator, Product, ProductListParams } from "../model/product";
+import type {
+  Operator,
+  Product,
+  ProductListParams,
+  ProductOption,
+} from "../model/product";
 
 /**
  * The Products endpoints and their mappers (FTA §7, D-6).
@@ -76,4 +81,14 @@ export async function updateProduct(id: number, input: ProductInput): Promise<Pr
 
 export async function deleteProduct(id: number): Promise<void> {
   await httpClient.delete(`/admin/products/${id}`);
+}
+
+/**
+ * The product set for a line-item picker (roadmap M5, Phase 1) — reuses
+ * `fetchProducts` UNFILTERED (no `operator`), the same unpaginated array
+ * every reference screen already reads. No new endpoint, no new envelope.
+ */
+export async function fetchProductOptions(): Promise<ProductOption[]> {
+  const products = await fetchProducts({});
+  return products.map(({ id, name }) => ({ id, name }));
 }

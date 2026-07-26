@@ -50,6 +50,24 @@ describe("invalidation map", () => {
     expect(queryKeyPrefixesFor("debt-payment.created")).toEqual([["debt-payments"]]);
   });
 
+  it("registers agent-stock-return.created — Agent Stock Returns' own key space only", () => {
+    expect(queryKeyPrefixesFor("agent-stock-return.created")).toEqual([
+      ["agent-stock-returns"],
+    ]);
+  });
+
+  it("registers agent-stock-return.line-changed — Agent Stock Returns' own key space only", () => {
+    expect(queryKeyPrefixesFor("agent-stock-return.line-changed")).toEqual([
+      ["agent-stock-returns"],
+    ]);
+  });
+
+  it("registers agent-stock-return.validated — no cross-domain prefix yet (no stock-read consumer exists)", () => {
+    expect(queryKeyPrefixesFor("agent-stock-return.validated")).toEqual([
+      ["agent-stock-returns"],
+    ]);
+  });
+
   it("invalidates nothing, and does not throw, for an unregistered event", async () => {
     const queryClient = new QueryClient();
     const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");

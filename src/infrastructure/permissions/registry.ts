@@ -188,6 +188,37 @@ export const PERMISSIONS = Object.freeze({
    * registered for either, since neither route exists to gate.
    */
   DEBT_PAYMENTS: "debt_cash",
+
+  /**
+   * Agent Stock Returns (roadmap M5, Phase 1 — the first Stock resource) —
+   * eight permissions, verified fresh from source
+   * (`App\Authorization\AgentStockReturnPermissions::ALL`). Gated in
+   * FormRequests (`authorize()`), NOT route middleware — a genuine
+   * departure from every prior domain's `->middleware('permission:...')`
+   * convention, confirmed by reading `routes/api.php`'s own
+   * `agent-stock-returns` group (no middleware calls at all there).
+   *
+   * `VIEW_AGENT_STOCK_RETURN` IS DELIBERATELY SINGULAR
+   * (`view-agent-stock-return`) — copied verbatim from the backend
+   * constant, not normalized to match its own sibling strings (which are
+   * all singular `agent-stock-return` too, so this one is actually
+   * consistent internally; it is Cheques'/Deposits' OWN plural resource
+   * names, e.g. `view-cheques`, that are the outlier across this
+   * registry). A test pins the exact string.
+   *
+   * `VALIDATE_AGENT_STOCK_RETURN` is excluded from the backend's own
+   * `ADMIN_GRANTS` (super-admin only — verified from source), the same
+   * posture Cheques'/Deposits'/Bons' own validate/approve permissions
+   * already have.
+   */
+  VIEW_AGENT_STOCK_RETURN: "view-agent-stock-return",
+  CREATE_AGENT_STOCK_RETURN: "create-agent-stock-return",
+  UPDATE_AGENT_STOCK_RETURN: "update-agent-stock-return",
+  DELETE_AGENT_STOCK_RETURN: "delete-agent-stock-return",
+  VALIDATE_AGENT_STOCK_RETURN: "validate-agent-stock-return",
+  CREATE_AGENT_STOCK_RETURN_LINE: "create-agent-stock-return-line",
+  UPDATE_AGENT_STOCK_RETURN_LINE: "update-agent-stock-return-line",
+  DELETE_AGENT_STOCK_RETURN_LINE: "delete-agent-stock-return-line",
 } as const satisfies Record<string, string>);
 
 export type PermissionName = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

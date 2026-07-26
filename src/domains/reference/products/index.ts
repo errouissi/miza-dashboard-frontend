@@ -1,6 +1,16 @@
 export { PRODUCTS_PATH, productsRoutes } from "./routes";
 
-// api/, model/, queries/, components/ and the page stay internal. The app layer
-// needs the route contributions and the path (for the nav entry) — nothing else
-// (FTA §4). Nothing here is consumed by a sibling domain: Products has no
-// relation to resolve, so it neither imports from nor exports to Villes/Secteurs.
+/**
+ * The product set, for line-item pickers in sibling domains (FTA §4 — a
+ * domain may read another's public surface with a documented coupling).
+ *
+ * Added now, against the real caller (roadmap M5 Phase 1's
+ * `LineItemsEditor`, consumed by Agent Stock Returns) — exactly as
+ * `useManagerOptionsQuery`'s own export was added at M3.3 against its own
+ * real caller, not ahead of one.
+ */
+export { useProductOptionsQuery } from "./queries/products-queries";
+export type { ProductOption } from "./model/product";
+
+// api/, the list query, mutations, components and the page stay internal.
+// Siblings get the options picker surface above — nothing else.

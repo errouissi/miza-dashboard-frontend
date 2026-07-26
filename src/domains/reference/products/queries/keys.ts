@@ -13,4 +13,6 @@ export const productsKeys = {
   all: ["products"] as const,
   lists: () => [...productsKeys.all, "list"] as const,
   list: (params: ProductListParams) => [...productsKeys.lists(), params] as const,
+  /** The line-item picker read (roadmap M5, Phase 1) — its own scope under `["products"]`. */
+  options: () => [...productsKeys.all, "options"] as const,
 };

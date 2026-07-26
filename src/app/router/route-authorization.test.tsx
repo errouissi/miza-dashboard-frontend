@@ -30,6 +30,11 @@ import {
   DEBT_PAYMENTS_PATH,
   DEBT_PAYMENTS_NEW_PATH,
 } from "@/domains/money/debt-payments";
+import {
+  AGENT_STOCK_RETURNS_PATH,
+  AGENT_STOCK_RETURN_NEW_PATH,
+  agentStockReturnDetailPath,
+} from "@/domains/stock/agent-stock-returns";
 import { routes } from "./routes";
 
 /**
@@ -255,6 +260,14 @@ describe("every contributed domain route is guarded", () => {
   // `permission:debt_cash` check, unlike Cheques'/Deposits' own split
   // view/create vocabularies. No detail path exists to test — the backend
   // route is commented out.
+  // AGENT_STOCK_RETURNS_PATH/AGENT_STOCK_RETURN_NEW_PATH/
+  // `agentStockReturnDetailPath(1)` (roadmap M5, Phase 1 — the first Stock
+  // resource) are guarded by `view-agent-stock-return`/
+  // `create-agent-stock-return`/`view-agent-stock-return` respectively —
+  // verified fresh from source: the backend gates these in FormRequests
+  // (`authorize()`), not route middleware, a genuine departure from every
+  // domain above, but this frontend guard still exercises the same
+  // permission strings regardless of which layer enforces them server-side.
   // `unpermittedSession` holds nothing at all, so it exercises every gate
   // identically.
   const domainPaths = [
@@ -275,6 +288,9 @@ describe("every contributed domain route is guarded", () => {
     depositDetailPath(1),
     DEBT_PAYMENTS_PATH,
     DEBT_PAYMENTS_NEW_PATH,
+    AGENT_STOCK_RETURNS_PATH,
+    AGENT_STOCK_RETURN_NEW_PATH,
+    agentStockReturnDetailPath(1),
   ];
 
   it.each(domainPaths)("refuses %s without the permission", async (path) => {

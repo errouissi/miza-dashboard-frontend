@@ -11,6 +11,7 @@ import {
   Clock,
   Landmark,
   Wallet,
+  Undo2,
 } from "lucide-react";
 import { PERMISSIONS, type PermissionResolver } from "@/infrastructure/permissions";
 import { ADMINS_PATH } from "@/domains/network/admins";
@@ -20,6 +21,7 @@ import { CLIENTS_PATH } from "@/domains/network/clients";
 import { CHEQUES_PATH, CHEQUES_PENDING_PATH } from "@/domains/money/cheques";
 import { DEPOSITS_PATH } from "@/domains/money/deposits";
 import { DEBT_PAYMENTS_PATH } from "@/domains/money/debt-payments";
+import { AGENT_STOCK_RETURNS_PATH } from "@/domains/stock/agent-stock-returns";
 import { PRODUCTS_PATH } from "@/domains/reference/products";
 import { SECTEURS_PATH } from "@/domains/reference/secteurs";
 import { VILLES_PATH } from "@/domains/reference/villes";
@@ -170,6 +172,23 @@ export const NAV_TREE: NavGroup[] = [
         // approval queue here, just list + submit.
         permission: PERMISSIONS.DEBT_PAYMENTS,
         icon: Wallet,
+      },
+    ],
+  },
+  {
+    label: "Stock",
+    items: [
+      {
+        label: "Agent Stock Returns",
+        to: AGENT_STOCK_RETURNS_PATH,
+        // `view-agent-stock-return` (roadmap M5, Phase 1) — its OWN
+        // permission, mirroring the route. The other seven Agent Stock
+        // Return permissions gate actions (create/update/delete/validate,
+        // plus the three line permissions) inside the page, not visibility
+        // of the list — same convention every prior domain's own nav entry
+        // already follows.
+        permission: PERMISSIONS.VIEW_AGENT_STOCK_RETURN,
+        icon: Undo2,
       },
     ],
   },
