@@ -46,6 +46,29 @@ export function useDepositQuery(id: number, options: { enabled?: boolean } = {})
 }
 
 /**
+ * The freshness-rule read (M4 · G4 closure) — ITS OWN KEY
+ * (`depositsKeys.freshness(id)`), deliberately NOT the same key as
+ * `useDepositQuery`. See `chequesKeys.freshness`'s own docblock (and
+ * `useChequeFreshnessQuery`'s) for the reasoning, confirmed empirically
+ * during implementation: sharing the detail key would mean a TRANSIENT
+ * failure of this pre-confirm check flips the host page's own
+ * `useDepositQuery` into an error state too. `enabled: false` — this
+ * observer never fetches on its own; it exists to be driven by
+ * `useFreshConfirm`'s explicit `refetch()` call the instant Validate/Reject
+ * opens, which bypasses `staleTime` regardless of tier. `staleTime:
+ * CRITICAL` still documents the intent (this read is never
+ * acceptable-if-recent).
+ */
+export function useDepositFreshnessQuery(id: number) {
+  return useQuery({
+    queryKey: depositsKeys.freshness(id),
+    queryFn: () => fetchDepositById(id),
+    staleTime: STALE_TIMES.CRITICAL,
+    enabled: false,
+  });
+}
+
+/**
  * Validate (M4.3 Phase 3) — `POST /admin/depos/{id}/validate`.
  *
  * Invalidates via `"deposit.validated"` — `["deposits"]` ONLY. Re-verified

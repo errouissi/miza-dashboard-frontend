@@ -75,6 +75,36 @@ function showHandler(id: number, envelope: ReturnType<typeof showEnvelope>) {
   return http.get(`${API}/admin/cheques/${id}`, () => HttpResponse.json(envelope));
 }
 
+/**
+ * Returns a DIFFERENT envelope on each successive GET — the page's own
+ * initial load is the first call; a freshness-rule refetch (M4 · G4
+ * closure), fired the instant Reject/Annuler opens, is the second.
+ */
+function sequentialShowHandler(id: number, envelopes: ReturnType<typeof showEnvelope>[]) {
+  let call = 0;
+  return http.get(`${API}/admin/cheques/${id}`, () => {
+    const envelope = envelopes[Math.min(call, envelopes.length - 1)];
+    call += 1;
+    return HttpResponse.json(envelope);
+  });
+}
+
+/** The second (and every later) GET fails — simulates the freshness refetch itself failing. */
+function failingAfterFirstShowHandler(
+  id: number,
+  firstEnvelope: ReturnType<typeof showEnvelope>,
+) {
+  let call = 0;
+  return http.get(`${API}/admin/cheques/${id}`, () => {
+    call += 1;
+    if (call === 1) return HttpResponse.json(firstEnvelope);
+    return HttpResponse.json(
+      { success: false, message: "Erreur serveur" },
+      { status: 500 },
+    );
+  });
+}
+
 function renderPage(initialPath: string, queryClient: QueryClient = createQueryClient()) {
   const router = createMemoryRouter(
     [
@@ -363,7 +393,16 @@ describe("Approve — allocation split", () => {
 
   async function openApproveDialog() {
     fireEvent.click(await screen.findByRole("button", { name: "Approve" }));
-    return screen.findByRole("dialog");
+    const dialog = await screen.findByRole("dialog");
+    // Wait for the freshness-rule check (M4 · G4 closure) to settle before
+    // the caller starts asserting on/interacting with the confirm button —
+    // otherwise a real, if fast, GET round trip via MSW races every test
+    // that immediately reads confirm's enabled/disabled state. From here
+    // on, `confirmDisabled` reflects only this dialog's own sum-match rule.
+    await waitFor(() =>
+      expect(within(dialog).queryByText("Checking for changes…")).not.toBeInTheDocument(),
+    );
+    return dialog;
   }
 
   it("shows the cheque amount read-only, plus Rapped and Grattage inputs", async () => {
@@ -524,7 +563,9 @@ describe("Approve — allocation split", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Approve" }));
     const dialog = await screen.findByRole("dialog");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Approve" }));
+    const confirmButton = within(dialog).getByRole("button", { name: "Approve" });
+    await waitFor(() => expect(confirmButton).toBeEnabled());
+    fireEvent.click(confirmButton);
 
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     // Not the "Cancel cheque" button — this session holds only
@@ -548,7 +589,9 @@ describe("Approve — allocation split", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Approve" }));
     const dialog = await screen.findByRole("dialog");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Approve" }));
+    const confirmButton = within(dialog).getByRole("button", { name: "Approve" });
+    await waitFor(() => expect(confirmButton).toBeEnabled());
+    fireEvent.click(confirmButton);
 
     expect(await within(dialog).findByRole("alert")).toHaveTextContent(
       /could not be approved/i,
@@ -569,7 +612,9 @@ describe("Approve — allocation split", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Approve" }));
     const dialog = await screen.findByRole("dialog");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Approve" }));
+    const confirmButton = within(dialog).getByRole("button", { name: "Approve" });
+    await waitFor(() => expect(confirmButton).toBeEnabled());
+    fireEvent.click(confirmButton);
 
     await waitFor(() =>
       expect(queryClient.getQueryState(["managers", "list", {}])?.isInvalidated).toBe(
@@ -580,6 +625,88 @@ describe("Approve — allocation split", () => {
       true,
     );
     expect(queryClient.getQueryState(["cheques", "list", {}])?.isInvalidated).toBe(true);
+  });
+});
+
+describe("Approve — freshness rule (M4 · G4 closure)", () => {
+  beforeEach(() => {
+    signInWith([PERMISSIONS.VIEW_CHEQUES, PERMISSIONS.APPROVE_CHEQUE]);
+  });
+
+  it("keeps confirm disabled while the freshness check is in flight", async () => {
+    let call = 0;
+    server.use(
+      http.get(`${API}/admin/cheques/1`, async () => {
+        call += 1;
+        if (call > 1) await delay(200);
+        return HttpResponse.json(showEnvelope({ id: 1, statute: "en_attente" }));
+      }),
+    );
+    renderPage("/money/cheques/1");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Approve" }));
+    const dialog = await screen.findByRole("dialog");
+
+    expect(within(dialog).getByRole("button", { name: "Approve" })).toBeDisabled();
+    expect(within(dialog).getByText("Checking for changes…")).toBeInTheDocument();
+  });
+
+  it("blocks confirm when the fresh read shows the cheque already processed", async () => {
+    server.use(
+      sequentialShowHandler(1, [
+        showEnvelope({ id: 1, statute: "en_attente" }),
+        showEnvelope({ id: 1, statute: "rejetee" }),
+      ]),
+    );
+    renderPage("/money/cheques/1");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Approve" }));
+    const dialog = await screen.findByRole("dialog");
+
+    expect(
+      await within(dialog).findByText(
+        "This cheque changed while you were reviewing it. Close and reopen to approve the current version.",
+      ),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Approve" })).toBeDisabled();
+  });
+
+  it("blocks confirm when the fresh read shows a DIFFERENT amount, even though status is unchanged — the seeded split would no longer sum correctly", async () => {
+    server.use(
+      sequentialShowHandler(1, [
+        showEnvelope({ id: 1, statute: "en_attente", amount: "1500.00" }),
+        showEnvelope({ id: 1, statute: "en_attente", amount: "1200.00" }),
+      ]),
+    );
+    renderPage("/money/cheques/1");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Approve" }));
+    const dialog = await screen.findByRole("dialog");
+
+    expect(
+      await within(dialog).findByText(
+        "This cheque changed while you were reviewing it. Close and reopen to approve the current version.",
+      ),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Approve" })).toBeDisabled();
+  });
+
+  it("blocks confirm and offers Retry when the freshness check itself fails", async () => {
+    server.use(
+      failingAfterFirstShowHandler(1, showEnvelope({ id: 1, statute: "en_attente" })),
+    );
+    renderPage("/money/cheques/1");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Approve" }));
+    const dialog = await screen.findByRole("dialog");
+
+    expect(
+      await within(dialog).findByText(
+        "This cheque's current status could not be verified.",
+      ),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Approve" })).toBeDisabled();
+    expect(within(dialog).getByRole("button", { name: "Retry" })).toBeInTheDocument();
   });
 });
 
@@ -599,7 +726,12 @@ describe("Reject", () => {
     fireEvent.change(within(dialog).getByLabelText("Reason"), {
       target: { value: "Illegible signature" },
     });
-    expect(within(dialog).getByRole("button", { name: "Reject" })).toBeEnabled();
+    // The freshness-rule check (M4 · G4 closure) also gates the confirm
+    // button — it must settle (a real, if fast, GET round trip via MSW)
+    // before the button reflects the reason-non-empty rule alone.
+    await waitFor(() =>
+      expect(within(dialog).getByRole("button", { name: "Reject" })).toBeEnabled(),
+    );
   });
 
   it("sends the entered reason as decision_reason", async () => {
@@ -615,7 +747,9 @@ describe("Reject", () => {
     fireEvent.change(within(dialog).getByLabelText("Reason"), {
       target: { value: "Illegible signature" },
     });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Reject" }));
+    const confirmButton = within(dialog).getByRole("button", { name: "Reject" });
+    await waitFor(() => expect(confirmButton).toBeEnabled());
+    fireEvent.click(confirmButton);
 
     await waitFor(() => expect(body).toEqual({ decision_reason: "Illegible signature" }));
   });
@@ -649,7 +783,9 @@ describe("Reject", () => {
     fireEvent.change(within(dialog).getByLabelText("Reason"), {
       target: { value: "Illegible signature" },
     });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Reject" }));
+    const confirmButton = within(dialog).getByRole("button", { name: "Reject" });
+    await waitFor(() => expect(confirmButton).toBeEnabled());
+    fireEvent.click(confirmButton);
 
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(await screen.findByText("Illegible signature")).toBeInTheDocument();
@@ -675,7 +811,9 @@ describe("Reject", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Reject" }));
     const dialog = await screen.findByRole("dialog");
     fireEvent.change(within(dialog).getByLabelText("Reason"), { target: { value: "x" } });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Reject" }));
+    const confirmButton = within(dialog).getByRole("button", { name: "Reject" });
+    await waitFor(() => expect(confirmButton).toBeEnabled());
+    fireEvent.click(confirmButton);
 
     expect(
       await within(dialog).findByText(
@@ -704,7 +842,9 @@ describe("Reject", () => {
     fireEvent.change(within(dialog).getByLabelText("Reason"), {
       target: { value: "Illegible signature" },
     });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Reject" }));
+    const confirmButton = within(dialog).getByRole("button", { name: "Reject" });
+    await waitFor(() => expect(confirmButton).toBeEnabled());
+    fireEvent.click(confirmButton);
 
     await waitFor(() =>
       expect(queryClient.getQueryState(["cheques", "list", {}])?.isInvalidated).toBe(
@@ -717,6 +857,54 @@ describe("Reject", () => {
     expect(queryClient.getQueryState(["commercials", "list", {}])?.isInvalidated).toBe(
       false,
     );
+  });
+});
+
+describe("Reject — freshness rule (M4 · G4 closure)", () => {
+  beforeEach(() => {
+    signInWith([PERMISSIONS.VIEW_CHEQUES, PERMISSIONS.REJECT_CHEQUE]);
+  });
+
+  it("blocks confirm and explains when the fresh read shows the cheque already processed", async () => {
+    server.use(
+      sequentialShowHandler(1, [
+        showEnvelope({ id: 1, statute: "en_attente" }),
+        showEnvelope({ id: 1, statute: "accepter" }),
+      ]),
+    );
+    renderPage("/money/cheques/1");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Reject" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("Reason"), {
+      target: { value: "Illegible signature" },
+    });
+
+    expect(
+      await within(dialog).findByText("This cheque has already been processed."),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Reject" })).toBeDisabled();
+  });
+
+  it("blocks confirm and offers Retry when the freshness check itself fails", async () => {
+    server.use(
+      failingAfterFirstShowHandler(1, showEnvelope({ id: 1, statute: "en_attente" })),
+    );
+    renderPage("/money/cheques/1");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Reject" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("Reason"), {
+      target: { value: "Illegible signature" },
+    });
+
+    expect(
+      await within(dialog).findByText(
+        "This cheque's current status could not be verified.",
+      ),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Reject" })).toBeDisabled();
+    expect(within(dialog).getByRole("button", { name: "Retry" })).toBeInTheDocument();
   });
 });
 
@@ -765,7 +953,9 @@ describe("Annuler (Cancel cheque)", () => {
     fireEvent.change(within(dialog).getByLabelText("Reason"), {
       target: { value: "Agent requested reversal" },
     });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel cheque" }));
+    const confirmButton = within(dialog).getByRole("button", { name: "Cancel cheque" });
+    await waitFor(() => expect(confirmButton).toBeEnabled());
+    fireEvent.click(confirmButton);
 
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(await screen.findByText("Agent requested reversal")).toBeInTheDocument();
@@ -797,7 +987,9 @@ describe("Annuler (Cancel cheque)", () => {
     fireEvent.change(within(dialog).getByLabelText("Reason"), {
       target: { value: "Agent requested reversal" },
     });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel cheque" }));
+    const confirmButton = within(dialog).getByRole("button", { name: "Cancel cheque" });
+    await waitFor(() => expect(confirmButton).toBeEnabled());
+    fireEvent.click(confirmButton);
 
     expect(await within(dialog).findByRole("alert")).toHaveTextContent(
       "This cheque could not be cancelled: the agent's balance no longer covers the amount to reverse.",
@@ -820,7 +1012,9 @@ describe("Annuler (Cancel cheque)", () => {
     fireEvent.change(within(dialog).getByLabelText("Reason"), {
       target: { value: "Agent requested reversal" },
     });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel cheque" }));
+    const confirmButton = within(dialog).getByRole("button", { name: "Cancel cheque" });
+    await waitFor(() => expect(confirmButton).toBeEnabled());
+    fireEvent.click(confirmButton);
 
     await waitFor(() =>
       expect(queryClient.getQueryState(["managers", "list", {}])?.isInvalidated).toBe(
@@ -830,5 +1024,53 @@ describe("Annuler (Cancel cheque)", () => {
     expect(queryClient.getQueryState(["commercials", "list", {}])?.isInvalidated).toBe(
       true,
     );
+  });
+});
+
+describe("Annuler — freshness rule (M4 · G4 closure)", () => {
+  beforeEach(() => {
+    signInWith([PERMISSIONS.VIEW_CHEQUES, PERMISSIONS.ANNULER_CHEQUE]);
+  });
+
+  it("blocks confirm and explains when the fresh read shows the cheque no longer approved", async () => {
+    server.use(
+      sequentialShowHandler(1, [
+        showEnvelope({ id: 1, statute: "accepter" }),
+        showEnvelope({ id: 1, statute: "rejetee" }),
+      ]),
+    );
+    renderPage("/money/cheques/1");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Cancel cheque" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("Reason"), {
+      target: { value: "Agent requested reversal" },
+    });
+
+    expect(
+      await within(dialog).findByText("This cheque is no longer approved."),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Cancel cheque" })).toBeDisabled();
+  });
+
+  it("blocks confirm and offers Retry when the freshness check itself fails", async () => {
+    server.use(
+      failingAfterFirstShowHandler(1, showEnvelope({ id: 1, statute: "accepter" })),
+    );
+    renderPage("/money/cheques/1");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Cancel cheque" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("Reason"), {
+      target: { value: "Agent requested reversal" },
+    });
+
+    expect(
+      await within(dialog).findByText(
+        "This cheque's current status could not be verified.",
+      ),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Cancel cheque" })).toBeDisabled();
+    expect(within(dialog).getByRole("button", { name: "Retry" })).toBeInTheDocument();
   });
 });

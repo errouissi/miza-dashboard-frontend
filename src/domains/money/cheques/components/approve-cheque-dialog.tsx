@@ -1,8 +1,13 @@
 import { useState } from "react";
 import { isAppError } from "@/infrastructure/errors";
+import { useFreshConfirm } from "@/shared/hooks";
 import { ConfirmActionDialog } from "@/shared/components/patterns/confirm-action-dialog";
+import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
-import { useApproveChequeMutation } from "../queries/cheques-queries";
+import {
+  useApproveChequeMutation,
+  useChequeFreshnessQuery,
+} from "../queries/cheques-queries";
 import type { Cheque, ChequeAllocationType } from "../model/cheque";
 
 /**
@@ -42,6 +47,23 @@ import type { Cheque, ChequeAllocationType } from "../model/cheque";
  * "sum must equal the cheque amount exactly" rules mirrored client-side so
  * an invalid split cannot even be submitted, not just rejected after a
  * round trip.
+ *
+ * FRESHNESS RULE (M4 · G4 closure, FTA §8) — THE ONE DIALOG WHERE STALENESS
+ * IS ABOUT MORE THAN STATUS: the split is SEEDED from `cheque.amount` the
+ * moment this dialog opens (100% rapped, matching the legacy default), and
+ * the backend's own rule requires the submitted sum to equal the cheque's
+ * amount EXACTLY. If the amount was corrected underneath the operator, the
+ * seeded split silently no longer sums to the real amount — exactly the
+ * scenario FTA §8 names verbatim ("someone else approved it; the amount
+ * was corrected"). `hasChanged` therefore checks BOTH `status` and
+ * `amount`, not status alone. On staleness, this dialog does NOT attempt a
+ * live re-seed in place — it blocks confirm and asks the operator to close
+ * and reopen, which naturally re-triggers the EXISTING re-seed-on-reopen
+ * mechanism below (`setSeededChequeId(undefined)`) against whatever the
+ * cheque now holds. `useChequeFreshnessQuery` uses its OWN cache key,
+ * deliberately distinct from `useChequeQuery`'s — see that hook's own
+ * docblock for why sharing the key would let a transient verification
+ * failure corrupt the host page's own display.
  */
 type ApproveChequeDialogProps = {
   /** Absent = closed. Present = confirm approving this cheque. */
@@ -81,6 +103,15 @@ export function ApproveChequeDialog({ cheque, onOpenChange }: ApproveChequeDialo
   const [seededChequeId, setSeededChequeId] = useState<number | undefined>(undefined);
   const approveMutation = useApproveChequeMutation();
 
+  const freshnessQuery = useChequeFreshnessQuery(cheque?.id ?? -1);
+  const freshness = useFreshConfirm({
+    open: cheque !== undefined,
+    current: cheque,
+    query: freshnessQuery,
+    hasChanged: (fresh, snapshot) =>
+      fresh.status !== "en_attente" || fresh.amount !== snapshot.amount,
+  });
+
   // Re-seeds whenever a DIFFERENT cheque opens. Defaults to the backend's
   // own legacy shape (100% rapped) so an operator who touches nothing gets
   // exactly the same outcome the old "no allocations" call used to produce.
@@ -105,18 +136,33 @@ export function ApproveChequeDialog({ cheque, onOpenChange }: ApproveChequeDialo
       : undefined;
 
   const onConfirm = () => {
-    if (!cheque || rappedCents === null || grattageCents === null || !sumMatches) return;
+    if (
+      !cheque ||
+      rappedCents === null ||
+      grattageCents === null ||
+      !sumMatches ||
+      freshness.blocked
+    )
+      return;
     approveMutation.mutate(
       { id: cheque.id, allocations: buildAllocations(rappedCents, grattageCents) },
       { onSuccess: () => onOpenChange(false) },
     );
   };
 
-  const errorMessage = isAppError(approveMutation.error)
-    ? approveMutation.error.kind === "permission"
-      ? "You do not have permission to approve this cheque."
-      : "This cheque could not be approved. It may already have been processed."
-    : undefined;
+  const freshnessMessage = freshness.isStale
+    ? "This cheque changed while you were reviewing it. Close and reopen to approve the current version."
+    : freshness.isUnavailable
+      ? "This cheque's current status could not be verified."
+      : undefined;
+
+  const errorMessage =
+    freshnessMessage ??
+    (isAppError(approveMutation.error)
+      ? approveMutation.error.kind === "permission"
+        ? "You do not have permission to approve this cheque."
+        : "This cheque could not be approved. It may already have been processed."
+      : undefined);
 
   return (
     <ConfirmActionDialog
@@ -146,8 +192,16 @@ export function ApproveChequeDialog({ cheque, onOpenChange }: ApproveChequeDialo
       isPending={approveMutation.isPending}
       errorMessage={errorMessage}
       variant="default"
-      confirmDisabled={!sumMatches}
+      confirmDisabled={!sumMatches || freshness.blocked}
     >
+      {freshness.isChecking ? (
+        <p className="text-muted-foreground text-sm">Checking for changes…</p>
+      ) : null}
+      {freshness.isUnavailable ? (
+        <Button type="button" variant="outline" size="sm" onClick={freshness.retry}>
+          Retry
+        </Button>
+      ) : null}
       {cheque ? (
         <>
           <div>

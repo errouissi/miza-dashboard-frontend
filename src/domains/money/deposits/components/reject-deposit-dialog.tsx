@@ -1,7 +1,12 @@
 import { useState } from "react";
 import { isAppError } from "@/infrastructure/errors";
+import { useFreshConfirm } from "@/shared/hooks";
 import { ConfirmActionDialog } from "@/shared/components/patterns/confirm-action-dialog";
-import { useRejectDepositMutation } from "../queries/deposits-queries";
+import { Button } from "@/shared/components/ui/button";
+import {
+  useDepositFreshnessQuery,
+  useRejectDepositMutation,
+} from "../queries/deposits-queries";
 import type { Deposit } from "../model/deposit";
 
 const REJECT_REASON_MIN_LENGTH = 10;
@@ -27,6 +32,16 @@ const REJECT_REASON_MAX_LENGTH = 1000;
  *
  * A server-side 422 on the same field still maps to `reason.error`, not a
  * generic banner — same as `RejectChequeDialog`.
+ *
+ * FRESHNESS RULE (M4 · G4 closure, FTA §8) — `useFreshConfirm` re-verifies
+ * this deposit's `status` the instant the dialog opens, via
+ * `useDepositFreshnessQuery` (the SAME query key `useDepositQuery` reads,
+ * so a fresh result also updates what `DepositDetailPage` itself shows).
+ * `confirmDisabled` composes `freshness.blocked` with this dialog's own
+ * `outOfBounds` reason-length check — either alone is enough to block.
+ * A failed verification (network/server) BLOCKS rather than allows, per
+ * explicit product decision: the whole point of this feature is to never
+ * act on unverified data.
  */
 type RejectDepositDialogProps = {
   /** Absent = closed. Present = confirm rejecting this deposit. */
@@ -38,6 +53,14 @@ export function RejectDepositDialog({ deposit, onOpenChange }: RejectDepositDial
   const [reason, setReason] = useState("");
   const rejectMutation = useRejectDepositMutation();
 
+  const freshnessQuery = useDepositFreshnessQuery(deposit?.id ?? -1);
+  const freshness = useFreshConfirm({
+    open: deposit !== undefined,
+    current: deposit,
+    query: freshnessQuery,
+    hasChanged: (fresh, snapshot) => fresh.status !== snapshot.status,
+  });
+
   const trimmedLength = reason.trim().length;
   const tooShort = trimmedLength > 0 && trimmedLength < REJECT_REASON_MIN_LENGTH;
   const tooLong = trimmedLength > REJECT_REASON_MAX_LENGTH;
@@ -45,7 +68,7 @@ export function RejectDepositDialog({ deposit, onOpenChange }: RejectDepositDial
     trimmedLength < REJECT_REASON_MIN_LENGTH || trimmedLength > REJECT_REASON_MAX_LENGTH;
 
   const onConfirm = () => {
-    if (!deposit || outOfBounds) return;
+    if (!deposit || outOfBounds || freshness.blocked) return;
     rejectMutation.mutate(
       { id: deposit.id, rejectReason: reason },
       { onSuccess: () => onOpenChange(false) },
@@ -56,12 +79,19 @@ export function RejectDepositDialog({ deposit, onOpenChange }: RejectDepositDial
     ? rejectMutation.error.fieldErrors?.reject_reason?.[0]
     : undefined;
 
+  const freshnessMessage = freshness.isStale
+    ? "This deposit has already been processed."
+    : freshness.isUnavailable
+      ? "This deposit's current status could not be verified."
+      : undefined;
+
   const errorMessage =
-    isAppError(rejectMutation.error) && !reasonError
+    freshnessMessage ??
+    (isAppError(rejectMutation.error) && !reasonError
       ? rejectMutation.error.kind === "permission"
         ? "You do not have permission to reject this deposit."
         : "This deposit could not be rejected. It may already have been processed."
-      : undefined;
+      : undefined);
 
   return (
     <ConfirmActionDialog
@@ -84,7 +114,7 @@ export function RejectDepositDialog({ deposit, onOpenChange }: RejectDepositDial
       onConfirm={onConfirm}
       isPending={rejectMutation.isPending}
       errorMessage={errorMessage}
-      confirmDisabled={outOfBounds}
+      confirmDisabled={outOfBounds || freshness.blocked}
       reason={{
         label: "Reason",
         value: reason,
@@ -97,7 +127,16 @@ export function RejectDepositDialog({ deposit, onOpenChange }: RejectDepositDial
               ? `Reason must be ${REJECT_REASON_MAX_LENGTH} characters or fewer.`
               : undefined),
       }}
-    />
+    >
+      {freshness.isChecking ? (
+        <p className="text-muted-foreground text-sm">Checking for changes…</p>
+      ) : null}
+      {freshness.isUnavailable ? (
+        <Button type="button" variant="outline" size="sm" onClick={freshness.retry}>
+          Retry
+        </Button>
+      ) : null}
+    </ConfirmActionDialog>
   );
 }
 

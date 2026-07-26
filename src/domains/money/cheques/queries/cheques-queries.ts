@@ -61,6 +61,43 @@ export function useChequeQuery(id: number, options: { enabled?: boolean } = {}) 
 }
 
 /**
+ * The freshness-rule read (M4 · G4 closure) — `useChequeQuery`'s own
+ * docblock named this exact need ahead of time.
+ *
+ * ITS OWN KEY (`chequesKeys.freshness(id)`), DELIBERATELY NOT
+ * `chequesKeys.detail(id)` — an earlier draft shared the detail key so a
+ * successful refetch would transparently refresh the host page's own
+ * display too, but that has a real bug: TanStack Query's error/success
+ * state is tracked per QUERY KEY, shared across every observer of it, so a
+ * TRANSIENT FAILURE of this pre-confirm check would flip `useChequeQuery`'s
+ * own result into an error state as well — the whole detail page would
+ * render "could not be loaded" over a dialog merely failing to re-verify.
+ * Confirmed empirically before this hook shipped. A distinct key isolates
+ * the check to whichever dialog is running it; the host page's own display
+ * is untouched by either outcome. It still sits under the `["cheques"]`
+ * prefix, so `cheque.approved`/`rejected`/`annuled` invalidations still
+ * reach it — harmless, since it is `enabled: false` and unobserved once its
+ * dialog closes.
+ *
+ * `staleTime: CRITICAL` documents the intent (this read must never be
+ * treated as acceptable-if-recent); `enabled: false` means this observer
+ * never fetches on its own — it exists to be driven by an explicit
+ * `refetch()` call from `useFreshConfirm` the instant a confirm dialog
+ * opens, which bypasses `staleTime` entirely regardless of the tier
+ * configured. Declaring `enabled: false` here is what keeps that
+ * deliberate; leaving it default-enabled would let this observer race an
+ * automatic "stale on mount" fetch of its own, on top of the explicit one.
+ */
+export function useChequeFreshnessQuery(id: number) {
+  return useQuery({
+    queryKey: chequesKeys.freshness(id),
+    queryFn: () => fetchChequeById(id),
+    staleTime: STALE_TIMES.CRITICAL,
+    enabled: false,
+  });
+}
+
+/**
  * The pending queue (M4.2 Phase 3B) — `GET /admin/cheques/pending`. Same
  * `LIVE` tier as the general list: multiple admins may act on any pending
  * cheque concurrently (FTA §8 names "pending cheques" explicitly under this

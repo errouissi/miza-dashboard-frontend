@@ -21,4 +21,17 @@ export const depositsKeys = {
   agentCash: (agentId: string) => [...depositsKeys.all, "agentCash", agentId] as const,
   grattageOutstanding: (agentId: string) =>
     [...depositsKeys.all, "grattageOutstanding", agentId] as const,
+  /**
+   * The freshness-rule read (M4 · G4 closure) — its OWN key, deliberately
+   * NOT the same key as `detail(id)`. See `chequesKeys.freshness`'s own
+   * docblock for why: TanStack Query's error/success state is per query
+   * key, shared across every observer of it, so reusing `detail(id)` would
+   * mean a transient failure of the pre-confirm freshness check flips the
+   * host page's own detail query into its error state too. A distinct key
+   * isolates the check to the dialog; it still sits under the
+   * `["deposits"]` prefix, so existing `deposit.validated`/`rejected`
+   * invalidations still reach it (harmless — `enabled: false`, unobserved
+   * once its dialog closes).
+   */
+  freshness: (id: number) => [...depositsKeys.detail(id), "freshness"] as const,
 };

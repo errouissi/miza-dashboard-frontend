@@ -81,6 +81,33 @@ function showHandler(id: number, envelope: ReturnType<typeof showEnvelope>) {
   return http.get(`${API}/admin/depos/${id}`, () => HttpResponse.json(envelope));
 }
 
+/**
+ * Returns a DIFFERENT envelope on each successive GET — the page's own
+ * initial load is the first call; a freshness-rule refetch (M4 · G4
+ * closure), fired the instant Validate/Reject opens, is the second.
+ */
+function sequentialShowHandler(id: number, envelopes: ReturnType<typeof showEnvelope>[]) {
+  let call = 0;
+  return http.get(`${API}/admin/depos/${id}`, () => {
+    const envelope = envelopes[Math.min(call, envelopes.length - 1)];
+    call += 1;
+    return HttpResponse.json(envelope);
+  });
+}
+
+/** The second (and every later) GET fails — simulates the freshness refetch itself failing. */
+function failingAfterFirstShowHandler(
+  id: number,
+  firstEnvelope: ReturnType<typeof showEnvelope>,
+) {
+  let call = 0;
+  return http.get(`${API}/admin/depos/${id}`, () => {
+    call += 1;
+    if (call === 1) return HttpResponse.json(firstEnvelope);
+    return HttpResponse.json({ error: "Erreur serveur" }, { status: 500 });
+  });
+}
+
 function renderPage(initialPath: string, queryClient: QueryClient = createQueryClient()) {
   const router = createMemoryRouter(
     [
@@ -414,7 +441,9 @@ describe("Validate", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Validate" }));
     const dialog = await screen.findByRole("dialog");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Validate" }));
+    const confirmButton = within(dialog).getByRole("button", { name: "Validate" });
+    await waitFor(() => expect(confirmButton).toBeEnabled());
+    fireEvent.click(confirmButton);
 
     await waitFor(() => expect(body).toBe(""));
   });
@@ -432,6 +461,7 @@ describe("Validate", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Validate" }));
     const dialog = await screen.findByRole("dialog");
     const confirmButton = within(dialog).getByRole("button", { name: "Validate" });
+    await waitFor(() => expect(confirmButton).toBeEnabled());
     fireEvent.click(confirmButton);
 
     expect(
@@ -462,7 +492,9 @@ describe("Validate", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Validate" }));
     const dialog = await screen.findByRole("dialog");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Validate" }));
+    const confirmButton = within(dialog).getByRole("button", { name: "Validate" });
+    await waitFor(() => expect(confirmButton).toBeEnabled());
+    fireEvent.click(confirmButton);
 
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(await screen.findAllByText("Validated")).not.toHaveLength(0);
@@ -479,7 +511,9 @@ describe("Validate", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Validate" }));
     const dialog = await screen.findByRole("dialog");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Validate" }));
+    const confirmButton = within(dialog).getByRole("button", { name: "Validate" });
+    await waitFor(() => expect(confirmButton).toBeEnabled());
+    fireEvent.click(confirmButton);
 
     expect(await within(dialog).findByRole("alert")).toHaveTextContent(
       /could not be validated/i,
@@ -500,7 +534,9 @@ describe("Validate", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Validate" }));
     const dialog = await screen.findByRole("dialog");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Validate" }));
+    const confirmButton = within(dialog).getByRole("button", { name: "Validate" });
+    await waitFor(() => expect(confirmButton).toBeEnabled());
+    fireEvent.click(confirmButton);
 
     await waitFor(() =>
       expect(queryClient.getQueryState(["deposits", "list", {}])?.isInvalidated).toBe(
@@ -513,6 +549,48 @@ describe("Validate", () => {
     expect(queryClient.getQueryState(["commercials", "list", {}])?.isInvalidated).toBe(
       false,
     );
+  });
+});
+
+describe("Validate — freshness rule (M4 · G4 closure)", () => {
+  beforeEach(() => {
+    signInWith([PERMISSIONS.VIEW_DEPOSITS, PERMISSIONS.VALIDATE_DEPOSIT]);
+  });
+
+  it("blocks confirm and explains when the fresh read shows the deposit already processed", async () => {
+    server.use(
+      sequentialShowHandler(1, [
+        showEnvelope({ id: 1, status: "pending" }),
+        showEnvelope({ id: 1, status: "rejected" }),
+      ]),
+    );
+    renderPage("/money/deposits/1");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Validate" }));
+    const dialog = await screen.findByRole("dialog");
+
+    expect(
+      await within(dialog).findByText("This deposit has already been processed."),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Validate" })).toBeDisabled();
+  });
+
+  it("blocks confirm and offers Retry when the freshness check itself fails", async () => {
+    server.use(
+      failingAfterFirstShowHandler(1, showEnvelope({ id: 1, status: "pending" })),
+    );
+    renderPage("/money/deposits/1");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Validate" }));
+    const dialog = await screen.findByRole("dialog");
+
+    expect(
+      await within(dialog).findByText(
+        "This deposit's current status could not be verified.",
+      ),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Validate" })).toBeDisabled();
+    expect(within(dialog).getByRole("button", { name: "Retry" })).toBeInTheDocument();
   });
 });
 
@@ -539,7 +617,10 @@ describe("Reject", () => {
     ).toBeInTheDocument();
 
     fireEvent.change(reasonField, { target: { value: "This reason is long enough." } });
-    expect(confirmButton).toBeEnabled();
+    // The freshness-rule check (M4 · G4 closure) also gates the confirm
+    // button — it must settle (a real, if fast, GET round trip via MSW)
+    // before the button reflects the reason-length rule alone.
+    await waitFor(() => expect(confirmButton).toBeEnabled());
   });
 
   it("disables Reject when the reason exceeds the backend's own 1000-character maximum", async () => {
@@ -573,7 +654,9 @@ describe("Reject", () => {
     fireEvent.change(within(dialog).getByLabelText("Reason"), {
       target: { value: "Illegible receipt image" },
     });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Reject" }));
+    const confirmButton = within(dialog).getByRole("button", { name: "Reject" });
+    await waitFor(() => expect(confirmButton).toBeEnabled());
+    fireEvent.click(confirmButton);
 
     await waitFor(() =>
       expect(body).toEqual({ reject_reason: "Illegible receipt image" }),
@@ -595,7 +678,9 @@ describe("Reject", () => {
     fireEvent.change(within(dialog).getByLabelText("Reason"), {
       target: { value: "Illegible receipt image" },
     });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Reject" }));
+    const confirmButton = within(dialog).getByRole("button", { name: "Reject" });
+    await waitFor(() => expect(confirmButton).toBeEnabled());
+    fireEvent.click(confirmButton);
 
     expect(
       await within(dialog).findByRole("button", { name: "Rejecting…" }),
@@ -623,7 +708,9 @@ describe("Reject", () => {
     fireEvent.change(within(dialog).getByLabelText("Reason"), {
       target: { value: "Illegible receipt image" },
     });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Reject" }));
+    const confirmButton = within(dialog).getByRole("button", { name: "Reject" });
+    await waitFor(() => expect(confirmButton).toBeEnabled());
+    fireEvent.click(confirmButton);
 
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(await screen.findByText("Illegible receipt image")).toBeInTheDocument();
@@ -651,7 +738,9 @@ describe("Reject", () => {
     fireEvent.change(within(dialog).getByLabelText("Reason"), {
       target: { value: "Illegible receipt image" },
     });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Reject" }));
+    const confirmButton = within(dialog).getByRole("button", { name: "Reject" });
+    await waitFor(() => expect(confirmButton).toBeEnabled());
+    fireEvent.click(confirmButton);
 
     expect(
       await within(dialog).findByText(
@@ -678,7 +767,9 @@ describe("Reject", () => {
     fireEvent.change(within(dialog).getByLabelText("Reason"), {
       target: { value: "Illegible receipt image" },
     });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Reject" }));
+    const confirmButton = within(dialog).getByRole("button", { name: "Reject" });
+    await waitFor(() => expect(confirmButton).toBeEnabled());
+    fireEvent.click(confirmButton);
 
     expect(await within(dialog).findByRole("alert")).toHaveTextContent(
       /could not be rejected/i,
@@ -701,7 +792,9 @@ describe("Reject", () => {
     fireEvent.change(within(dialog).getByLabelText("Reason"), {
       target: { value: "Illegible receipt image" },
     });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Reject" }));
+    const confirmButton = within(dialog).getByRole("button", { name: "Reject" });
+    await waitFor(() => expect(confirmButton).toBeEnabled());
+    fireEvent.click(confirmButton);
 
     await waitFor(() =>
       expect(queryClient.getQueryState(["deposits", "list", {}])?.isInvalidated).toBe(
@@ -714,6 +807,125 @@ describe("Reject", () => {
     expect(queryClient.getQueryState(["commercials", "list", {}])?.isInvalidated).toBe(
       false,
     );
+  });
+});
+
+describe("Reject — freshness rule (M4 · G4 closure)", () => {
+  beforeEach(() => {
+    signInWith([PERMISSIONS.VIEW_DEPOSITS, PERMISSIONS.REJECT_DEPOSIT]);
+  });
+
+  it("keeps confirm disabled while the freshness check is in flight, even with a valid reason", async () => {
+    let call = 0;
+    server.use(
+      http.get(`${API}/admin/depos/1`, async () => {
+        call += 1;
+        // The page's own initial load (call 1) resolves immediately; the
+        // freshness check fired when the dialog opens (call 2) is held
+        // open long enough to observe the "checking" phase before it
+        // settles.
+        if (call > 1) await delay(200);
+        return HttpResponse.json(showEnvelope({ id: 1, status: "pending" }));
+      }),
+    );
+    renderPage("/money/deposits/1");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Reject" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("Reason"), {
+      target: { value: "Illegible receipt image" },
+    });
+
+    expect(within(dialog).getByRole("button", { name: "Reject" })).toBeDisabled();
+    expect(within(dialog).getByText("Checking for changes…")).toBeInTheDocument();
+  });
+
+  it("blocks confirm and explains when the fresh read shows the deposit already processed", async () => {
+    server.use(
+      sequentialShowHandler(1, [
+        showEnvelope({ id: 1, status: "pending" }),
+        showEnvelope({ id: 1, status: "validated" }),
+      ]),
+    );
+    renderPage("/money/deposits/1");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Reject" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("Reason"), {
+      target: { value: "Illegible receipt image" },
+    });
+
+    expect(
+      await within(dialog).findByText("This deposit has already been processed."),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Reject" })).toBeDisabled();
+  });
+
+  it("blocks confirm, shows a verification-failed message and a Retry action when the freshness check itself fails", async () => {
+    server.use(
+      failingAfterFirstShowHandler(1, showEnvelope({ id: 1, status: "pending" })),
+    );
+    renderPage("/money/deposits/1");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Reject" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("Reason"), {
+      target: { value: "Illegible receipt image" },
+    });
+
+    expect(
+      await within(dialog).findByText(
+        "This deposit's current status could not be verified.",
+      ),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Reject" })).toBeDisabled();
+    expect(within(dialog).getByRole("button", { name: "Retry" })).toBeInTheDocument();
+  });
+
+  it("Retry re-attempts the freshness check and unblocks confirm once it succeeds", async () => {
+    server.use(
+      failingAfterFirstShowHandler(1, showEnvelope({ id: 1, status: "pending" })),
+    );
+    renderPage("/money/deposits/1");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Reject" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("Reason"), {
+      target: { value: "Illegible receipt image" },
+    });
+    await within(dialog).findByRole("button", { name: "Retry" });
+
+    // The retry itself will also 500 from this handler (it fails every
+    // call after the first) — swap in a handler that succeeds instead,
+    // then retry.
+    server.use(showHandler(1, showEnvelope({ id: 1, status: "pending" })));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Retry" }));
+
+    await waitFor(() =>
+      expect(within(dialog).getByRole("button", { name: "Reject" })).toBeEnabled(),
+    );
+    expect(
+      within(dialog).queryByText("This deposit's current status could not be verified."),
+    ).not.toBeInTheDocument();
+  });
+
+  it("does not show a freshness message when the record is unchanged", async () => {
+    server.use(showHandler(1, showEnvelope({ id: 1, status: "pending" })));
+    renderPage("/money/deposits/1");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Reject" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("Reason"), {
+      target: { value: "Illegible receipt image" },
+    });
+
+    await waitFor(() =>
+      expect(within(dialog).getByRole("button", { name: "Reject" })).toBeEnabled(),
+    );
+    expect(
+      within(dialog).queryByText("This deposit has already been processed."),
+    ).not.toBeInTheDocument();
+    expect(within(dialog).queryByText(/could not be verified/i)).not.toBeInTheDocument();
   });
 });
 
