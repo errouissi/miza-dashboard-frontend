@@ -10,6 +10,7 @@ import {
   Banknote,
   Clock,
   Landmark,
+  Wallet,
 } from "lucide-react";
 import { PERMISSIONS, type PermissionResolver } from "@/infrastructure/permissions";
 import { ADMINS_PATH } from "@/domains/network/admins";
@@ -18,6 +19,7 @@ import { COMMERCIALS_PATH } from "@/domains/network/commercials";
 import { CLIENTS_PATH } from "@/domains/network/clients";
 import { CHEQUES_PATH, CHEQUES_PENDING_PATH } from "@/domains/money/cheques";
 import { DEPOSITS_PATH } from "@/domains/money/deposits";
+import { DEBT_PAYMENTS_PATH } from "@/domains/money/debt-payments";
 import { PRODUCTS_PATH } from "@/domains/reference/products";
 import { SECTEURS_PATH } from "@/domains/reference/secteurs";
 import { VILLES_PATH } from "@/domains/reference/villes";
@@ -157,6 +159,17 @@ export const NAV_TREE: NavGroup[] = [
         // actions inside a future detail page, not visibility of this list.
         permission: PERMISSIONS.VIEW_DEPOSITS,
         icon: Landmark,
+      },
+      {
+        label: "Debt Payments",
+        to: DEBT_PAYMENTS_PATH,
+        // `debt_cash` (roadmap M4) — the SAME single permission gates both
+        // this list and its create route; there is no separate
+        // view/create split the way Cheques/Deposits each have. No
+        // "queue" chip (unlike Cheques/Deposits above) — there is no
+        // approval queue here, just list + submit.
+        permission: PERMISSIONS.DEBT_PAYMENTS,
+        icon: Wallet,
       },
     ],
   },

@@ -109,6 +109,13 @@ const INVALIDATION_MAP: Readonly<Record<DomainEvent, readonly QueryKey[]>> =
      * source this phase, `DepoController::store`).
      */
     "deposit.created": [["deposits"]],
+    /**
+     * Recording a debt payment writes `User.debt` only (`DebtPaymentController
+     * ::store`) — a column no Network list renders (Managers'/Commercials'
+     * own `avanceTotal` reads `montant_avance_*`, never `debt`). Only
+     * Debt Payments' own key space needs busting.
+     */
+    "debt-payment.created": [["debt-payments"]],
   });
 
 /** The prefixes a given event invalidates, or an empty list for an unregistered one. */

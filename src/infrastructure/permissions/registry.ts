@@ -174,6 +174,20 @@ export const PERMISSIONS = Object.freeze({
   CREATE_DEPOSIT: "create-depo",
   VALIDATE_DEPOSIT: "validate-depo",
   REJECT_DEPOSIT: "reject-depo",
+
+  /**
+   * Debt Payments (roadmap M4, the third and final Money deliverable) — a
+   * single permission, verified fresh from source (`routes/api.php:167-170`):
+   * `GET /admin/debt-payments` AND `POST /admin/debt-payments` both carry
+   * `permission:debt_cash`, unlike Cheques/Deposits' own split
+   * view/create/validate/reject vocabularies. There is no separate
+   * "view" vs "create" string here because the backend does not have one —
+   * this registry mirrors that exactly rather than inventing a split for
+   * consistency with the other two Money resources. `show`/`destroy` are
+   * commented out in `routes/api.php` (dead code) — no permission is
+   * registered for either, since neither route exists to gate.
+   */
+  DEBT_PAYMENTS: "debt_cash",
 } as const satisfies Record<string, string>);
 
 export type PermissionName = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

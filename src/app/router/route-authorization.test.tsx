@@ -26,6 +26,10 @@ import {
   DEPOSIT_NEW_PATH,
   depositDetailPath,
 } from "@/domains/money/deposits";
+import {
+  DEBT_PAYMENTS_PATH,
+  DEBT_PAYMENTS_NEW_PATH,
+} from "@/domains/money/debt-payments";
 import { routes } from "./routes";
 
 /**
@@ -244,6 +248,13 @@ describe("every contributed domain route is guarded", () => {
   // a DIFFERENT permission from the list route it sits beside, mirroring
   // `POST /admin/depos`'s own, separate check — the same pattern
   // CHEQUES_NEW_PATH already established for Cheques.
+  // DEBT_PAYMENTS_PATH/DEBT_PAYMENTS_NEW_PATH (roadmap M4, the third and
+  // final Money resource) are BOTH guarded by the SAME `debt_cash`
+  // permission — verified fresh from source (`routes/api.php:167-170`):
+  // `GET`/`POST /admin/debt-payments` carry the identical
+  // `permission:debt_cash` check, unlike Cheques'/Deposits' own split
+  // view/create vocabularies. No detail path exists to test — the backend
+  // route is commented out.
   // `unpermittedSession` holds nothing at all, so it exercises every gate
   // identically.
   const domainPaths = [
@@ -262,6 +273,8 @@ describe("every contributed domain route is guarded", () => {
     DEPOSITS_PATH,
     DEPOSIT_NEW_PATH,
     depositDetailPath(1),
+    DEBT_PAYMENTS_PATH,
+    DEBT_PAYMENTS_NEW_PATH,
   ];
 
   it.each(domainPaths)("refuses %s without the permission", async (path) => {
