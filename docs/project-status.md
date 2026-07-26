@@ -3,43 +3,68 @@
 **The current state of the project.** Overwrite this file after every completed
 milestone — it describes *now*, not history. History lives in `decisions.md` and git.
 
-_Last updated: 2026-07-25_
+_Last updated: 2026-07-26_
 
 ---
 
 ## Current milestone
 
 **M3 — Network / identity graph — COMPLETE** (all six sub-milestones).
-**M4 — Money is UNDERWAY: M4.1 (infrastructure) and all of M4.2 — Cheques
-(Phase 1 domain model/API/queries, Phase 2 permissions/routing/list page,
-Phase 3A creation, Phase 3B pending queue + detail page, Phase 3C
-approve/reject/annuler including the allocation-split correction) — are
-now COMPLETE.** The full Cheques workflow exists end to end: submit, list,
-pending queue, detail page, approve (with a rapped/grattage split),
-reject, annuler. A full M4 discovery pass ran before any implementation
-(architecture proposal, API inventory, business rules, risks and unknowns,
-across Cheques/Deposits/Debt Payments) and was the source for M4.1's and
-M4.2's scope; its Deposits/Debt Payments findings are carried in
-`next-session.md`, to be re-verified fresh at M4.3's own discovery pass.
-**Manual end-to-end validation of the full Cheques workflow (list, create,
-pending queue, detail page, approve, reject, annuler) against the real
-running backend is complete this session.** **M4.3 (Deposits) is the next
-milestone — a fresh discovery pass is required before any implementation
-starts**, per this session's own instruction; do not carry forward
-Cheques' plan or assume Deposits mirrors its shape. M3.x (Admin/Manager/
-Commercial detail pages, ADR-0014) remains the only open M3 item, blocked
-by FE-2 — unaffected by M4.
+**M4 — Money — COMPLETE.** All three Money resources now exist end to end:
+Cheques (M4.2, submit/list/pending queue/detail/approve/reject/annuler),
+Deposits (M4.3, submit/list/detail/validate/reject), and Debt Payments
+(M4.4, submit/list — the simplest of the three, `list + submit` only, no
+detail page and no lifecycle: the backend has no `status`/`type` column
+and `show()`/`destroy()` are both dead routes). The FTA §8 freshness rule
+was also retrofitted onto every irreversible Money confirmation this phase
+(`useFreshConfirm`, see below) — this is the M4 "Gate G4" closure referred
+to throughout this file and `decisions.md`.
+
+**M5 — Stock is UNDERWAY.** A full M5 discovery pass ran across all four
+Stock movement types (Bons, Allocations, Agent Transfers, Agent Stock
+Returns) before any implementation, producing an approved 5-phase order:
+Agent Stock Returns → Agent Transfers → shared-component extraction →
+Allocations → Bons. **Phase 1 (Agent Stock Returns) and Phase 2 (Agent
+Transfers) are both COMPLETE** — full draft → add-lines → validate
+lifecycles, each with its own Manager→Commercial cascading picker
+(deliberately domain-local, ADR-0021), its own error-code registration
+(13 codes for Returns, 15 for Transfers — registered explicitly per
+resource, never derived mechanically from the other, ADR-0022), and the
+shared `LineItemsEditor` (ADR-0019) extracted at Phase 1's own first
+caller. **Allocations is the next milestone.** Neither has been manually
+validated against a real running backend browser session yet (both passed
+implementation-level verification: full automated suites, quality gates,
+and — for Returns — a prior session's own manual pass; Transfers' own
+manual validation is still owed).
+
+M3.x (Admin/Manager/Commercial detail pages, ADR-0014) remains the only
+open M3 item, blocked by FE-2 — unaffected by M4 or M5.
 
 ## Current branch
 
-`main`, level with `origin/main` — M4.2 Phases 3B and 3C (Cheques: pending
-queue, detail page, approve/reject/annuler including the allocation-split
-correction) are committed and pushed as `bba78d3` (`feat(money): complete
-cheque approval workflow`), 21 files changed, +2435/-33. No uncommitted
-files remain (this documentation pass is the only pending change). See
-`next-session.md` for the exact commit and verification commands.
+`main`, level with `origin/main`. Since M4.2 Phase 3C (`bba78d3`), the
+following are each their own commit, in order: Deposits list (`dcb8380`),
+Deposits detail page (`6ab02a5`), Deposits validate/reject
+(`a64f42f`), Deposits creation (`4dd4d63`), Debt Payments (`c0d3f36`), the
+`useFreshConfirm` freshness-rule retrofit onto Cheques' and Deposits'
+existing dialogs (`7da7804`), Agent Stock Returns (`49af3b7`), and Agent
+Transfers (`e559e76`). No uncommitted files remain (this documentation
+pass is the only pending change). See `next-session.md` for verification
+commands.
 
 ## Last completed implementation
+
+**M5 Phase 2 — Agent Transfers — COMPLETE.** See its own section below for
+the full write-up. The previous entries, kept for continuity:
+
+**M5 Phase 1 — Agent Stock Returns — COMPLETE.** See its own section below.
+
+**Freshness-rule retrofit (`useFreshConfirm`) — COMPLETE.** See its own
+section below.
+
+**M4.4 — Debt Payments — COMPLETE.** See its own section below.
+
+**M4.3 — Deposits (all four phases) — COMPLETE.** See its own section below.
 
 **M4.2 Phase 3B + Phase 3C — Cheques (pending queue, detail page,
 approve/reject/annuler) — COMPLETE.** See their own sections below for the
@@ -1291,6 +1316,194 @@ after Phase 3B).
 
 **No backend changes.**
 
+## M4.3 — Deposits (complete)
+
+The second Money resource, built in four phases (list, detail page,
+validate/reject, creation), each its own commit
+(`dcb8380`/`6ab02a5`/`a64f42f`/`4dd4d63`). Backend contract re-verified
+fresh from source at the start of the milestone, not carried forward from
+the M4 discovery pass unchecked — the backend had changed underneath that
+pass (`DepoResource`, commit `8786326`, unified `index()`/`show()`/`store()`
+onto one shape and added `reject_reason`/`validated_by`/`validated_at`/
+`bank_name`/`proof_type`).
+
+**`Deposit.amount` IS A REAL NUMBER** — `DepoResource` casts it
+`(float) $this->amount`, unlike `Cheque.amount`'s `decimal:2`-cast string.
+This is the first genuine Money caller of `<MoneyAmount>` (M4.1's own
+docblock named this ahead of time, then Cheque turned out not to qualify).
+**`date`/`validatedAt` are `Y-m-d H:i`, NOT ISO-8601** — normalized to
+ISO at the mapper boundary before reaching `shared/formatters`, a genuine
+divergence from Cheques'/Debt Payments' own plain-ISO timestamps.
+**`validatedByName`/`validatedAt` populate for a REJECTED deposit too, not
+only a validated one** — `DepositService::reject()` also sets
+`validated_by_admin`/`validated_at`; the column names are simply
+misleading ("who/when processed this", not literally "validated"). `type`
+(`rapped`/`grattage`) is set once at creation and never transitions —
+rendered as plain text, never through `StatusBadge`, which is reserved for
+the real `status` lifecycle (`pending`/`validated`/`rejected`).
+
+**No shared `DetailPage` pattern was extracted** — same Rule-of-Three
+reasoning Cheques' own detail page already established; two consumers
+(Cheques, Deposits) still short of three. **`index()` has NO `perPage`,
+sort, or date-range parameter** — `paginate(20)` is hardcoded server-side;
+`DepositListParams` carries none of these, exposing no control the API
+would ignore. The freshness rule (`useFreshConfirm`, see below) was
+retrofitted onto Deposits' own validate/reject dialogs in the same phase
+that built it, not left for a later pass.
+
+**No backend changes.** Tests grew across all four phases; the milestone's
+own final count is folded into the freshness-rule retrofit's count below
+(both landed in adjacent commits within the same session).
+
+## M4.4 — Debt Payments (complete)
+
+The third and final Money resource — `list + submit` only, the simplest of
+the three by a wide margin. **`admin_id` -> `User`, NOT `Agent`** — the one
+genuine structural difference from Cheques/Deposits: this screen is about
+the LOGGED-IN ADMIN's own debt to the company (accrued, among other ways,
+by Deposits' own rapped+cash-method side effect on `currentAdmin->debt`),
+not a cross-admin management list. `index()` hard-scopes every query to
+`Auth::user()` — there is no `admin_id` filter anywhere, confirmed from
+source, so this is inherently self-service.
+
+**No `status`, no `type` column exists on this model at all** — no
+lifecycle, so no `StatusBadge` anywhere on this screen. **`show()`/
+`destroy()` are both commented-out dead routes** (confirmed from source),
+so there is no detail page and no delete UI to build. `amount` is a
+`decimal:2`-cast string (Cheques' discipline, not Deposits'); `created_at`
+is plain ISO-8601 (Cheques' shape, not Deposits' `Y-m-d H:i`) — a genuinely
+different pairing of the two prior resources' own conventions, re-verified
+independently rather than assumed to match either one.
+
+**The list response carries two summary scalars alongside the paginated
+rows** — `current_debt` (`$admin->debt`, the same string the create form's
+own ceiling check reads) and `total_paid` (a plain SQL `SUM`, coerced with
+`String(...)` at the mapper boundary since the driver's own numeric-vs-
+string return shape was not captured live). This is the first Money list
+response parsed that carries extra scalar context beyond the page itself.
+Both `debt_cash` (list) and its create counterpart share the IDENTICAL
+permission string, verified from source (`routes/api.php:167-170`) — a
+genuine divergence from Cheques'/Deposits' own split view/create
+vocabularies, mirrored rather than invented.
+
+**No backend changes.**
+
+## Freshness-rule retrofit — `useFreshConfirm` (M4 · "Gate G4" closure)
+
+FTA §8's freshness rule ("data that gates an irreversible action is
+refetched immediately before that action is confirmed... if the refetch
+reveals the record changed underneath them, the dialog MUST say so and
+refuse") had NOT yet been implemented anywhere — every Money confirm
+dialog through M4.3 submitted directly against whatever was already in the
+cache. This phase built `useFreshConfirm` (`shared/hooks/`) and retrofitted
+it onto all five existing irreversible-action dialogs: Cheques' Approve/
+Reject/Annuler and Deposits' Validate/Reject.
+
+**Extracted immediately, at two domains, not deferred to a third caller —
+see ADR-0018** for the full reasoning (a frozen document's own mandate,
+not a UI shape discovered by repetition). **Each dialog's freshness query
+uses its OWN, distinct cache key**, never the host page's own detail query
+key — sharing would let a transient verification failure flip the host
+page's own display into an error state too, confirmed empirically while
+building this retrofit (see `useFreshConfirm`'s own docblock, and every
+`*FreshnessQuery` hook's, for the concrete mechanism).
+
+**No backend changes.** This retrofit is presentation/state-machine
+plumbing only — no dialog's business rule (which status transitions are
+valid, what "stale" means for that resource) changed.
+
+## M5 discovery — Stock domain (Bons, Allocations, Agent Transfers, Agent Stock Returns)
+
+A full discovery pass across all four Stock movement types, run before any
+M5 implementation, per the same discipline every M3/M4 milestone required.
+Produced an approved implementation plan with five explicit decisions:
+build order Agent Stock Returns → Agent Transfers → shared-component
+extraction → Allocations → Bons; extract `LineItemsEditor` at day one
+(justified by a verified, contract-proven line shape identical across all
+four types — not reuse-count speculation, see ADR-0019); hide any create
+form still blocked on a missing backend capability behind a feature flag
+rather than shipping a dead control; keep error-code copy English
+(consistent with every domain so far, O-1 still formally unsigned); and
+raise three backend consultation items rather than route around them:
+Companies/Suppliers controllers do not exist (blocks the Stock directory
+screens, not the four movement types — B-1, carried unchanged since M0),
+no stock-quantity read endpoint exists anywhere (no screen can show a
+live stock level; both `AGENT_TRANSFER_EXCEEDS_CAPACITY`'s capacity check
+and every `*_STOCK_INSUFFICIENT` refusal are therefore handled reactively,
+never with a proactive hint), and only Bons has a `/cancel` route today —
+Allocations/Agent Transfers/Agent Stock Returns have no cancellation
+lifecycle at all, confirmed from `routes/api.php`, not assumed absent.
+`gh` CLI is unavailable in this environment, so these three items were
+drafted as text for the user to file manually rather than created as real
+GitHub issues.
+
+## M5 Phase 1 — Agent Stock Returns (complete)
+
+The first Stock resource, and the first resource whose failures carry a
+documented, machine-readable `code` from day one (`error-code-registry.ts`
+gained its first 13 real entries here — every prior domain's own dialog
+hand-rolled its copy because none of its failures carried one).
+Draft → add lines → irreversible validate, mirroring the shape all four
+Stock movement types share; **no cancel** (verified from source — only
+Bons has that route). Manager→Commercial cascading picker
+(`ReturnManagerCommercialField`) guarantees `commercial.manager_id ===
+manager_id` BY CONSTRUCTION (the Commercial select is populated from
+`GET /admin/agents/{manager}/sub-data`, scoped to the chosen manager), so
+the binding is never re-checked client-side — the real check is the
+backend's own, re-asserted again under a row lock at validate time.
+
+`montant` is METADATA-ONLY (`SUM(line.unit_cost * line.quantity)`,
+recomputed server-side on every line write) — it gates nothing; the real
+gate is the commercial's stock floor, checked only at validate. `LineItems
+Editor` (ADR-0019) was extracted here, at its first caller. Manually
+validated against the real running backend this milestone; every issue
+validation found was fixed before close-out.
+
+**No backend changes.**
+
+## M5 Phase 2 — Agent Transfers (complete)
+
+The second and (for now) final Stock resource before the roadmap's
+approved shared-extraction pass. Structurally mirrors Agent Stock Returns
+(same draft → add lines → validate lifecycle, same `LineItemsEditor` and
+`useFreshConfirm` reuse, same FormRequest-gated permission posture — no
+route middleware, confirmed from source) but its own contract was
+re-verified fresh, not derived mechanically from Return's (ADR-0022):
+
+- **15 error codes registered explicitly**, not a `RETURN_` → `TRANSFER_`
+  rename — two have no Return equivalent at all
+  (`AGENT_TRANSFER_EXCEEDS_CAPACITY`, a live grattage-capacity gate;
+  `TRANSFER_RECIPIENT_HAS_OUTSTANDING_OBLIGATION`, the Grattage restock
+  gate — Phase 5.10 §2.9 — surfaced reactively now, with the proactive hook
+  an explicit M6 Grattage deliverable, not built here), and one superficially
+  resembles Return's own but carries a genuinely different string
+  (`TRANSFER_RECIPIENT_MANAGER_ROLE_INVALID` vs. `RETURN_MANAGER_ROLE_
+  INVALID` — a `RECIPIENT_` infix Return's equivalent does not have).
+- **`validation_summary`'s own keys genuinely diverge from Return's** —
+  `{line_count, total_quantity, montant}`, not Return's `{total_lines,
+  total_quantity, total_montant}` — verified directly from
+  `AgentTransferResource::toArray()`.
+- **`VIEW_AGENT_TRANSFERS` is PLURAL** (`view-agent-transfers`), copied
+  verbatim from the backend constant — Return's own equivalent is
+  singular. Eight permissions total, mirroring Return's own count.
+- **The Manager→Commercial cascading picker is its own, domain-local
+  copy** (`TransferManagerCommercialField`), not shared with Return's —
+  Allocation's own binding rule was independently re-verified to use a
+  completely different counterpart pair (`company_id` +
+  `agent_id(role=manager)`, no manager↔commercial relationship at all), so
+  this pattern has a confirmed ceiling of two consumers and will not reach
+  a Rule-of-Three extraction (ADR-0021).
+- **No proactive capacity hint was built** — `AGENT_TRANSFER_EXCEEDS_
+  CAPACITY` is handled reactively, by explicit decision; capacity stays a
+  backend-owned rule until a real read endpoint exists (see the M5
+  discovery section above).
+
+Implementation-level verification (typecheck/lint/format/build/full test
+suite) is complete and green; manual validation against the real running
+backend is still owed (see "Current milestone" above).
+
+**No backend changes.**
+
 ## Overall progress
 
 | Milestone | Status |
@@ -1317,14 +1530,24 @@ after Phase 3B).
 | **M4.2 — Cheques, Phase 3B (pending queue, detail page)** | ✅ **complete** |
 | **M4.2 — Cheques, Phase 3C (approve/reject/annuler, incl. allocation split)** | ✅ **complete** |
 | **M4.2 — Cheques — full workflow** | ✅ **COMPLETE, manually validated end to end against the real running backend** |
-| M4.3 — Deposits | ⬜ **next milestone** — fresh discovery pass required before implementation; the prior `DepoResource` blocker is resolved (see Backend dependencies) |
-| M4.4 — Debt Payments | ⬜ not started — contingent on the placement/permission questions (see Backend dependencies) |
-| M5+ — Stock, Grattage, Overview | ⬜ not started |
+| **M4.3 — Deposits (list, detail, validate/reject, creation)** | ✅ **complete** |
+| **M4.4 — Debt Payments** | ✅ **complete** |
+| **M4 — Money — full milestone** | ✅ **COMPLETE** (all three resources; manual validation of Cheques' own workflow done, Deposits'/Debt Payments' still owed) |
+| **Freshness-rule retrofit (`useFreshConfirm`, M4 "Gate G4" closure)** | ✅ **complete** — onto Cheques' and Deposits' existing dialogs |
+| **M5 discovery — Stock** | ✅ **complete** — 5-phase order approved, 3 backend items raised |
+| **M5 Phase 1 — Agent Stock Returns** | ✅ **complete**, manually validated |
+| **M5 Phase 2 — Agent Transfers** | ✅ **complete** — manual validation still owed |
+| M5 Phase 3 — shared-component extraction (per-caller, ongoing) | ✅ `LineItemsEditor`/`useFreshConfirm` already extracted at their first callers — no dedicated phase needed beyond that |
+| **M5 Phase 4 — Allocations** | ⬜ **next milestone** — fresh discovery pass required before implementation |
+| M5 Phase 5 — Bons | ⬜ not started |
+| M6+ — Grattage, Overview | ⬜ not started |
 
-**Tests: 548/548 across 29 files** (was 407/23 before M3.6; 431/24 at
+**Tests: 825/825 across 42 files** (was 407/23 before M3.6; 431/24 at
 M3.6's initial implementation; 442/24 after M3.6's three post-validation fix
 rounds; 447/25 after M4.1; 473/26 after M4.2 Phase 1+2; 489/27 after M4.2
-Phase 3A; 520/29 after M4.2 Phase 3B; now 548/29 after M4.2 Phase 3C). Lint ·
+Phase 3A; 520/29 after M4.2 Phase 3B; 548/29 after M4.2 Phase 3C; growing
+across M4.3's four phases, M4.4, the freshness-rule retrofit, and M5's two
+phases — now **825/42** as of Agent Transfers' own close-out). Lint ·
 typecheck · format · build all clean, re-verified fresh this session.
 
 ## Shared pattern layer
@@ -1442,19 +1665,24 @@ to actually cross into `shared/`. Every other row is unchanged from M3.6:
 | **Row selection / bulk action bar** (M3.5) | **1** — unaffected by M4.1 | Not reached, not close |
 | **File upload control** (`FileUploadField`) | **EXTRACTED at M4.1** — justified by Money's three NAMED upcoming callers (Cheque photo, Deposit proof, Debt Payment proof, all confirmed from source during M4 discovery), not by current evidence alone; M3.6's own ~11 internal call sites were explicitly insufficient on their own | Promoted ahead of the callers actually landing — a deliberate exception, not a precedent for extracting on named-but-unbuilt callers generally |
 | **`ApprovalQueuePage`**, new row at M4.2 Phase 3B/3C | **1** — the frozen architecture doc names this pattern for Cheques' Pending queue, but only one real consumer exists and its endpoint accepts no filters, so nothing "actionable" a shell would add over `ListPage` yet | Not reached — explicitly declined this phase (see Phase 3B's own write-up above), not silently skipped |
-| **`DetailPage`**, new row at M4.2 Phase 3B | **1** — same doc names this pattern too (deferred product-wide by ADR-0014); Cheques' is the first detail page built anywhere, domain-local by decision | Not reached — same explicit-decline treatment as `ApprovalQueuePage` |
+| **`DetailPage`**, new row at M4.2 Phase 3B | **2** as of M4.3 (Cheques, Deposits) — Deposits' own detail page (M4.3) is domain-local too, same Rule-of-Three reasoning re-applied, not re-derived | Not reached — a genuine third consumer (a Network detail page, or Stock's own) would be the actual decision point |
+| **`useFreshConfirm`** (M4 "Gate G4" closure) | **EXTRACTED at 2 domains** (Cheques, Deposits), reused unchanged by 2 more (Agent Stock Returns, Agent Transfers) — **5 real call sites** as of M5 Phase 2 | Extracted ahead of a third caller by decision, not evidence — see ADR-0018: a frozen-document mandate, not a repetition-discovered shape |
+| **`LineItemsEditor`** (M5 Phase 1) | **EXTRACTED at its first caller** (Agent Stock Returns), reused unchanged by Agent Transfers (M5 Phase 2) — **2 real callers**; Allocations/Bons (both still pending) are expected to be the 3rd/4th | Extracted ahead of a third caller by decision, not evidence — see ADR-0019: the line contract was verified identical across all four Stock movement types' own FormRequests before extraction |
+| **Manager→Commercial cascading picker** (Agent Stock Returns, Agent Transfers) | **2**, each its own domain-local copy, deliberately NOT extracted | **Will not reach 3** — Allocation's own binding rule uses a different counterpart pair entirely (`company_id` + `agent_id(role=manager)`), confirmed by re-checking the roadmap's remaining Stock resources, not assumed. See ADR-0021 |
 
 **The cross-domain picker-export tally and the URL-filter-hook question
-remain the two open Rule-of-Three decision points, still unresolved.**
-Neither M4.2 Phase 1+2 nor Phase 3B/3C added a fourth instance to the
-export tally — the Cheques agent filter *merges* two existing exports
-rather than exporting a new one, and none of the Phase 3B/3C screens
-export a picker at all — so the tally stays at 3, still the next actual
-decision point whenever a fourth genuine export appears. **`ApprovalQueuePage`/
-`DetailPage` are a THIRD, newly-tracked decision point** as of this
-session — both at "1" today; Deposits' own pending queue/detail page
-(M4.3) would be the second real consumer for either, worth raising
-explicitly at that milestone's discovery rather than resolving in advance.
+remain the two open Rule-of-Three decision points from M3/M4, still
+unresolved.** No M4.3/M4.4/M5 phase added a fourth instance to the export
+tally — Deposits'/Debt Payments' own agent pickers reuse existing exports
+the same way Cheques' merged filter already did, and Stock's own
+Manager→Commercial picker is domain-local by decision (ADR-0021), not an
+export. `ApprovalQueuePage`/`DetailPage` moved from "1" to "2" at M4.3
+(Deposits' own detail page is domain-local, same reasoning as Cheques') —
+still short of three. `useFreshConfirm` and `LineItemsEditor` are two
+NEW rows, both **already extracted ahead of a third caller**, by an
+explicit, recorded decision (ADR-0018/ADR-0019) rather than Rule-of-Three
+evidence — flagged here so a future review does not mistake either for a
+precedent that evidence-gated extraction has been abandoned generally.
 
 ## Current blockers
 
@@ -1465,20 +1693,25 @@ explicitly at that milestone's discovery rather than resolving in advance.
 | **BC-G** | Secteurs/Products/Admins index endpoints unpaginated | `DataTable`/`FilterBar` extraction |
 | **BC-U** | 🟡 The agent **update** endpoint cannot clear or accept null for `num_d_abonnement` or `ville`, though both columns allow null | Nobody can un-set either field via the UI, ever, until the backend validator changes. Unaffected by M3.3: Commercials' update payload never sends `ville` (that field belongs to Managers only), and `manager_id`/`ville_actuelle`/`secteur` are all correctly `nullable` in the validator |
 | **Operational** | Session permissions are cached at login (ADR-0003) and never refreshed. **Whenever a permission is newly seeded or corrected on the backend, an operator already logged in will not see the effect until they log out and back in** — this is how Block/Activate visibility was investigated and cleared this session (see below); not a code defect | Any future backend permission change while operators hold open sessions |
+| **BC-AA** (new, M5 discovery) | 🟡 No stock-quantity read endpoint exists anywhere in the backend | Every Stock movement type's capacity/stock-insufficient refusal is handled REACTIVELY only (no proactive hint anywhere); a Stock ledger view is unbuildable until this exists. Raised as a backend consultation item, not routed around |
+| **BC-AB** (new, M5 discovery) | 🟡 Only Bons has a `/cancel` route — Allocations, Agent Transfers and Agent Stock Returns have no cancellation lifecycle at all | No cancel UI exists or was attempted for either Stock resource shipped so far; confirmed absent from `routes/api.php`, not assumed |
+| **B-1** (carried since M0) | 🔴 Companies and Suppliers controllers do not exist | Blocks the Stock directory screens (M5) specifically — does NOT block any of the four movement types, which ship dark behind a flag where a directory screen would otherwise be needed |
 
 ### BC-T — resolved (M3.2, unchanged this session)
 
 `block-agent` is now seeded; block and activate work end to end for both
 Managers and Commercials (same permission, same endpoints).
 
-### FE-1 — unchanged, not touched by M4.2 Phase 3B/3C
+### FE-1 — unchanged, not touched since M4.2 Phase 3B/3C
 
 Five older test files' `findByRole("alert")` calls still run against the 1000 ms
-default timeout while taking 951–1240 ms. Not touched by Phase 3B/3C — no
+default timeout while taking 951–1240 ms. Not touched by M4.3/M4.4/M5 — no
 new evidence gathered, no fix applied. `pnpm test:ci` was run fresh at the
-end of Phase 3C (548/548) with no flake observed. Still recommended before
-the suite grows further; the suite is now at 548 tests across 29 files, 59
-more than when this was last raised at M4.2 Phase 3A (489/27).
+end of M5 Phase 2 (825/825, one transient timing flake observed on a full
+parallel run, confirmed as a flake — not a regression — by both an
+isolated re-run and a second full clean run). Still recommended before the
+suite grows further; the suite is now at 825 tests across 42 files, 277
+more than when this was last raised at M4.2 Phase 3C (548/29).
 
 **Governance follow-ups — not blockers** (unchanged):
 
@@ -1589,31 +1822,34 @@ Carried, unchanged from M3.2:
 | BC-U | Update endpoint cannot null `num_d_abonnement`/`ville` | 🟡 open |
 | — | `view-permissions` permission (B-6 deferred the OR-gate cleanup) | 🟢 non-blocking |
 
-### Deposits' `DepoResource` — RESOLVED, verified fresh this session
+### Deposits' `DepoResource` — RESOLVED, and shipped
 
-The M4 discovery pass's original finding — "`DepoResource` (the only thing
-`GET /admin/depos` and `GET /admin/depos/{id}` return) omits `type` and
-`status` from the wire entirely... raise with the backend before starting
-M4.3's list screen" — **no longer holds**. Re-read directly from
-`app/Http/Resources/DepoResource.php` this session:
+The M4 discovery pass's original finding ("`DepoResource` omits `type` and
+`status` from the wire entirely") was resolved before M4.3 even started
+(`039685c feat(deposits): expose status and type on DepoResource`) — see
+the earlier note in this file's own history. **The resource changed a
+SECOND time, found during M4.3's own re-verification** (commit `8786326`),
+unifying `index()`/`show()`/`store()` onto one shape and adding
+`reject_reason`/`validated_by`/`validated_at`/`bank_name`/`proof_type` —
+confirming the standing discipline (ADR-0022): a fact re-verified once is
+not guaranteed to still hold the next time it matters, and M4.3 shipped
+against the version re-read at ITS OWN start, not the M4 discovery pass's
+older snapshot.
 
-```php
-return [
-    'id' => $this->id,
-    'amount' => (float) $this->amount,
-    'status' => $this->status,
-    'type' => $this->type,
-    ...
-];
-```
+**From the M4.3/M4.4/M5 contract verification, independently re-confirmed,
+not inherited from Cheques by resemblance:**
 
-Both fields are present. Confirmed via the backend's own `git log` that
-this was a real, dedicated fix: `039685c feat(deposits): expose status and
-type on DepoResource`. This clears the way for a `StatusBadge` column, a
-status filter and the type tab `phase8-architecture.html` calls for on
-Deposits' own list screen — **still re-verify this from source at the
-start of M4.3's own discovery pass** rather than treating this note as a
-substitute for that session's own contract check.
+| ID | Class | Item | Status |
+| --- | --- | --- | --- |
+| — | **verified, positive** | `Deposit.amount` is cast `(float)`, a genuine number — the first Money `amount` field `MoneyAmount` was actually built for; `Cheque`'s and `DebtPayment`'s stay `decimal:2`-cast strings, unaffected | ✅ no action needed |
+| — | **verified, positive** | Deposits' `date`/`validatedAt` are `Y-m-d H:i`, not ISO — normalized once at the mapper boundary, the same "absorb it at the anti-corruption layer" discipline BC-Z's own write-up already established | ✅ no action needed |
+| — | **verified, positive** | `validated_by`/`validated_at` populate for a REJECTED deposit too, not exclusively a validated one — `DepositService::reject()` sets them as well; the column names are misleading, not the frontend's modelling | ✅ no action needed; documented in `model/deposit.ts` so a future session does not "fix" this into an exclusivity check |
+| — | **verified, positive** | Debt Payments' `debt_cash` permission is IDENTICAL across list and create (`routes/api.php:167-170`) — unlike Cheques'/Deposits' own split vocabularies | ✅ no action needed; both routes gate on the same permission string, mirroring the backend exactly |
+| — | **verified, positive** | Debt Payments' `show()`/`destroy()` are commented-out dead routes | ✅ no action needed; no detail page, no delete UI attempted |
+| BC-AC (new) | **limitation** | Debt Payments' `total_paid` summary scalar's wire type (JSON number vs. numeric string) was not captured from a live response — the mapper coerces with `String(...)` defensively either way | 🟢 non-blocking; revisit if a live capture ever contradicts the defensive coercion |
+| — | **verified, positive** | Agent Stock Return's 13 and Agent Transfer's 15 error codes were each read directly from their own `*ExceptionRenderer`, not derived from each other — confirmed genuinely divergent in specific, named ways (see the M5 Phase 2 section above) | ✅ no action needed; ADR-0022 records this as a standing discipline, not a one-off check |
+| BC-AA | **limitation** | No stock-quantity read endpoint exists anywhere | 🟡 open — see "Current blockers" above |
+| BC-AB | **limitation** | Only Bons has a `/cancel` route | 🟡 open — see "Current blockers" above |
 
 ## Domain inventory
 
@@ -1716,4 +1952,80 @@ src/domains/money/
                                    delete, NO bulk actions, NO attachments,
                                    NO comments — none of these were ever in
                                    scope)
+├── deposits/               M4.3 — COMPLETE, all four phases
+                                   (list, detail page, validate/reject,
+                                   creation); amount is a genuine cast
+                                   number (first real MoneyAmount caller
+                                   in Money); date/validatedAt normalized
+                                   from Y-m-d H:i to ISO at the mapper
+                                   boundary; validatedByName/validatedAt
+                                   populate for rejected too, not only
+                                   validated; type (rapped/grattage) is
+                                   plain text, never StatusBadge; NO sort,
+                                   NO date-range filter, NO perPage control
+                                   — index() hardcodes paginate(20); NO
+                                   shared DetailPage extracted (2nd
+                                   consumer, still short of 3); Validate/
+                                   Reject dialogs are the SECOND
+                                   useFreshConfirm callers)
+└── debt-payments/          M4.4 — COMPLETE (the third and simplest Money
+                                   resource: list + submit only; admin_id
+                                   -> User, not Agent — self-service,
+                                   scoped to the logged-in admin, no
+                                   admin_id filter exists; NO status, NO
+                                   type column, NO lifecycle, NO
+                                   StatusBadge; show()/destroy() are dead
+                                   routes — NO detail page, NO delete;
+                                   list response carries current_debt/
+                                   total_paid summary scalars alongside
+                                   the page, the first Money list to do so;
+                                   amount stays a decimal-cast STRING,
+                                   Cheques' discipline not Deposits')
+
+src/domains/stock/
+├── agent-stock-returns/    M5 Phase 1 — COMPLETE, manually validated
+                                   (the first Stock resource, and the
+                                   first domain whose failures carry a
+                                   documented `code` from day one — 13
+                                   RETURN_* codes registered; draft -> add
+                                   lines -> irreversible validate, NO
+                                   cancel — confirmed absent from
+                                   routes/api.php; Manager->Commercial
+                                   cascading picker guarantees the binding
+                                   by construction, domain-local, ADR-0021;
+                                   montant is metadata-only, recomputed on
+                                   every line write, gates nothing; first
+                                   real caller of the extracted
+                                   LineItemsEditor, ADR-0019; FormRequest-
+                                   gated permissions, no route middleware
+                                   — a genuine departure from every prior
+                                   domain)
+└── agent-transfers/        M5 Phase 2 — COMPLETE (manual validation still
+                                   owed); structurally mirrors Agent Stock
+                                   Returns (same LineItemsEditor/
+                                   useFreshConfirm reuse, same lifecycle
+                                   shape) but its own contract re-verified
+                                   fresh, not derived mechanically — 15
+                                   error codes registered explicitly
+                                   (2 with no Return equivalent:
+                                   AGENT_TRANSFER_EXCEEDS_CAPACITY, a live
+                                   grattage-capacity gate; TRANSFER_
+                                   RECIPIENT_HAS_OUTSTANDING_OBLIGATION,
+                                   the Grattage restock gate, surfaced
+                                   reactively); validation_summary's own
+                                   keys genuinely diverge from Return's
+                                   ({line_count,total_quantity,montant} vs.
+                                   {total_lines,total_quantity,
+                                   total_montant}); VIEW_AGENT_TRANSFERS is
+                                   PLURAL, unlike Return's singular
+                                   equivalent; its own domain-local
+                                   Manager->Commercial picker, NOT shared
+                                   with Return's, ADR-0021; no proactive
+                                   capacity hint built — reactive only, by
+                                   decision)
 ```
+
+Allocations (M5 Phase 4) and Bons (M5 Phase 5) are the two Stock movement
+types not yet started. A `src/domains/reference/companies/`-shaped
+directory pair (Companies, Suppliers) remains entirely unbuilt — blocked
+on B-1, the backend controllers do not exist yet.

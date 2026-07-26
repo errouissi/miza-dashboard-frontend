@@ -354,3 +354,174 @@ decisions made *during implementation*.
   - Does NOT apply to any other current or future form by default — the
     standard FTA §10 flow remains the norm everywhere else. This is a named
     exception, not a precedent for adding success screens generally.
+
+## ADR-0018 — `useFreshConfirm`: the FTA §8 freshness rule as a shared hook, mandated not discovered
+
+- **Date:** 2026-07-26
+- **Status:** Accepted
+- **Context:** FTA §8 mandates, product-wide: data gating an irreversible
+  action MUST be refetched immediately before confirmation, and the dialog
+  MUST refuse if the fresh read shows the record changed underneath the
+  operator. Cheques' three status-action dialogs and Deposits' validate/
+  reject dialogs each needed this identically. Building it separately per
+  domain, the way `ConfirmActionDialog`'s own `Rule of Three` extraction
+  precedent would suggest, would mean copying the same "checking / stale /
+  unavailable" state machine at least five times before the third domain
+  ever justified it.
+- **Decision:** Extracted immediately, at two domains (Cheques, Deposits),
+  not deferred to a third caller — the same class of decision
+  `invalidation-map.ts` already made at M4.1 (shipped ahead of any real
+  event). A cross-cutting policy a frozen document mandates uniformly is not
+  a UI shape discovered by repetition, and CLAUDE.md's Rule-of-Three governs
+  the latter, not the former.
+- **Rationale:** Lives in `shared/hooks/`, not `shared/components/` —
+  presentation-*adjacent*, not presentation-only: it owns the state machine
+  and the explicit `refetch()` timing, but no query key, no fetch function,
+  no domain type, and no copy (every message a dialog shows is the caller's
+  own). The caller's freshness query **must use its own, distinct cache
+  key**, never the host page's detail query's key — TanStack Query's error/
+  success state is shared across every observer of one key, so sharing it
+  would let a transient verification failure flip the host page's own
+  display into an error state too (confirmed empirically while building the
+  first two callers).
+- **Consequences:** Reused unchanged by every Stock caller since
+  (`ValidateReturnDialog`, `ValidateTransferDialog`) — five real call sites
+  as of M5 Phase 2, all sharing the identical hook with no modification.
+  Any future irreversible action anywhere in the product gating on stale
+  data reuses this hook; do not hand-roll a parallel "checking/stale"
+  state machine inside a new dialog.
+
+## ADR-0019 — `LineItemsEditor` extracted at its first caller, justified by a verified contract, not reuse count
+
+- **Date:** 2026-07-26
+- **Status:** Accepted
+- **Context:** Stock's four movement types (Bons, Allocations, Agent
+  Transfers, Agent Stock Returns) each need an add/edit/remove line editor
+  for a draft document. Only one of the four (Agent Stock Returns) had been
+  built when this component was written.
+- **Decision:** Extract to `shared/components/business/` at the FIRST
+  caller, not the third — because the line CONTRACT (`product_id`,
+  `quantity`, `unit_cost`, `notes`) was independently verified, from
+  source, to be IDENTICAL across all four movement types' own FormRequests
+  (`StoreBonLineRequest`/`StoreAllocationLineRequest`/
+  `StoreAgentTransferLineRequest`/`StoreAgentStockReturnLineRequest`)
+  before extraction, not assumed from resemblance.
+- **Rationale:** The same reasoning ADR-0018 already applied to
+  `useFreshConfirm`: CLAUDE.md's Rule-of-Three governs abstractions
+  discovered by repetition across independently-evolving call sites: a
+  contract PROVEN uniform ahead of time, from the backend's own validators,
+  is not the same kind of bet. Presentation-only, the same boundary
+  `ConfirmActionDialog` holds — no mutation, no query client, no domain
+  type (`productId`/`unitCost` are generic fields, not Stock-specific
+  knowledge); the caller owns every mutation and its pending/error state.
+- **Consequences:** Product is deliberately NOT editable on an existing
+  line, even though some backends' `UpdateXLineRequest` allow it — a
+  narrower surface than the backend permits, revisit only if a real caller
+  needs in-place product changes. Reused unchanged by Agent Transfers (M5
+  Phase 2), the second real caller; Allocations and Bons (both still
+  pending) are expected to reuse it unchanged too — if either needs a
+  materially different line shape, that is new evidence to weigh against
+  this ADR, not a silent fork.
+
+## ADR-0020 — `ConfirmActionDialog` stays presentation-only through every extension; extend, never fork for a business rule
+
+- **Date:** 2026-07-26
+- **Status:** Accepted (reaffirms and generalizes the M2c extraction boundary)
+- **Context:** `ConfirmActionDialog` picked up four additive props across
+  M4.2 Phase 3C (`variant`, `reason`, `confirmDisabled`, `children`), each
+  driven by a real domain need (Cheques' Approve/Reject/Annuler). Every
+  subsequent irreversible-action confirmation in the product (Deposits'
+  validate/reject, Stock's validate-return/validate-transfer) reused the
+  same component, still with zero business logic inside `shared/`.
+- **Decision:** `ConfirmActionDialog` may keep growing additive, generic
+  props (a label, a boolean, a slot) as new callers need them, but must
+  NEVER gain a prop that names a domain concept (no `chequeId`, no
+  `allocationSplit`, no `productLine`). The caller always computes its own
+  validity, its own copy, and its own error message; the component only
+  renders what it is given.
+- **Rationale:** A version that inspected an `AppError` or computed
+  business validity itself would need to know what it was confirming —
+  domain knowledge `shared/` may not hold (FTA §4, CLAUDE.md's "no business
+  logic in `shared/`"). Keeping the boundary strict is what let FOUR
+  different financial actions across two domains (and now two Stock
+  validate dialogs) reuse one component instead of forking near-identical
+  copies.
+- **Consequences:** Any future action needing dialog behavior this
+  component cannot express (e.g. a genuinely different layout, not just
+  different content) is a signal to design a new, separate component — not
+  to smuggle a domain conditional into this one. Eight-plus callers deep as
+  of M5 Phase 2, none of which have ever needed to reach into the
+  component's own internals.
+
+## ADR-0021 — The Manager → Commercial cascading picker stays domain-local, duplicated per resource
+
+- **Date:** 2026-07-26
+- **Status:** Accepted
+- **Context:** Both Agent Stock Returns and Agent Transfers need a Manager
+  select whose Commercial select is scoped to guarantee
+  `commercial.manager_id === manager_id` by construction (via
+  `GET /admin/agents/{manager}/sub-data`), because each resource's own
+  creation FormRequest asserts that exact binding. `ReturnManagerCommercial
+  Field`/`fetchManagerCommercials` (Return) and `TransferManagerCommercial
+  Field`/`fetchManagerCommercials` (Transfer) are near-identical, domain-
+  local copies — a real candidate for extraction on reuse-count grounds
+  alone.
+- **Decision:** Kept duplicated, one copy per domain. **Allocation's own
+  binding rule was independently re-verified and uses a completely
+  different counterpart pair** (`company_id` + `agent_id(role=manager)` —
+  no manager↔commercial relationship at all), so this specific pattern has
+  a hard ceiling of TWO consumers in the entire frozen roadmap, confirmed
+  by checking every remaining Stock movement type, not assumed from the
+  two that already exist.
+- **Rationale:** ADR-0012's own duplication list plus CLAUDE.md's
+  Rule-of-Three: two genuinely comparable, permanent consumers is
+  short of three, and a ceiling of two verified from the roadmap itself
+  means a third will never arrive to retroactively justify an extraction.
+  Duplication is the cheaper, correct choice here, not a shortcut.
+- **Consequences:** Do not merge `ReturnManagerCommercialField` and
+  `TransferManagerCommercialField` (or their sub-data fetchers) into one
+  shared component or shared query, even though they are near-identical
+  today. If a future backend change gives Allocations (or any other
+  resource) the same manager↔commercial binding rule, re-open this
+  decision explicitly rather than assuming the ceiling still holds.
+
+## ADR-0022 — The backend is the sole source of truth for contract facts; no document, including this log, may substitute for reading it
+
+- **Date:** 2026-07-26
+- **Status:** Accepted (formalizes a discipline already applied at every
+  milestone since M1, recorded once it produced a specific, recurring
+  category of correction worth naming)
+- **Context:** Every milestone from M3.3 onward independently re-verified
+  its own backend contract from source rather than inheriting the previous
+  resource's shape by resemblance — and every one of them found at least
+  one genuine divergence: Commercials' filter semantics differed from
+  Managers'; Clients' `index()` skipped `transform()` entirely; Deposits'
+  `DepoResource` changed shape mid-milestone (commit `8786326`) after the
+  M4 discovery pass had already read it once; Agent Transfer's error codes
+  and `validation_summary` keys were confirmed to diverge from Agent Stock
+  Return's superficially similar ones in specific, named ways
+  (`TRANSFER_RECIPIENT_MANAGER_ROLE_INVALID`'s `RECIPIENT_` infix,
+  `AGENT_TRANSFER_EXCEEDS_CAPACITY`'s different code prefix,
+  `{line_count, total_quantity, montant}` vs. `{total_lines, total_quantity,
+  total_montant}`). In every case, copying the nearest sibling's contract
+  instead of re-reading source would have shipped a silent defect.
+- **Decision:** No frozen document, living document (including this one),
+  prior session's implementation, or sibling resource's shape is ever
+  treated as authoritative about what the backend actually does. The
+  controller, the FormRequest, the model, and — where reachable — the live
+  endpoint are read fresh at the start of every phase that touches a new
+  contract surface, even when a very similar resource was just built.
+- **Rationale:** `session-bootstrap.md` already states this as the single
+  most-weighted working principle ("What does the API actually do? — the
+  backend source, then the live endpoint. No document is authoritative
+  about backend behaviour — only the backend is"). This ADR exists to give
+  that standing rule a permanent, citable decision record, since by M5 it
+  had already prevented multiple would-be defects (see Context) and is
+  worth protecting explicitly rather than leaving as prose alone.
+- **Consequences:** A "mechanical rename" from one resource's contract to
+  a similar one's (e.g. `RETURN_*` → `TRANSFER_*` error codes) is
+  explicitly disallowed as a shortcut — every code, field name and
+  validation rule for a new resource is registered from its own verified
+  source. This does not forbid reusing a *pattern* (a hook, a component, a
+  file structure) once its own contract-independence is established — only
+  forbids assuming a *specific contract fact* carries over unchecked.
