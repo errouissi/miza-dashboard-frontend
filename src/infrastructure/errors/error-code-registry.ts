@@ -272,6 +272,60 @@ export const ERROR_CODES: Readonly<Record<string, ErrorCodeEntry>> = Object.free
     message: "This line could not be found.",
     tone: "danger",
   },
+
+  /**
+   * BONS (roadmap M5, Phase 5 — the fifth and final Stock resource) — 9
+   * codes, verified fresh from source (`BonExceptionRenderer`). NO
+   * `BON_STOCK_INSUFFICIENT` EXISTS — `validateBon()` has no capacity or
+   * stock-sufficiency check at all (a bon is the SOURCE of stock, not a
+   * consumer). The only stock-insufficiency code in this whole resource
+   * is `BON_CANCEL_STOCK_INSUFFICIENT`, reachable only via cancel — a
+   * REAL, LIVE 409: the stock a bon brought in may already have been
+   * drawn down elsewhere (e.g. a later Allocation) by the time
+   * cancellation is attempted.
+   *
+   * `BON_NOT_CANCELLABLE`/`BON_CANCEL_STOCK_INSUFFICIENT` have NO
+   * equivalent in Allocation/Transfer/Return — Bons is the only Stock
+   * resource with a real cancel lifecycle (BC-AB).
+   */
+  BON_NOT_DRAFT: {
+    message: "This bon has already been processed.",
+    tone: "warning",
+  },
+  BON_HAS_NO_LINES: {
+    message: "Add at least one line before validating this bon.",
+    tone: "warning",
+  },
+  BON_NOT_EDITABLE: {
+    message: "This bon can no longer be edited.",
+    tone: "warning",
+  },
+  BON_NOT_CANCELLABLE: {
+    message: "This bon is not in a state that can be cancelled.",
+    tone: "warning",
+  },
+  BON_CANCEL_STOCK_INSUFFICIENT: {
+    message:
+      "This bon cannot be cancelled: the stock it brought in has already been used elsewhere.",
+    tone: "danger",
+  },
+  BON_LINE_DUPLICATE_PRODUCT: {
+    message:
+      "This product is already on this bon. Edit the existing line instead of adding a new one.",
+    tone: "warning",
+  },
+  BON_NUMBER_DUPLICATE: {
+    message: "This bon number is already in use.",
+    tone: "warning",
+  },
+  BON_NOT_FOUND: {
+    message: "This bon could not be found.",
+    tone: "danger",
+  },
+  BON_LINE_NOT_FOUND: {
+    message: "This line could not be found.",
+    tone: "danger",
+  },
 });
 
 /** Unregistered codes are still failures, and a failure is never "info". */

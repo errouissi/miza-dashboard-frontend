@@ -14,6 +14,7 @@ import {
   Undo2,
   ArrowLeftRight,
   Building2,
+  Truck,
 } from "lucide-react";
 import { PERMISSIONS, type PermissionResolver } from "@/infrastructure/permissions";
 import { ADMINS_PATH } from "@/domains/network/admins";
@@ -26,6 +27,7 @@ import { DEBT_PAYMENTS_PATH } from "@/domains/money/debt-payments";
 import { AGENT_STOCK_RETURNS_PATH } from "@/domains/stock/agent-stock-returns";
 import { AGENT_TRANSFERS_PATH } from "@/domains/stock/agent-transfers";
 import { ALLOCATIONS_PATH } from "@/domains/stock/allocations";
+import { BONS_PATH } from "@/domains/stock/bons";
 import { PRODUCTS_PATH } from "@/domains/reference/products";
 import { SECTEURS_PATH } from "@/domains/reference/secteurs";
 import { VILLES_PATH } from "@/domains/reference/villes";
@@ -218,6 +220,17 @@ export const NAV_TREE: NavGroup[] = [
         // entry already follows.
         permission: PERMISSIONS.VIEW_ALLOCATIONS,
         icon: Building2,
+      },
+      {
+        label: "Bons",
+        to: BONS_PATH,
+        // `view-bons` (roadmap M5, Phase 5) — its OWN permission, PLURAL
+        // (matches Transfer's/Allocation's own plurality, not Return's
+        // own singular). The other eight Bon permissions gate actions
+        // inside the page, not visibility of the list — same convention
+        // every prior Stock nav entry already follows.
+        permission: PERMISSIONS.VIEW_BONS,
+        icon: Truck,
       },
     ],
   },

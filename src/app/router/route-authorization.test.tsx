@@ -45,6 +45,7 @@ import {
   ALLOCATION_NEW_PATH,
   allocationDetailPath,
 } from "@/domains/stock/allocations";
+import { BONS_PATH, BON_NEW_PATH, bonDetailPath } from "@/domains/stock/bons";
 import { routes } from "./routes";
 
 /**
@@ -290,6 +291,11 @@ describe("every contributed domain route is guarded", () => {
   // Return's own singular — verified fresh from source,
   // ADR-0022)/`create-allocation`/`view-allocations` respectively — same
   // FormRequest-gated posture as Return/Transfer, not route middleware.
+  // BONS_PATH/BON_NEW_PATH/`bonDetailPath(1)` (roadmap M5, Phase 5 — the
+  // fifth and final Stock resource) are guarded by `view-bons` (PLURAL,
+  // matching Transfer's/Allocation's own plurality)/`create-bon`/
+  // `view-bons` respectively — same FormRequest-gated posture, not route
+  // middleware.
   // `unpermittedSession` holds nothing at all, so it exercises every gate
   // identically.
   const domainPaths = [
@@ -319,6 +325,9 @@ describe("every contributed domain route is guarded", () => {
     ALLOCATIONS_PATH,
     ALLOCATION_NEW_PATH,
     allocationDetailPath(1),
+    BONS_PATH,
+    BON_NEW_PATH,
+    bonDetailPath(1),
   ];
 
   it.each(domainPaths)("refuses %s without the permission", async (path) => {

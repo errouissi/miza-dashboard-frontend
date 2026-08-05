@@ -243,3 +243,56 @@ describe("Allocation codes (roadmap M5, Phase 4) — fewer than Return's/Transfe
     }
   });
 });
+
+describe("Bon codes (roadmap M5, Phase 5) — the fifth and final Stock resource, the only one with a cancel lifecycle", () => {
+  it("registers exactly the 9 codes BonExceptionRenderer emits", () => {
+    const bonCodes = Object.keys(ERROR_CODES).filter((code) => code.startsWith("BON_"));
+
+    expect(bonCodes.sort()).toEqual(
+      [
+        "BON_NOT_DRAFT",
+        "BON_HAS_NO_LINES",
+        "BON_NOT_EDITABLE",
+        "BON_NOT_CANCELLABLE",
+        "BON_CANCEL_STOCK_INSUFFICIENT",
+        "BON_LINE_DUPLICATE_PRODUCT",
+        "BON_NUMBER_DUPLICATE",
+        "BON_NOT_FOUND",
+        "BON_LINE_NOT_FOUND",
+      ].sort(),
+    );
+  });
+
+  // No BON_STOCK_INSUFFICIENT exists — validateBon() has no capacity or
+  // stock-sufficiency check at all (a bon is the SOURCE of stock). Only
+  // cancelling can hit a stock-insufficiency refusal.
+  it("has no BON_STOCK_INSUFFICIENT code, unlike every other Stock resource's own validate-time gate", () => {
+    expect(ERROR_CODES["BON_STOCK_INSUFFICIENT"]).toBeUndefined();
+    expect(ERROR_CODES["BON_CANCEL_STOCK_INSUFFICIENT"]).toBeDefined();
+  });
+
+  it("resolves the cancel-stock-insufficient code to real copy", () => {
+    const display = resolveErrorDisplay(
+      new AppError({
+        kind: "domain",
+        code: "BON_CANCEL_STOCK_INSUFFICIENT",
+        requestId: "req-6",
+      }),
+    );
+
+    expect(display.message).toBe(
+      "This bon cannot be cancelled: the stock it brought in has already been used elsewhere.",
+    );
+    expect(display.tone).toBe("danger");
+  });
+
+  it("has no registered recovery path for any BON_* code yet", () => {
+    const bonEntries = Object.entries(ERROR_CODES).filter(([code]) =>
+      code.startsWith("BON_"),
+    );
+
+    for (const [, entry] of bonEntries) {
+      expect(entry.recovery).toBeUndefined();
+    }
+  });
+});

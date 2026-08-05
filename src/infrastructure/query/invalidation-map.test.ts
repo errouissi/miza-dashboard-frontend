@@ -96,6 +96,22 @@ describe("invalidation map", () => {
     expect(queryKeyPrefixesFor("allocation.validated")).toEqual([["allocations"]]);
   });
 
+  it("registers bon.created — Bons' own key space only", () => {
+    expect(queryKeyPrefixesFor("bon.created")).toEqual([["bons"]]);
+  });
+
+  it("registers bon.line-changed — Bons' own key space only", () => {
+    expect(queryKeyPrefixesFor("bon.line-changed")).toEqual([["bons"]]);
+  });
+
+  it("registers bon.validated — no cross-domain prefix (writes only stock_movements/stocks)", () => {
+    expect(queryKeyPrefixesFor("bon.validated")).toEqual([["bons"]]);
+  });
+
+  it("registers bon.cancelled — no cross-domain prefix (reverses stock plus the bon's own cancellation-audit columns only)", () => {
+    expect(queryKeyPrefixesFor("bon.cancelled")).toEqual([["bons"]]);
+  });
+
   it("invalidates nothing, and does not throw, for an unregistered event", async () => {
     const queryClient = new QueryClient();
     const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");

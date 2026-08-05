@@ -178,6 +178,35 @@ const INVALIDATION_MAP: Readonly<Record<DomainEvent, readonly QueryKey[]>> =
      * ledger view or the Grattage restock-gate hook (both M6) exist.
      */
     "allocation.validated": [["allocations"]],
+    /**
+     * Bons (roadmap M5, Phase 5 — the fifth and final Stock resource). A
+     * draft touches no stock row — materialization only happens at
+     * validate time. `["bons"]` only.
+     */
+    "bon.created": [["bons"]],
+    /**
+     * Any of the three line mutations (add/update/remove) — `bons.montant`
+     * is metadata-only, so unlike Allocation's own line-changed event
+     * there is no recomputed aggregate for the list to reflect, but the
+     * key space still needs busting so the detail page's own lines table
+     * refreshes. `["bons"]` only.
+     */
+    "bon.line-changed": [["bons"]],
+    /**
+     * Validating writes only `stock_movements`/`stocks` rows (re-verified
+     * from source this phase, `StockService::validateBon`) — no Network
+     * or Money list renders a column this mutation changes. `["bons"]`
+     * only.
+     */
+    "bon.validated": [["bons"]],
+    /**
+     * Cancelling reverses stock (`stock_movements`/`stocks`) and writes
+     * the bon's own four cancellation-audit columns
+     * (`status`/`cancelled_by`/`cancelled_at`/`cancellation_reason`) —
+     * re-verified from source, `StockService::cancelBon`. No other
+     * domain's own list renders any of these. `["bons"]` only.
+     */
+    "bon.cancelled": [["bons"]],
   });
 
 /** The prefixes a given event invalidates, or an empty list for an unregistered one. */

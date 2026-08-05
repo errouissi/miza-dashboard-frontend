@@ -272,6 +272,30 @@ export const PERMISSIONS = Object.freeze({
   CREATE_ALLOCATION_LINE: "create-allocation-line",
   UPDATE_ALLOCATION_LINE: "update-allocation-line",
   DELETE_ALLOCATION_LINE: "delete-allocation-line",
+
+  /**
+   * Bons (roadmap M5, Phase 5 — the fifth and final Stock resource) —
+   * NINE permissions, one more than every other Stock resource, verified
+   * fresh from source (`App\Authorization\BonPermissions::ALL`). Same
+   * FormRequest-gated posture (no route middleware).
+   *
+   * `VIEW_BONS` IS PLURAL (`view-bons`) — matches Transfer's/Allocation's
+   * own plurality, not Return's own singular.
+   *
+   * `CANCEL_BON` IS NEW — no other Stock resource has this permission at
+   * all (BC-AB: only Bons has a `/cancel` route). Excluded from the
+   * backend's own `ADMIN_GRANTS` (super-admin only, verified from
+   * source), the same posture `VALIDATE_BON` already has.
+   */
+  VIEW_BONS: "view-bons",
+  CREATE_BON: "create-bon",
+  UPDATE_BON: "update-bon",
+  DELETE_BON: "delete-bon",
+  VALIDATE_BON: "validate-bon",
+  CANCEL_BON: "cancel-bon",
+  CREATE_BON_LINE: "create-bon-line",
+  UPDATE_BON_LINE: "update-bon-line",
+  DELETE_BON_LINE: "delete-bon-line",
 } as const satisfies Record<string, string>);
 
 export type PermissionName = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
