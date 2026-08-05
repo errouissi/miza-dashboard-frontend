@@ -3,46 +3,44 @@
 **Read this file first.** It is written so a session with no prior context can resume
 immediately. Overwrite it at the end of every session.
 
-_Last updated: 2026-07-26_
+_Last updated: 2026-08-05_
 
 ---
 
 ## Current state
 
-**M4 (Money) is COMPLETE — all three resources (Cheques, Deposits, Debt Payments) now
-exist end to end**, and the FTA §8 freshness rule (`useFreshConfirm`) has been
-retrofitted onto every irreversible Money confirmation. **M5 (Stock) is underway: a
-full discovery pass and its first two phases — Agent Stock Returns and Agent
-Transfers — are both complete.** `next-session.md` and `project-status.md` had not
-been updated across any of M4.3 (Deposits), M4.4 (Debt Payments), the freshness
-retrofit, M5's discovery, or its own two phases — each of those sessions was told
-explicitly not to touch documentation, commit, or push, deferring the sync to this
-one. **This session's own job was exactly that catch-up**, not new implementation.
+**M4 (Money) is COMPLETE.** **M5 (Stock) is underway: discovery plus Phases 1, 2 and 4
+(Agent Stock Returns, Agent Transfers, Allocations) are all complete at the
+implementation level.** Allocations' own manual validation is BLOCKED (not just
+deferred, see below) — Phase 5 (Bons) is next.
 
-- **Code**: everything through Agent Transfers is committed and pushed (see "Last
-  completed work" below for the exact commit list). Working tree is clean except for
-  this documentation pass.
-- **Tests**: 825/825 across 42 files. `pnpm lint`/`pnpm typecheck`/`pnpm format:check`/
+- **Code**: everything through Allocations is committed (`16aad37`) and pushed. Working
+  tree is clean.
+- **Tests**: 888/888 across 45 files. `pnpm lint`/`pnpm typecheck`/`pnpm format:check`/
   `pnpm build` all clean, re-verified this session.
 - **Manual validation**: Cheques' full workflow and Agent Stock Returns are both
   manually validated against the real running backend. **Deposits, Debt Payments and
-  Agent Transfers have NOT had a manual browser pass yet** — each shipped on
-  implementation-level verification (full automated suites, quality gates, file-by-file
-  review) only.
-- **Documentation**: this file, `project-status.md` and `decisions.md` were all
-  brought current this session. `decisions.md` gained five new entries (ADR-0018
-  through ADR-0022) recording decisions that had become permanent across M4/M5 but
-  were never written down. `implementation-status.md` was **NOT** touched — it has not
-  been appended to since M3.1 and is now a substantial backfill on its own; flagged
-  for the user as a separate, explicit task rather than assumed in scope here.
+  Agent Transfers have NOT had a manual browser pass yet.** **Allocations CANNOT be
+  manually validated yet at all** — an allocation moves company stock to a manager, and
+  that stock has no source until the Supplier Bon flow (Phase 5) exists; a real
+  `validateAllocation()` call today would 409 on `ALLOCATION_STOCK_INSUFFICIENT` (or a
+  capacity/obligation gate first) regardless of how correct the frontend is. This is an
+  external dependency on Phase 5, not a quality gap — implementation-level verification
+  (automated suite, backend contract re-verified from source) is complete and green.
+- **New this phase**: a read-only `GET /admin/companies` reference endpoint (mirrors
+  `SecteurController::index()`'s minimal shape — no CRUD, seeded once via
+  `Phase4ASeeder`) and its frontend counterpart, `domains/reference/companies/`
+  (model/api/queries/index only, no list page — there is nothing to manage). Suppliers
+  needs the identical treatment before Bons can build its own company/supplier picker —
+  not done yet, see Known follow-ups.
 
 ## Before anything else
 
 ```bash
 cd C:\Miza\frontend-v2
 git status                 # expect: clean
-git log --oneline -3        # expect e559e76 at HEAD (before this doc commit, if made)
-pnpm test:ci               # expect: 825/825 across 42 files
+git log --oneline -3        # expect 16aad37 at HEAD (this doc commit lands next)
+pnpm test:ci               # expect: 888/888 across 45 files
 pnpm lint && pnpm typecheck && pnpm format:check && pnpm build
 ```
 
@@ -78,40 +76,45 @@ pnpm lint && pnpm typecheck && pnpm format:check && pnpm build
   from Return's own (see `project-status.md`'s own M5 Phase 2 section for the exact
   list). Its own domain-local Manager→Commercial picker (ADR-0021). Manual browser
   validation still owed.
+- **M5 Phase 4 — Allocations** — `16aad37`. Genuinely different binding pair
+  (`company_id` + `agent_id` role=manager, no cascade), load-bearing `montant`, two
+  new validate-time gates (deposit capacity, team obligation), only 10 error codes
+  (no role-mismatch family — a real contract fact). Added the read-only
+  `GET /admin/companies` endpoint and `domains/reference/companies/`. See
+  `project-status.md`'s own M5 Phase 4 section for the full write-up. **Manual
+  validation BLOCKED on Bons** (Phase 5) — no stock source exists yet.
 
 Full write-ups for every item above: `project-status.md`'s own dedicated sections.
 
-## Next task: M5 Phase 4 — Allocations
+## Next task: M5 Phase 5 — Bons
 
 **Do a fresh discovery pass first — do not begin implementation.** Per the same
-discipline every M4/M5 phase applied (and per ADR-0022, now a standing decision, not
-just a convention): re-read `AllocationController`, `AllocationResource`, the
-`Allocation`/`AllocationLine` models, their FormRequests and permission registrations
-directly from source before proposing any scope. **Do not assume Allocations mirrors
-Agent Stock Returns' or Agent Transfers' shape** — the M5 discovery pass itself
-already found Allocations' binding rule is structurally different from both
-(`company_id` + `agent_id(role=manager)`, no manager↔commercial relationship at all —
-this is WHY the Manager→Commercial picker stays domain-local, ADR-0021, rather than
-becoming a third consumer of that pattern).
+discipline every M4/M5 phase applied (ADR-0022): re-read `BonController`,
+`BonResource`, the `Bon`/`BonLine` models, their FormRequests and permission
+registrations directly from source before proposing any scope. **Do not assume Bons
+mirrors any of the other three Stock resources' shape** — it is the ONLY one of the
+four with a `/cancel` route (BC-AB), and its own binding is a Supplier→Company
+relationship, neither of the pairs the other three resources use.
 
 **What is known and safe to reuse, verify-don't-assume:**
 
-- `LineItemsEditor` (`shared/components/business/`) — its own line contract
-  (`product_id`, `quantity`, `unit_cost`, `notes`) was verified identical across ALL
-  FOUR Stock movement types' FormRequests, including Allocation's, before extraction
-  (ADR-0019). Re-verify `StoreAllocationLineRequest` at the start of this phase
-  regardless — the contract may have drifted since M5's own discovery pass read it.
-- `useFreshConfirm` (`shared/hooks/`) — reuse for Allocation's own validate
-  confirmation, giving its freshness query its OWN cache key (never the detail
-  query's), the same discipline both Stock callers already applied (ADR-0018).
-- The error-code registry — register EVERY Allocation code explicitly from
-  `AllocationExceptionRenderer` (or equivalent), never as a mechanical rename of
-  Return's or Transfer's own codes. Assume nothing carries over unchanged (ADR-0022).
-- The Manager→Commercial picker — **do NOT reuse or generalize
-  `ReturnManagerCommercialField`/`TransferManagerCommercialField`** for Allocations.
-  Its own binding rule is a different pair entirely; building a picker around it (if
-  one is even needed) is new, domain-local work, not a third consumer of the existing
-  pattern (ADR-0021).
+- `LineItemsEditor` (`shared/components/business/`) — already the third real caller
+  (Return, Transfer, Allocations); Bon's own `StoreBonLineRequest` was one of the
+  four FormRequests verified identical before extraction (ADR-0019), but re-verify
+  at the start of this phase regardless — the contract may have drifted.
+- `useFreshConfirm` (`shared/hooks/`) — reuse for Bon's own validate confirmation,
+  its own distinct cache key (ADR-0018). Bon's `/cancel` action is a genuinely new
+  irreversible-action shape none of the other three resources have — decide whether
+  it reuses `useFreshConfirm`/`ConfirmActionDialog` or needs something new.
+- The error-code registry — register EVERY Bon code explicitly from
+  `BonExceptionRenderer`, never as a mechanical rename of another resource's codes
+  (ADR-0022).
+- **A Suppliers reference endpoint is needed before Bon's own create form can work**
+  — the identical gap Allocations found for Companies (see M5 Phase 4's own
+  write-up): `Supplier` (`suppliers` table, `{id, name, code, active}`) has no HTTP
+  surface at all today. Raise the same minimal, read-only
+  `GET /admin/suppliers` request (mirrors `CompanyController::index()` exactly)
+  before building Bon's create form, rather than inventing a workaround.
 
 ## Things that MUST NOT be changed without a new decision (carried, updated this session)
 
@@ -152,29 +155,36 @@ becoming a third consumer of that pattern).
   Register each one explicitly, verified fresh from its own `*ExceptionRenderer` and
   Resource class (ADR-0022) — Transfer's own codes diverged from Return's in
   specific, named ways precisely because this discipline was followed.
+- 🚫 **Do not build CRUD (create/edit/delete) for Companies or Suppliers.** Both are
+  seeded once (`Phase4ASeeder`) and are deliberately reference-only — a read-only
+  `GET` endpoint plus a `domains/reference/*` module with no list page, mirroring
+  `domains/reference/companies/` exactly, is the whole shape either one gets.
 
 ## Known follow-ups (carried, updated this session)
 
 - [x] **M4 (Cheques, Deposits, Debt Payments) — fully DONE.** See `project-status.md`.
 - [x] **Freshness-rule retrofit (`useFreshConfirm`) — DONE.**
-- [x] **M5 discovery, Phase 1 (Agent Stock Returns), Phase 2 (Agent Transfers) — DONE.**
-- [ ] **M5 Phase 4 — Allocations — NEXT. Fresh discovery pass required before any
-      implementation.**
-- [ ] **M5 Phase 5 — Bons.** Later than Allocations.
+- [x] **M5 discovery, Phase 1 (Agent Stock Returns), Phase 2 (Agent Transfers),
+      Phase 4 (Allocations) — all DONE at the implementation level.**
+- [ ] **M5 Phase 5 — Bons — NEXT. Fresh discovery pass required before any
+      implementation.** Needs its own `GET /admin/suppliers` reference endpoint first
+      (see "Next task" above).
 - [ ] **Manual browser validation owed** for Deposits, Debt Payments, and Agent
       Transfers — none of the three has had a real end-to-end pass yet.
-- [ ] **FE-1 — test flake, unchanged.** Suite is now at 825 tests across 42 files. One
-      transient flake observed on a full parallel run this session (confirmed as a
-      flake, not a regression, by both an isolated re-run and a second full clean
-      run). Recommended before the suite grows further.
+- [ ] **Allocations' manual validation is BLOCKED, not merely owed** — no stock
+      source exists until Bons ships. Revisit once Phase 5 lands.
+- [ ] **FE-1 — test flake, unchanged.** Suite is now at 888 tests across 45 files.
+      Recommended before the suite grows further.
 - [ ] **FE-2 — nested-route guard.** Unchanged, still non-blocking. No Stock resource
       has needed a nested route either — every one so far ships flat sibling routes.
 - [ ] **BC-AA — no stock-quantity read endpoint anywhere.** Raise with the backend.
       Blocks any proactive capacity hint and any future Stock ledger view.
 - [ ] **BC-AB — only Bons has a `/cancel` route.** Raise with the backend. No cancel
       UI exists for Allocations/Agent Transfers/Agent Stock Returns.
-- [ ] **B-1 — Companies/Suppliers controllers do not exist.** Unchanged since M0.
-      Blocks the Stock directory screens specifically, not the four movement types.
+- [x] **B-1, Companies half — RESOLVED this phase.** `GET /admin/companies` now
+      exists (read-only, seeded reference data, no CRUD — by design, not a partial
+      fix). **Suppliers half is still open** — blocks Bons' own create form
+      specifically, not the other three movement types.
 - [ ] **BC-Y, BC-X, BC-N, BC-U, BC-V, BC-S, BC-Z — raise with the backend.** Unchanged.
 - [ ] **`implementation-status.md` has not been appended to since M3.1** — this
       session deliberately left it alone (a full historical backfill through M2–M5 is
