@@ -139,11 +139,30 @@ function failingAfterFirstShowHandler(
   });
 }
 
-function productsHandler() {
-  return http.get(`${API}/admin/products`, () =>
+/**
+ * `GET /admin/companies/{company}/stock` — the "add line" picker's own
+ * source of truth now (replaces the generic, unfiltered
+ * `GET /admin/products` this page used before the endpoint existed).
+ * Scoped to company id 5, matching every `showEnvelope`'s own default
+ * `company_id`.
+ */
+function companyStockHandler() {
+  return http.get(`${API}/admin/companies/5/stock`, () =>
     HttpResponse.json([
-      { id: 1, name: "IAM 10 DH", operator: "IAM", value: 10 },
-      { id: 2, name: "INWI 20 DH", operator: "INWI", value: 20 },
+      {
+        product_id: 1,
+        name: "IAM 10 DH",
+        operator: "IAM",
+        value: 10,
+        available_quantity: 50,
+      },
+      {
+        product_id: 2,
+        name: "INWI 20 DH",
+        operator: "INWI",
+        value: 20,
+        available_quantity: 30,
+      },
     ]),
   );
 }
@@ -173,7 +192,7 @@ describe("rendering every field show() returns", () => {
   it("renders allocation number, status, company, manager, amount, notes", async () => {
     server.use(
       showHandler(1, showEnvelope({ id: 1, notes: "Q3 restock" })),
-      productsHandler(),
+      companyStockHandler(),
     );
     renderPage("/stock/allocations/1");
 
@@ -188,7 +207,7 @@ describe("rendering every field show() returns", () => {
   it("renders lines when present", async () => {
     server.use(
       showHandler(1, showEnvelope({ id: 1, lines: [lineRow()] })),
-      productsHandler(),
+      companyStockHandler(),
     );
     renderPage("/stock/allocations/1");
 
@@ -199,7 +218,7 @@ describe("rendering every field show() returns", () => {
   it("renders no Consumptions section — show() never eager-loads it", async () => {
     server.use(
       showHandler(1, showEnvelope({ id: 1, lines: [lineRow()] })),
-      productsHandler(),
+      companyStockHandler(),
     );
     renderPage("/stock/allocations/1");
 
@@ -214,7 +233,7 @@ describe("status-dependent sections", () => {
   it("shows no Processed section for a draft", async () => {
     server.use(
       showHandler(1, showEnvelope({ id: 1, status: "draft" })),
-      productsHandler(),
+      companyStockHandler(),
     );
     renderPage("/stock/allocations/1");
 
@@ -233,7 +252,7 @@ describe("status-dependent sections", () => {
           approved_at: "2026-07-26T10:00:00Z",
         }),
       ),
-      productsHandler(),
+      companyStockHandler(),
     );
     renderPage("/stock/allocations/1");
 
@@ -247,7 +266,7 @@ describe("loading, error and not-found states", () => {
       http.get(`${API}/admin/allocations/1`, () =>
         HttpResponse.json({ success: false, message: "Erreur serveur" }, { status: 500 }),
       ),
-      productsHandler(),
+      companyStockHandler(),
     );
     renderPage("/stock/allocations/1");
 
@@ -267,7 +286,7 @@ describe("loading, error and not-found states", () => {
           { status: 404 },
         ),
       ),
-      productsHandler(),
+      companyStockHandler(),
     );
     renderPage("/stock/allocations/1");
 
@@ -279,7 +298,7 @@ describe("action visibility — permission AND status gating", () => {
   it("shows Validate for a draft with at least one line, when the permission is held", async () => {
     server.use(
       showHandler(1, showEnvelope({ id: 1, status: "draft", lines: [lineRow()] })),
-      productsHandler(),
+      companyStockHandler(),
     );
     renderPage("/stock/allocations/1");
 
@@ -289,7 +308,7 @@ describe("action visibility — permission AND status gating", () => {
   it("disables Validate on an empty draft, with an explanatory hint", async () => {
     server.use(
       showHandler(1, showEnvelope({ id: 1, status: "draft" })),
-      productsHandler(),
+      companyStockHandler(),
     );
     renderPage("/stock/allocations/1");
 
@@ -301,7 +320,7 @@ describe("action visibility — permission AND status gating", () => {
     signInWith([PERMISSIONS.VIEW_ALLOCATIONS]);
     server.use(
       showHandler(1, showEnvelope({ id: 1, status: "draft", lines: [lineRow()] })),
-      productsHandler(),
+      companyStockHandler(),
     );
     renderPage("/stock/allocations/1");
 
@@ -312,7 +331,7 @@ describe("action visibility — permission AND status gating", () => {
   it("hides Validate for an already-validated allocation, even with the permission held", async () => {
     server.use(
       showHandler(1, showEnvelope({ id: 1, status: "validated" })),
-      productsHandler(),
+      companyStockHandler(),
     );
     renderPage("/stock/allocations/1");
 
@@ -323,7 +342,7 @@ describe("action visibility — permission AND status gating", () => {
   it("renders lines read-only (no Add/Edit/Remove) once no longer a draft", async () => {
     server.use(
       showHandler(1, showEnvelope({ id: 1, status: "validated", lines: [lineRow()] })),
-      productsHandler(),
+      companyStockHandler(),
     );
     renderPage("/stock/allocations/1");
 
@@ -339,7 +358,7 @@ describe("adding a line", () => {
     let body: unknown;
     server.use(
       showHandler(1, showEnvelope({ id: 1, status: "draft" })),
-      productsHandler(),
+      companyStockHandler(),
       http.post(`${API}/admin/allocations/1/lines`, async ({ request }) => {
         body = await request.json();
         return HttpResponse.json(
@@ -349,8 +368,9 @@ describe("adding a line", () => {
     );
     renderPage("/stock/allocations/1");
 
-    await screen.findByLabelText("Add product");
-    fireEvent.change(screen.getByLabelText("Add product"), { target: { value: "1" } });
+    const productSelect = await screen.findByLabelText("Add product");
+    await within(productSelect).findByRole("option", { name: "IAM 10 DH" });
+    fireEvent.change(productSelect, { target: { value: "1" } });
     fireEvent.change(screen.getByLabelText("Add quantity"), { target: { value: "5" } });
     fireEvent.change(screen.getByLabelText("Add unit cost"), { target: { value: "10" } });
     fireEvent.click(screen.getByRole("button", { name: "Add line" }));
@@ -364,7 +384,7 @@ describe("adding a line", () => {
   it("shows domain-owned copy from the error-code registry on a duplicate product", async () => {
     server.use(
       showHandler(1, showEnvelope({ id: 1, status: "draft" })),
-      productsHandler(),
+      companyStockHandler(),
       http.post(`${API}/admin/allocations/1/lines`, () =>
         HttpResponse.json(
           {
@@ -378,8 +398,9 @@ describe("adding a line", () => {
     );
     renderPage("/stock/allocations/1");
 
-    await screen.findByLabelText("Add product");
-    fireEvent.change(screen.getByLabelText("Add product"), { target: { value: "1" } });
+    const productSelect = await screen.findByLabelText("Add product");
+    await within(productSelect).findByRole("option", { name: "IAM 10 DH" });
+    fireEvent.change(productSelect, { target: { value: "1" } });
     fireEvent.change(screen.getByLabelText("Add quantity"), { target: { value: "5" } });
     fireEvent.change(screen.getByLabelText("Add unit cost"), { target: { value: "10" } });
     fireEvent.click(screen.getByRole("button", { name: "Add line" }));
@@ -403,7 +424,7 @@ describe("editing a line", () => {
       http.get(`${API}/admin/allocations/1`, () =>
         HttpResponse.json(showEnvelope({ id: 1, status: "draft", lines })),
       ),
-      productsHandler(),
+      companyStockHandler(),
       http.patch(`${API}/admin/allocations/1/lines/1`, async ({ request }) => {
         body = await request.json();
         lines = [lineRow({ quantity: 8, unit_cost: "12.00" })];
@@ -434,7 +455,7 @@ describe("removing a line", () => {
       http.get(`${API}/admin/allocations/1`, () =>
         HttpResponse.json(showEnvelope({ id: 1, status: "draft", lines })),
       ),
-      productsHandler(),
+      companyStockHandler(),
       http.delete(`${API}/admin/allocations/1/lines/1`, () => {
         called = true;
         lines = [];
@@ -456,7 +477,7 @@ describe("removing a line", () => {
   it("shows domain-owned copy on a stock-insufficient refusal", async () => {
     server.use(
       showHandler(1, showEnvelope({ id: 1, status: "draft", lines: [lineRow()] })),
-      productsHandler(),
+      companyStockHandler(),
       http.delete(`${API}/admin/allocations/1/lines/1`, () =>
         HttpResponse.json(
           {
@@ -493,7 +514,7 @@ describe("Validate — freshness rule (M4 · G4 closure) and error codes", () =>
           showEnvelope({ id: 1, status: "draft", lines: [lineRow()] }),
         );
       }),
-      productsHandler(),
+      companyStockHandler(),
     );
     renderPage("/stock/allocations/1");
 
@@ -510,7 +531,7 @@ describe("Validate — freshness rule (M4 · G4 closure) and error codes", () =>
         showEnvelope({ id: 1, status: "draft", lines: [lineRow()] }),
         showEnvelope({ id: 1, status: "validated", lines: [lineRow()] }),
       ]),
-      productsHandler(),
+      companyStockHandler(),
     );
     renderPage("/stock/allocations/1");
 
@@ -529,7 +550,7 @@ describe("Validate — freshness rule (M4 · G4 closure) and error codes", () =>
         1,
         showEnvelope({ id: 1, status: "draft", lines: [lineRow()] }),
       ),
-      productsHandler(),
+      companyStockHandler(),
     );
     renderPage("/stock/allocations/1");
 
@@ -550,7 +571,7 @@ describe("Validate — freshness rule (M4 · G4 closure) and error codes", () =>
       http.get(`${API}/admin/allocations/1`, () =>
         HttpResponse.json(showEnvelope({ id: 1, status, lines: [lineRow()] })),
       ),
-      productsHandler(),
+      companyStockHandler(),
       http.post(`${API}/admin/allocations/1/validate`, () => {
         status = "validated";
         return HttpResponse.json(showEnvelope({ id: 1, status, lines: [lineRow()] }));
@@ -571,7 +592,7 @@ describe("Validate — freshness rule (M4 · G4 closure) and error codes", () =>
   it("shows the registered copy for a stock-insufficient 409 on validate", async () => {
     server.use(
       showHandler(1, showEnvelope({ id: 1, status: "draft", lines: [lineRow()] })),
-      productsHandler(),
+      companyStockHandler(),
       http.post(`${API}/admin/allocations/1/validate`, () =>
         HttpResponse.json(
           {
@@ -605,7 +626,7 @@ describe("Validate — freshness rule (M4 · G4 closure) and error codes", () =>
   it("shows the registered copy for a deposit-capacity-exceeded 409 on validate", async () => {
     server.use(
       showHandler(1, showEnvelope({ id: 1, status: "draft", lines: [lineRow()] })),
-      productsHandler(),
+      companyStockHandler(),
       http.post(`${API}/admin/allocations/1/validate`, () =>
         HttpResponse.json(
           {
@@ -639,7 +660,7 @@ describe("Validate — freshness rule (M4 · G4 closure) and error codes", () =>
   it("shows the registered copy for a team outstanding-obligation 409 on validate", async () => {
     server.use(
       showHandler(1, showEnvelope({ id: 1, status: "draft", lines: [lineRow()] })),
-      productsHandler(),
+      companyStockHandler(),
       http.post(`${API}/admin/allocations/1/validate`, () =>
         HttpResponse.json(
           {
@@ -672,7 +693,7 @@ describe("Validate — freshness rule (M4 · G4 closure) and error codes", () =>
     queryClient.setQueryData(["allocations", "list", {}], { fake: true });
     server.use(
       showHandler(1, showEnvelope({ id: 1, status: "draft", lines: [lineRow()] })),
-      productsHandler(),
+      companyStockHandler(),
       http.post(`${API}/admin/allocations/1/validate`, () =>
         HttpResponse.json(
           showEnvelope({ id: 1, status: "validated", lines: [lineRow()] }),

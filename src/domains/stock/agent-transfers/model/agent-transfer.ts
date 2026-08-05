@@ -79,6 +79,7 @@ export type AgentTransferLine = {
 
 export type AgentTransfer = {
   id: number;
+  /** BACKEND-GENERATED (`TRF-{ULID}`, `AgentTransferService::createDraft` via `DocumentNumberService`) — never a create-form input; see `model/create-agent-transfer.ts`'s own docblock. */
   transferNumber: string;
   status: AgentTransferStatus;
   /** Metadata-only, `decimal:2`-cast STRING — see the module docblock. */

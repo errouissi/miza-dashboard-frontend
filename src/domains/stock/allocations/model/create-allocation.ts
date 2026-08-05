@@ -8,16 +8,22 @@ import { z } from "zod";
  *
  * FIELDS VERIFIED FRESH FROM `StoreAllocationRequest`'s OWN VALIDATOR:
  *
- *   'allocation_number' => 'required|string|max:191|unique:allocations,allocation_number'
- *   'company_id'         => 'required|integer|exists:companies,id (active)'
- *   'agent_id'            => 'required|integer|exists:agents,id (active, role=manager)'
- *   'notes'               => 'nullable|string|max:1000'
+ *   'company_id' => 'required|integer|exists:companies,id (active)'
+ *   'agent_id'    => 'required|integer|exists:agents,id (active, role=manager)'
+ *   'notes'       => 'nullable|string|max:1000'
+ *
+ * NO `allocation_number` FIELD — `allocation_number` is now BACKEND-
+ * GENERATED (`AllocationService::createDraft`, via `DocumentNumberService`,
+ * `ALLOC-{ULID}`) and was removed from `StoreAllocationRequest`'s own
+ * rules entirely; any value a caller supplied would simply be ignored even
+ * before this change removed the field client-side. There is therefore no
+ * client-side "duplicate allocation number" case to guard against anymore
+ * — a collision (bounded at 3 server-side regeneration attempts) is
+ * astronomically unlikely and not user-facing in any way this form could
+ * meaningfully react to.
  *
  * NO DATE FIELD — unlike `create-agent-transfer.ts`'s own `transferDate`,
  * `StoreAllocationRequest` has no date field at all; not an omission.
- *
- * `allocation_number` IS `max:191`, NOT `max:255` LIKE TRANSFER'S OWN
- * `transfer_number` — a genuine, verified divergence, not normalized away.
  *
  * `companyId` HAS NO CLIENT-SIDE RE-CHECK OF "is this company active" — the
  * picker (`useCompanyOptionsQuery`) already only ever offers active
@@ -28,27 +34,12 @@ import { z } from "zod";
  */
 
 const shape = {
-  allocationNumber: z.string().trim(),
   companyId: z.string().trim(),
   agentId: z.string().trim(),
   notes: z.string().trim(),
 };
 
 export const createAllocationSchema = z.object(shape).superRefine((data, ctx) => {
-  if (!data.allocationNumber) {
-    ctx.addIssue({
-      code: "custom",
-      message: "Allocation number is required.",
-      path: ["allocationNumber"],
-    });
-  } else if (data.allocationNumber.length > 191) {
-    ctx.addIssue({
-      code: "custom",
-      message: "Allocation number must be 191 characters or fewer.",
-      path: ["allocationNumber"],
-    });
-  }
-
   if (!data.companyId) {
     ctx.addIssue({
       code: "custom",
@@ -77,7 +68,6 @@ export const createAllocationSchema = z.object(shape).superRefine((data, ctx) =>
 export type CreateAllocationFormValues = z.infer<typeof createAllocationSchema>;
 
 export const defaultCreateAllocationValues: CreateAllocationFormValues = {
-  allocationNumber: "",
   companyId: "",
   agentId: "",
   notes: "",

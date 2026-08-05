@@ -10,6 +10,7 @@ import {
   validateAgentTransfer,
 } from "../api/agent-transfers-api";
 import { fetchManagerCommercials } from "../api/agent-sub-data-api";
+import { fetchManagerStock } from "../api/manager-stock-api";
 import type { AgentTransferListParams } from "../model/agent-transfer";
 import type { CreateAgentTransferFormValues } from "../model/create-agent-transfer";
 import { agentTransfersKeys } from "./keys";
@@ -84,6 +85,29 @@ export function useManagerCommercialsQuery(
     queryFn: () => fetchManagerCommercials(managerId),
     staleTime: STALE_TIMES.LIVE,
     enabled: (options.enabled ?? true) && !!managerId,
+  });
+}
+
+/**
+ * The detail page's own "add line" product picker
+ * (`GET /admin/managers/{manager}/stock`) — THE backend source of truth
+ * for product availability, verified fresh from source
+ * (`AgentController::stock`). `LIVE` tier, mirroring
+ * `useCompanyStockQuery`'s own reasoning (Allocations, added the same
+ * phase): the same class of data as the transfer itself. Replaces the
+ * generic, unfiltered `useProductOptionsQuery()` this page used before
+ * this contract existed — every option this query returns already has
+ * `available_quantity > 0`.
+ */
+export function useManagerStockQuery(
+  managerId: number,
+  options: { enabled?: boolean } = {},
+) {
+  return useQuery({
+    queryKey: agentTransfersKeys.managerStock(managerId),
+    queryFn: () => fetchManagerStock(managerId),
+    staleTime: STALE_TIMES.LIVE,
+    enabled: (options.enabled ?? true) && managerId > 0,
   });
 }
 

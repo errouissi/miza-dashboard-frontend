@@ -62,11 +62,17 @@ function subDataHandler(
   );
 }
 
-/** `store()`'s own flat envelope — `{"data": new AgentTransferResource(...)}`. */
+/**
+ * `store()`'s own flat envelope — `{"data": new AgentTransferResource(...)}`.
+ * `transfer_number` is BACKEND-GENERATED now (`AgentTransferService::
+ * createDraft` via `DocumentNumberService`) — this fixture value stands in
+ * for whatever the server actually returns; the create form never sends
+ * one.
+ */
 const CREATE_TRANSFER_ENVELOPE = {
   data: {
     id: 900,
-    transfer_number: "TRF-900",
+    transfer_number: "TRF-01J8Z9XQ7K",
     status: "draft",
     montant: "0.00",
     notes: null,
@@ -117,17 +123,18 @@ beforeEach(() => {
 });
 
 describe("rendering", () => {
-  it("renders the backend-supported fields", async () => {
+  it("renders the backend-supported fields, no transfer number input", async () => {
     server.use(managersHandler());
     renderPage();
 
-    expect(await screen.findByLabelText("Transfer number")).toBeInTheDocument();
-    expect(screen.getByLabelText("Manager")).toBeInTheDocument();
+    expect(await screen.findByLabelText("Manager")).toBeInTheDocument();
     expect(screen.getByLabelText("Commercial")).toBeInTheDocument();
     expect(screen.getByLabelText("Transfer date")).toBeInTheDocument();
     expect(screen.getByLabelText("Notes")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Record Transfer" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
+    // Backend-generated now — no field for it anymore.
+    expect(screen.queryByLabelText(/transfer number/i)).not.toBeInTheDocument();
   });
 
   it("disables the Commercial select until a manager is chosen", async () => {
@@ -211,20 +218,19 @@ describe("manager -> commercial cascade", () => {
 });
 
 describe("validation", () => {
-  it("shows a required error for every field on an empty submit", async () => {
+  it("shows a required error for both remaining required fields on an empty submit", async () => {
     server.use(managersHandler());
     renderPage();
 
     fireEvent.click(await screen.findByRole("button", { name: "Record Transfer" }));
 
-    expect(await screen.findByText("Transfer number is required.")).toBeInTheDocument();
-    expect(screen.getByText("Manager is required.")).toBeInTheDocument();
+    expect(await screen.findByText("Manager is required.")).toBeInTheDocument();
     expect(screen.getByText("Commercial is required.")).toBeInTheDocument();
   });
 });
 
 describe("submission and success", () => {
-  it("submits the exact wire field names, omitting blank optional fields", async () => {
+  it("submits the exact wire field names — no transfer_number, the backend generates it", async () => {
     let body: unknown;
     server.use(
       managersHandler(),
@@ -236,15 +242,11 @@ describe("submission and success", () => {
     );
     renderPage();
 
-    fireEvent.change(await screen.findByLabelText("Transfer number"), {
-      target: { value: "TRF-900" },
-    });
     await selectManagerAndCommercial();
     fireEvent.click(screen.getByRole("button", { name: "Record Transfer" }));
 
     await waitFor(() =>
       expect(body).toEqual({
-        transfer_number: "TRF-900",
         manager_id: "20",
         commercial_id: "10",
       }),
@@ -263,9 +265,6 @@ describe("submission and success", () => {
     );
     renderPage();
 
-    fireEvent.change(await screen.findByLabelText("Transfer number"), {
-      target: { value: "TRF-900" },
-    });
     await selectManagerAndCommercial();
     fireEvent.change(screen.getByLabelText("Notes"), {
       target: { value: "Restocking" },
@@ -289,9 +288,6 @@ describe("submission and success", () => {
     );
     const router = renderPage();
 
-    fireEvent.change(await screen.findByLabelText("Transfer number"), {
-      target: { value: "TRF-900" },
-    });
     await selectManagerAndCommercial();
     fireEvent.click(screen.getByRole("button", { name: "Record Transfer" }));
 
@@ -313,7 +309,7 @@ describe("Cancel", () => {
     );
     const router = renderPage();
 
-    await screen.findByLabelText("Transfer number");
+    await screen.findByLabelText("Manager");
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
 
     expect(router.state.location.pathname).toBe(TRANSFERS_PATH);
@@ -332,44 +328,15 @@ describe("failure preserves entered values", () => {
     );
     const router = renderPage();
 
-    fireEvent.change(await screen.findByLabelText("Transfer number"), {
-      target: { value: "TRF-900" },
-    });
     await selectManagerAndCommercial();
+    fireEvent.change(screen.getByLabelText("Notes"), { target: { value: "Restocking" } });
     fireEvent.click(screen.getByRole("button", { name: "Record Transfer" }));
 
     expect(
       await screen.findByText(/something went wrong recording this transfer/i),
     ).toBeInTheDocument();
     expect(router.state.location.pathname).toBe(PATH);
-    expect(screen.getByLabelText("Transfer number")).toHaveValue("TRF-900");
-  });
-
-  it("maps a field-level 422 (e.g. a duplicate transfer number) to its own field", async () => {
-    server.use(
-      managersHandler(),
-      subDataHandler(20, [{ id: 10, nom: "Alaoui", prenom: "Sara", status: "active" }]),
-      http.post(`${API}/admin/agent-transfers`, () =>
-        HttpResponse.json(
-          {
-            message: "The given data was invalid.",
-            errors: { transfer_number: ["The transfer number has already been taken."] },
-          },
-          { status: 422 },
-        ),
-      ),
-    );
-    renderPage();
-
-    fireEvent.change(await screen.findByLabelText("Transfer number"), {
-      target: { value: "TRF-900" },
-    });
-    await selectManagerAndCommercial();
-    fireEvent.click(screen.getByRole("button", { name: "Record Transfer" }));
-
-    expect(
-      await screen.findByText("The transfer number has already been taken."),
-    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Notes")).toHaveValue("Restocking");
   });
 
   it("shows a permission-specific message on a 403", async () => {
@@ -385,9 +352,6 @@ describe("failure preserves entered values", () => {
     );
     renderPage();
 
-    fireEvent.change(await screen.findByLabelText("Transfer number"), {
-      target: { value: "TRF-900" },
-    });
     await selectManagerAndCommercial();
     fireEvent.click(screen.getByRole("button", { name: "Record Transfer" }));
 

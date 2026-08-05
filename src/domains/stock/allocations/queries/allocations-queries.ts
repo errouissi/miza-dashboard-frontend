@@ -9,6 +9,7 @@ import {
   updateAllocationLine,
   validateAllocation,
 } from "../api/allocations-api";
+import { fetchCompanyStock } from "../api/company-stock-api";
 import type { AllocationListParams } from "../model/allocation";
 import type { CreateAllocationFormValues } from "../model/create-allocation";
 import { allocationsKeys } from "./keys";
@@ -61,6 +62,30 @@ export function useAllocationFreshnessQuery(id: number) {
     queryFn: () => fetchAllocationById(id),
     staleTime: STALE_TIMES.CRITICAL,
     enabled: false,
+  });
+}
+
+/**
+ * The detail page's own "add line" product picker
+ * (`GET /admin/companies/{company}/stock`) — THE backend source of truth
+ * for product availability, verified fresh from source
+ * (`CompanyController::stock`). `LIVE` tier: the same class of data as the
+ * allocation itself, and it can change the instant another admin validates
+ * a different allocation against the same company. Replaces the generic,
+ * unfiltered `useProductOptionsQuery()` this page used before this
+ * contract existed — every option this query returns already has
+ * `available_quantity > 0`, so the picker can never offer a product with
+ * no stock to allocate.
+ */
+export function useCompanyStockQuery(
+  companyId: number,
+  options: { enabled?: boolean } = {},
+) {
+  return useQuery({
+    queryKey: allocationsKeys.companyStock(companyId),
+    queryFn: () => fetchCompanyStock(companyId),
+    staleTime: STALE_TIMES.LIVE,
+    enabled: (options.enabled ?? true) && companyId > 0,
   });
 }
 

@@ -9,11 +9,11 @@ import { Button } from "@/shared/components/ui/button";
 import { Skeleton } from "@/shared/components/ui/skeleton";
 import { ListErrorState } from "@/shared/components/patterns/list-states";
 import { LineItemsEditor } from "@/shared/components/business/line-items-editor";
-import { useProductOptionsQuery } from "@/domains/reference/products";
 import { ValidateAllocationDialog } from "../components/validate-allocation-dialog";
 import {
   useAddAllocationLineMutation,
   useAllocationQuery,
+  useCompanyStockQuery,
   useRemoveAllocationLineMutation,
   useUpdateAllocationLineMutation,
 } from "../queries/allocations-queries";
@@ -54,8 +54,19 @@ import { ALLOCATION_STATUS_LABELS, ALLOCATION_STATUS_TONES } from "../model/allo
  * with an inline hint rather than left to round-trip. A failed validate may
  * ALSO surface `ALLOCATION_EXCEEDS_DEPOSIT_CAPACITY` or
  * `ALLOCATION_TEAM_HAS_OUTSTANDING_OBLIGATION` — both handled reactively by
- * `ValidateAllocationDialog`'s own error-code resolution, no proactive
- * check here (BC-AA, no stock-quantity read endpoint exists).
+ * `ValidateAllocationDialog`'s own error-code resolution; NEITHER gate is
+ * about product-level stock, so BC-AA's own restraint (no proactive
+ * capacity/obligation hint) is unchanged by the "add line" picker below.
+ *
+ * THE "ADD LINE" PRODUCT PICKER IS NOW BACKED BY REAL AVAILABILITY —
+ * `useCompanyStockQuery` (`GET /admin/companies/{company}/stock`), added
+ * once the backend started exposing per-company product availability.
+ * Replaces the generic, unfiltered `useProductOptionsQuery()` this page
+ * used before that contract existed; every option offered here already has
+ * `available_quantity > 0` (filtered server-side), so `ALLOCATION_STOCK_
+ * INSUFFICIENT` can still fire (the picker reflects availability at
+ * render time, not at the instant of submission) but can no longer be
+ * triggered by a product the company never had any of.
  */
 export function AllocationDetailPage() {
   const navigate = useNavigate();
@@ -66,7 +77,9 @@ export function AllocationDetailPage() {
   const [validateOpen, setValidateOpen] = useState(false);
 
   const allocationQuery = useAllocationQuery(id ?? -1, { enabled: id !== undefined });
-  const productOptionsQuery = useProductOptionsQuery();
+  const companyStockQuery = useCompanyStockQuery(allocationQuery.data?.companyId ?? -1, {
+    enabled: allocationQuery.data !== undefined,
+  });
 
   const addLineMutation = useAddAllocationLineMutation();
   const updateLineMutation = useUpdateAllocationLineMutation();
@@ -216,7 +229,10 @@ export function AllocationDetailPage() {
         <h2 className="text-lg font-semibold">Lines</h2>
         <LineItemsEditor
           lines={lines}
-          productOptions={productOptionsQuery.data ?? []}
+          productOptions={(companyStockQuery.data ?? []).map((item) => ({
+            id: item.productId,
+            name: item.name,
+          }))}
           readOnly={!isDraft || !canEditLines}
           pendingId={pendingId}
           error={lineError}

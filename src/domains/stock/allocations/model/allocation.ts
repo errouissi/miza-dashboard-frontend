@@ -97,6 +97,7 @@ export type AllocationLine = {
 
 export type Allocation = {
   id: number;
+  /** BACKEND-GENERATED (`ALLOC-{ULID}`, `AllocationService::createDraft` via `DocumentNumberService`) — never a create-form input; see `model/create-allocation.ts`'s own docblock. */
   allocationNumber: string;
   status: AllocationStatus;
   /** LOAD-BEARING, `decimal:2`-cast STRING — see the module docblock. */

@@ -28,4 +28,12 @@ export const agentTransfersKeys = {
    */
   managerCommercials: (managerId: string) =>
     [...agentTransfersKeys.all, "managerCommercials", managerId] as const,
+  /**
+   * The detail page's own "add line" product picker
+   * (`GET /admin/managers/{manager}/stock`) — keyed by manager id, kept
+   * under this domain's own `["agent-transfers"]` prefix, mirroring
+   * `allocationsKeys.companyStock`'s own precedent (added the same phase).
+   */
+  managerStock: (managerId: number) =>
+    [...agentTransfersKeys.all, "managerStock", managerId] as const,
 };

@@ -8,11 +8,20 @@ import { z } from "zod";
  *
  * FIELDS VERIFIED FRESH FROM `StoreAgentTransferRequest`'s OWN VALIDATOR:
  *
- *   'transfer_number' => 'required|string|max:255|unique:agent_transfers,transfer_number'
- *   'manager_id'       => 'required|integer|exists:agents,id (active, role=manager)'
- *   'commercial_id'    => 'required|integer|exists:agents,id (active, role=commercial)'
- *   'notes'            => 'nullable|string|max:1000'
- *   'transfer_date'    => 'nullable|date'
+ *   'manager_id'    => 'required|integer|exists:agents,id (active, role=manager)'
+ *   'commercial_id' => 'required|integer|exists:agents,id (active, role=commercial)'
+ *   'notes'         => 'nullable|string|max:1000'
+ *   'transfer_date' => 'nullable|date'
+ *
+ * NO `transfer_number` FIELD — `transfer_number` is now BACKEND-GENERATED
+ * (`AgentTransferService::createDraft`, via `DocumentNumberService`,
+ * `TRF-{ULID}`) and was removed from `StoreAgentTransferRequest`'s own
+ * rules entirely; any value a caller supplied would simply be ignored even
+ * before this change removed the field client-side. There is therefore no
+ * client-side "duplicate transfer number" case to guard against anymore —
+ * a collision (bounded at 3 server-side regeneration attempts) is
+ * astronomically unlikely and not user-facing in any way this form could
+ * meaningfully react to.
  *
  * THE CROSS-FIELD BINDING RULE (`commercial.manager_id === manager_id`,
  * re-verified from `StoreAgentTransferRequest::withValidator`) IS
@@ -28,7 +37,6 @@ import { z } from "zod";
  */
 
 const shape = {
-  transferNumber: z.string().trim(),
   managerId: z.string().trim(),
   commercialId: z.string().trim(),
   notes: z.string().trim(),
@@ -37,20 +45,6 @@ const shape = {
 };
 
 export const createAgentTransferSchema = z.object(shape).superRefine((data, ctx) => {
-  if (!data.transferNumber) {
-    ctx.addIssue({
-      code: "custom",
-      message: "Transfer number is required.",
-      path: ["transferNumber"],
-    });
-  } else if (data.transferNumber.length > 255) {
-    ctx.addIssue({
-      code: "custom",
-      message: "Transfer number must be 255 characters or fewer.",
-      path: ["transferNumber"],
-    });
-  }
-
   if (!data.managerId) {
     ctx.addIssue({
       code: "custom",
@@ -79,7 +73,6 @@ export const createAgentTransferSchema = z.object(shape).superRefine((data, ctx)
 export type CreateAgentTransferFormValues = z.infer<typeof createAgentTransferSchema>;
 
 export const defaultCreateAgentTransferValues: CreateAgentTransferFormValues = {
-  transferNumber: "",
   managerId: "",
   commercialId: "",
   notes: "",

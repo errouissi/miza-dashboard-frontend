@@ -42,6 +42,10 @@ const SELECT_CLASS =
  * offering one here would be a control guaranteed to fail (ADR-0009's own
  * discipline: expose only backend-supported capabilities).
  *
+ * NO ALLOCATION NUMBER FIELD — `allocation_number` is now BACKEND-GENERATED
+ * (see `model/create-allocation.ts`'s own docblock); `StoreAllocationRequest`
+ * no longer accepts it as input at all. Removed here, not merely hidden.
+ *
  * NO TOAST LIBRARY EXISTS IN THIS CODEBASE — on success, navigate straight
  * to the new allocation's OWN DETAIL PAGE (not the list) — this is where
  * the operator adds lines next, the actual next step in the roadmap's own
@@ -72,13 +76,11 @@ export function CreateAllocationPage() {
   const fieldError = (wireName: string): string | undefined =>
     isAppError(mutationError) ? mutationError.fieldErrors?.[wireName]?.[0] : undefined;
 
-  const allocationNumberError = fieldError("allocation_number");
   const companyError = fieldError("company_id");
   const agentError = fieldError("agent_id");
   const notesError = fieldError("notes");
 
-  const hasFieldError =
-    !!allocationNumberError || !!companyError || !!agentError || !!notesError;
+  const hasFieldError = !!companyError || !!agentError || !!notesError;
 
   const generalError =
     isAppError(mutationError) && !hasFieldError
@@ -98,29 +100,6 @@ export function CreateAllocationPage() {
         <p className="text-muted-foreground mt-1 text-sm">
           Submits a draft. Add lines and validate on the next page.
         </p>
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="allocationNumber" className="text-sm font-medium">
-          Allocation number
-        </label>
-        <Input
-          id="allocationNumber"
-          aria-invalid={
-            !!form.formState.errors.allocationNumber || !!allocationNumberError
-          }
-          {...form.register("allocationNumber")}
-        />
-        {form.formState.errors.allocationNumber ? (
-          <p role="alert" className="text-destructive text-xs">
-            {form.formState.errors.allocationNumber.message}
-          </p>
-        ) : null}
-        {allocationNumberError ? (
-          <p role="alert" className="text-destructive text-xs">
-            {allocationNumberError}
-          </p>
-        ) : null}
       </div>
 
       <div className="flex flex-col gap-1.5">

@@ -146,11 +146,16 @@ export async function fetchAllocationById(id: number): Promise<Allocation> {
   return toAllocation(data.data);
 }
 
+/**
+ * `allocation_number` is NOT sent — it is backend-generated
+ * (`AllocationService::createDraft`, via `DocumentNumberService`) and
+ * `StoreAllocationRequest` no longer accepts it as input at all; sending
+ * one would simply be ignored.
+ */
 export async function createAllocation(
   values: CreateAllocationFormValues,
 ): Promise<Allocation> {
   const { data } = await httpClient.post<AllocationEnvelope>("/admin/allocations", {
-    allocation_number: values.allocationNumber.trim(),
     company_id: values.companyId,
     agent_id: values.agentId,
     ...(values.notes.trim() ? { notes: values.notes.trim() } : {}),

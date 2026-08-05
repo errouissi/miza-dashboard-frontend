@@ -19,4 +19,13 @@ export const allocationsKeys = {
    * detail query into an error state too.
    */
   freshness: (id: number) => [...allocationsKeys.detail(id), "freshness"] as const,
+  /**
+   * The "add line" product picker's own source of truth
+   * (`GET /admin/companies/{company}/stock`) — keyed by company id, kept
+   * under this domain's own `["allocations"]` prefix rather than a
+   * Companies key, mirroring `agentTransfersKeys.managerCommercials`'s own
+   * precedent for a domain-local cross-cutting read.
+   */
+  companyStock: (companyId: number) =>
+    [...allocationsKeys.all, "companyStock", companyId] as const,
 };

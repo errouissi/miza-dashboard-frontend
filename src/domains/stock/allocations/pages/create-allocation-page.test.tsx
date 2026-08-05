@@ -48,11 +48,17 @@ function managersHandler() {
   );
 }
 
-/** `store()`'s own flat envelope — `{"data": new AllocationResource(...)}`. */
+/**
+ * `store()`'s own flat envelope — `{"data": new AllocationResource(...)}`.
+ * `allocation_number` is BACKEND-GENERATED now (`AllocationService::
+ * createDraft` via `DocumentNumberService`) — this fixture value stands in
+ * for whatever the server actually returns; the create form never sends
+ * one.
+ */
 const CREATE_ALLOCATION_ENVELOPE = {
   data: {
     id: 900,
-    allocation_number: "ALL-900",
+    allocation_number: "ALLOC-01J8Z9XQ7K",
     status: "draft",
     montant: "0.00",
     notes: null,
@@ -110,17 +116,18 @@ beforeEach(() => {
 });
 
 describe("rendering", () => {
-  it("renders the backend-supported fields — two independent selects, no cascade", async () => {
+  it("renders the backend-supported fields — two independent selects, no cascade, no allocation number input", async () => {
     server.use(companiesHandler(), managersHandler());
     renderPage();
 
-    expect(await screen.findByLabelText("Allocation number")).toBeInTheDocument();
-    expect(screen.getByLabelText("Company")).toBeInTheDocument();
+    expect(await screen.findByLabelText("Company")).toBeInTheDocument();
     expect(screen.getByLabelText("Manager")).toBeInTheDocument();
     expect(screen.getByLabelText("Notes")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Record Allocation" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
-    // No date field — StoreAllocationRequest has none, unlike Transfer's own.
+    // No allocation number field — it is backend-generated now, and no
+    // date field — StoreAllocationRequest has none, unlike Transfer's own.
+    expect(screen.queryByLabelText(/allocation number/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/date/i)).not.toBeInTheDocument();
   });
 
@@ -173,20 +180,19 @@ describe("rendering", () => {
 });
 
 describe("validation", () => {
-  it("shows a required error for every field on an empty submit", async () => {
+  it("shows a required error for both remaining fields on an empty submit", async () => {
     server.use(companiesHandler(), managersHandler());
     renderPage();
 
     fireEvent.click(await screen.findByRole("button", { name: "Record Allocation" }));
 
-    expect(await screen.findByText("Allocation number is required.")).toBeInTheDocument();
-    expect(screen.getByText("Company is required.")).toBeInTheDocument();
+    expect(await screen.findByText("Company is required.")).toBeInTheDocument();
     expect(screen.getByText("Manager is required.")).toBeInTheDocument();
   });
 });
 
 describe("submission and success", () => {
-  it("submits the exact wire field names, omitting blank optional fields", async () => {
+  it("submits the exact wire field names — no allocation_number, the backend generates it", async () => {
     let body: unknown;
     server.use(
       companiesHandler(),
@@ -198,15 +204,11 @@ describe("submission and success", () => {
     );
     renderPage();
 
-    fireEvent.change(await screen.findByLabelText("Allocation number"), {
-      target: { value: "ALL-900" },
-    });
     await selectCompanyAndManager();
     fireEvent.click(screen.getByRole("button", { name: "Record Allocation" }));
 
     await waitFor(() =>
       expect(body).toEqual({
-        allocation_number: "ALL-900",
         company_id: "5",
         agent_id: "20",
       }),
@@ -225,9 +227,6 @@ describe("submission and success", () => {
     );
     renderPage();
 
-    fireEvent.change(await screen.findByLabelText("Allocation number"), {
-      target: { value: "ALL-900" },
-    });
     await selectCompanyAndManager();
     fireEvent.change(screen.getByLabelText("Notes"), {
       target: { value: "Q3 restock" },
@@ -247,9 +246,6 @@ describe("submission and success", () => {
     );
     const router = renderPage();
 
-    fireEvent.change(await screen.findByLabelText("Allocation number"), {
-      target: { value: "ALL-900" },
-    });
     await selectCompanyAndManager();
     fireEvent.click(screen.getByRole("button", { name: "Record Allocation" }));
 
@@ -272,7 +268,7 @@ describe("Cancel", () => {
     );
     const router = renderPage();
 
-    await screen.findByLabelText("Allocation number");
+    await screen.findByLabelText("Company");
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
 
     expect(router.state.location.pathname).toBe(ALLOCATIONS_PATH);
@@ -291,46 +287,15 @@ describe("failure preserves entered values", () => {
     );
     const router = renderPage();
 
-    fireEvent.change(await screen.findByLabelText("Allocation number"), {
-      target: { value: "ALL-900" },
-    });
     await selectCompanyAndManager();
+    fireEvent.change(screen.getByLabelText("Notes"), { target: { value: "Q3 restock" } });
     fireEvent.click(screen.getByRole("button", { name: "Record Allocation" }));
 
     expect(
       await screen.findByText(/something went wrong recording this allocation/i),
     ).toBeInTheDocument();
     expect(router.state.location.pathname).toBe(PATH);
-    expect(screen.getByLabelText("Allocation number")).toHaveValue("ALL-900");
-  });
-
-  it("maps a field-level 422 (e.g. a duplicate allocation number) to its own field", async () => {
-    server.use(
-      companiesHandler(),
-      managersHandler(),
-      http.post(`${API}/admin/allocations`, () =>
-        HttpResponse.json(
-          {
-            message: "The given data was invalid.",
-            errors: {
-              allocation_number: ["The allocation number has already been taken."],
-            },
-          },
-          { status: 422 },
-        ),
-      ),
-    );
-    renderPage();
-
-    fireEvent.change(await screen.findByLabelText("Allocation number"), {
-      target: { value: "ALL-900" },
-    });
-    await selectCompanyAndManager();
-    fireEvent.click(screen.getByRole("button", { name: "Record Allocation" }));
-
-    expect(
-      await screen.findByText("The allocation number has already been taken."),
-    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Notes")).toHaveValue("Q3 restock");
   });
 
   it("shows a permission-specific message on a 403", async () => {
@@ -346,9 +311,6 @@ describe("failure preserves entered values", () => {
     );
     renderPage();
 
-    fireEvent.change(await screen.findByLabelText("Allocation number"), {
-      target: { value: "ALL-900" },
-    });
     await selectCompanyAndManager();
     fireEvent.click(screen.getByRole("button", { name: "Record Allocation" }));
 

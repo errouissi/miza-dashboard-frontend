@@ -24,6 +24,11 @@ import {
  * `TransferManagerCommercialField` itself, same reasoning Return's own
  * create page already established.
  *
+ * NO TRANSFER NUMBER FIELD — `transfer_number` is now BACKEND-GENERATED
+ * (see `model/create-agent-transfer.ts`'s own docblock);
+ * `StoreAgentTransferRequest` no longer accepts it as input at all.
+ * Removed here, not merely hidden.
+ *
  * NO TOAST LIBRARY EXISTS IN THIS CODEBASE — on success, navigate straight
  * to the new transfer's OWN DETAIL PAGE (not the list) — this is where the
  * operator adds lines next, the actual next step in the roadmap's own
@@ -51,18 +56,13 @@ export function CreateAgentTransferPage() {
   const fieldError = (wireName: string): string | undefined =>
     isAppError(mutationError) ? mutationError.fieldErrors?.[wireName]?.[0] : undefined;
 
-  const transferNumberError = fieldError("transfer_number");
   const managerError = fieldError("manager_id");
   const commercialError = fieldError("commercial_id");
   const notesError = fieldError("notes");
   const transferDateError = fieldError("transfer_date");
 
   const hasFieldError =
-    !!transferNumberError ||
-    !!managerError ||
-    !!commercialError ||
-    !!notesError ||
-    !!transferDateError;
+    !!managerError || !!commercialError || !!notesError || !!transferDateError;
 
   const generalError =
     isAppError(mutationError) && !hasFieldError
@@ -82,27 +82,6 @@ export function CreateAgentTransferPage() {
         <p className="text-muted-foreground mt-1 text-sm">
           Submits a draft. Add lines and validate on the next page.
         </p>
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="transferNumber" className="text-sm font-medium">
-          Transfer number
-        </label>
-        <Input
-          id="transferNumber"
-          aria-invalid={!!form.formState.errors.transferNumber || !!transferNumberError}
-          {...form.register("transferNumber")}
-        />
-        {form.formState.errors.transferNumber ? (
-          <p role="alert" className="text-destructive text-xs">
-            {form.formState.errors.transferNumber.message}
-          </p>
-        ) : null}
-        {transferNumberError ? (
-          <p role="alert" className="text-destructive text-xs">
-            {transferNumberError}
-          </p>
-        ) : null}
       </div>
 
       <TransferManagerCommercialField

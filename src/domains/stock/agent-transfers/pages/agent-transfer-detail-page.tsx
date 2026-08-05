@@ -9,11 +9,11 @@ import { Button } from "@/shared/components/ui/button";
 import { Skeleton } from "@/shared/components/ui/skeleton";
 import { ListErrorState } from "@/shared/components/patterns/list-states";
 import { LineItemsEditor } from "@/shared/components/business/line-items-editor";
-import { useProductOptionsQuery } from "@/domains/reference/products";
 import { ValidateTransferDialog } from "../components/validate-transfer-dialog";
 import {
   useAddAgentTransferLineMutation,
   useAgentTransferQuery,
+  useManagerStockQuery,
   useRemoveAgentTransferLineMutation,
   useUpdateAgentTransferLineMutation,
 } from "../queries/agent-transfers-queries";
@@ -50,8 +50,16 @@ import {
  * with an inline hint rather than left to round-trip. A failed validate may
  * ALSO surface `AGENT_TRANSFER_EXCEEDS_CAPACITY` or
  * `TRANSFER_RECIPIENT_HAS_OUTSTANDING_OBLIGATION` — both handled reactively
- * by `ValidateTransferDialog`'s own error-code resolution, no proactive
- * check here (this phase's explicit decision #3).
+ * by `ValidateTransferDialog`'s own error-code resolution; NEITHER gate is
+ * about product-level stock, so this restraint is unchanged by the "add
+ * line" picker below.
+ *
+ * THE "ADD LINE" PRODUCT PICKER IS NOW BACKED BY REAL AVAILABILITY —
+ * `useManagerStockQuery` (`GET /admin/managers/{manager}/stock`), added
+ * once the backend started exposing per-manager product availability.
+ * Replaces the generic, unfiltered `useProductOptionsQuery()` this page
+ * used before that contract existed; every option offered here already has
+ * `available_quantity > 0` (filtered server-side).
  */
 export function AgentTransferDetailPage() {
   const navigate = useNavigate();
@@ -62,7 +70,9 @@ export function AgentTransferDetailPage() {
   const [validateOpen, setValidateOpen] = useState(false);
 
   const transferQuery = useAgentTransferQuery(id ?? -1, { enabled: id !== undefined });
-  const productOptionsQuery = useProductOptionsQuery();
+  const managerStockQuery = useManagerStockQuery(transferQuery.data?.managerId ?? -1, {
+    enabled: transferQuery.data !== undefined,
+  });
 
   const addLineMutation = useAddAgentTransferLineMutation();
   const updateLineMutation = useUpdateAgentTransferLineMutation();
@@ -218,7 +228,10 @@ export function AgentTransferDetailPage() {
         <h2 className="text-lg font-semibold">Lines</h2>
         <LineItemsEditor
           lines={lines}
-          productOptions={productOptionsQuery.data ?? []}
+          productOptions={(managerStockQuery.data ?? []).map((item) => ({
+            id: item.productId,
+            name: item.name,
+          }))}
           readOnly={!isDraft || !canEditLines}
           pendingId={pendingId}
           error={lineError}

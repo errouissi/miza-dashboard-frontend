@@ -153,13 +153,18 @@ export async function fetchAgentTransferById(id: number): Promise<AgentTransfer>
   return toAgentTransfer(data.data);
 }
 
+/**
+ * `transfer_number` is NOT sent — it is backend-generated
+ * (`AgentTransferService::createDraft`, via `DocumentNumberService`) and
+ * `StoreAgentTransferRequest` no longer accepts it as input at all;
+ * sending one would simply be ignored.
+ */
 export async function createAgentTransfer(
   values: CreateAgentTransferFormValues,
 ): Promise<AgentTransfer> {
   const { data } = await httpClient.post<AgentTransferEnvelope>(
     "/admin/agent-transfers",
     {
-      transfer_number: values.transferNumber.trim(),
       manager_id: values.managerId,
       commercial_id: values.commercialId,
       ...(values.notes.trim() ? { notes: values.notes.trim() } : {}),
