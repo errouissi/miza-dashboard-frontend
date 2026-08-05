@@ -525,3 +525,91 @@ decisions made *during implementation*.
   source. This does not forbid reusing a *pattern* (a hook, a component, a
   file structure) once its own contract-independence is established — only
   forbids assuming a *specific contract fact* carries over unchecked.
+
+## ADR-0023 — Companies/Suppliers are minimal, read-only reference endpoints, never CRUD
+
+- **Date:** 2026-08-05
+- **Status:** Accepted
+- **Context:** Allocations (M5 Phase 4) needed a `company_id` picker with no
+  existing backend list endpoint (B-1, open since M0). Bons (M5 Phase 5)
+  needed the identical thing for `supplier_id`. Both `companies` and
+  `suppliers` are seeded once (`Phase4ASeeder`) and never edited afterward.
+- **Decision:** Each gets exactly one endpoint — `GET /admin/companies` /
+  `GET /admin/suppliers` — read-only, unpaginated, `access-dashboard`,
+  filtered to `active=true`, returning only `{id, name, code, active}`.
+  Mirrors `SecteurController::index()`'s own minimal shape. No
+  `store`/`update`/`destroy` route was added for either, and none is
+  planned — a full CRUD surface was explicitly considered and rejected as
+  scope neither resource needs.
+- **Rationale:** The frontend counterpart
+  (`domains/reference/companies/`, `domains/reference/suppliers/`) is
+  deliberately narrower than Villes/Secteurs/Products for the same reason:
+  no list page, no routes, model/api/queries/index only — there is no
+  screen to manage either from, because neither is dashboard-managed data.
+- **Consequences:** If a future resource needs a `supplier_id`/`company_id`
+  picker, reuse `useCompanyOptionsQuery`/`useSupplierOptionsQuery`
+  unchanged — do not add a third, parallel reference module. Do not build
+  create/edit/delete for either without a fresh, explicit decision; the
+  seeded-reference-data premise this ADR rests on would need to change
+  first.
+
+## ADR-0024 — `allocation_number`/`transfer_number` are backend-generated; client input removed entirely
+
+- **Date:** 2026-08-05
+- **Status:** Accepted
+- **Context:** Both fields were originally client-supplied, required,
+  unique text inputs (M5 Phases 2 and 4). The backend introduced
+  `DocumentNumberService` (`{PREFIX}-{ULID}, e.g. `ALLOC-…`/`TRF-…`) and
+  removed both fields from `StoreAllocationRequest`'s and
+  `StoreAgentTransferRequest`'s own validators entirely — not merely made
+  them optional. Any value a caller still sent would be silently ignored.
+- **Decision:** The number input was removed from both create forms
+  entirely — not hidden, not disabled — and neither `createAllocation` nor
+  `createAgentTransfer` sends the field anymore. The corresponding
+  "duplicate number" 422 field-mapping and its dedicated test were removed
+  too: with no form field to bind the error to, and a collision bounded at
+  three server-side regeneration attempts, there is no user-facing case
+  left to guard against.
+- **Rationale:** Sending a field the backend no longer accepts, or
+  displaying an input for a value the operator no longer controls, would
+  misrepresent the contract (ADR-0009's own discipline, applied to a
+  removed capability rather than a missing one).
+- **Consequences:** Any FUTURE Stock resource needing its own document
+  number should default to the same `DocumentNumberService`-generated
+  pattern unless a real reason argues for operator-supplied numbers
+  instead — that would be a deliberate reversal of this decision, not a
+  fresh default.
+
+## ADR-0025 — Per-owner stock endpoints are the source of truth for "add line" product pickers; kept domain-local
+
+- **Date:** 2026-08-05
+- **Status:** Accepted
+- **Context:** Allocations' and Agent Transfers' own "add line" pickers
+  used `useProductOptionsQuery()` (the full, unfiltered product catalogue)
+  because no availability-scoped read existed (BC-AA). The backend added
+  `GET /admin/companies/{company}/stock` and
+  `GET /admin/managers/{manager}/stock` — both read-only, both pre-filtered
+  to `available_quantity > 0` server-side — giving each resource a real
+  source of truth for "can this product actually be moved right now."
+- **Decision:** `AllocationDetailPage`/`AgentTransferDetailPage` now build
+  their `LineItemsEditor` `productOptions` from `useCompanyStockQuery`/
+  `useManagerStockQuery` instead. Both reads live domain-locally
+  (`domains/stock/allocations/api/company-stock-api.ts`,
+  `domains/stock/agent-transfers/api/manager-stock-api.ts`), NOT inside
+  `domains/reference/companies/` or Network's Managers — the same
+  ADR-0021 reasoning class: the read exists because of each Stock
+  resource's own "add line" picker, not because Companies/Managers gained
+  a new public concern.
+- **Rationale:** These are genuinely DEPENDENT queries (they only fetch
+  once the parent Allocation/Transfer resolves and its `companyId`/
+  `managerId` is known), unlike the independent `useProductOptionsQuery()`
+  they replaced — tests that assumed the product option was already
+  rendered the instant the picker appeared had to start explicitly
+  awaiting the option itself, not just the picker's own presence.
+- **Consequences:** BC-AA is now PARTIALLY resolved — proactive,
+  real-availability product pickers are possible and now built for
+  Allocations/Transfers specifically. It is NOT fully resolved: neither
+  endpoint is a general cross-owner Stock ledger view, and Return's/Bons'
+  own product pickers still use the unfiltered catalogue by choice (out of
+  this change's scope — revisit only with a fresh, explicit decision, not
+  as a side effect of unrelated work).

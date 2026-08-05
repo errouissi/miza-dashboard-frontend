@@ -20,40 +20,51 @@ was also retrofitted onto every irreversible Money confirmation this phase
 (`useFreshConfirm`, see below) — this is the M4 "Gate G4" closure referred
 to throughout this file and `decisions.md`.
 
-**M5 — Stock is UNDERWAY.** A full M5 discovery pass ran across all four
-Stock movement types (Bons, Allocations, Agent Transfers, Agent Stock
-Returns) before any implementation, producing an approved 5-phase order:
-Agent Stock Returns → Agent Transfers → shared-component extraction →
-Allocations → Bons. **Phase 1 (Agent Stock Returns), Phase 2 (Agent
-Transfers) and Phase 4 (Allocations) are all COMPLETE at the implementation
-level** — full draft → add-lines → validate lifecycles. Return/Transfer
-each has its own Manager→Commercial cascading picker (deliberately
-domain-local, ADR-0021); Allocations has no cascade at all — its binding
-pair (`company_id` + `agent_id` role=manager) needed a NEW backend
-capability instead (see ADR-0023). All three have their own error-code
-registration (13 codes for Returns, 15 for Transfers, 10 for Allocations —
-registered explicitly per resource, never derived mechanically from
-another, ADR-0022), and all three reuse the shared `LineItemsEditor`
-(ADR-0019) extracted at Phase 1's own first caller. **Bons (Phase 5) is the
-next milestone.**
+**M5 — Stock is COMPLETE at the implementation level, all five phases.** A
+full M5 discovery pass ran across all four Stock movement types (Bons,
+Allocations, Agent Transfers, Agent Stock Returns) before any
+implementation, producing an approved 5-phase order: Agent Stock Returns →
+Agent Transfers → shared-component extraction → Allocations → Bons. Every
+phase — Agent Stock Returns, Agent Transfers, Allocations, and now Bons —
+ships the full draft → add-lines → validate lifecycle (Bons alone also
+ships cancel — BC-AB, the only Stock resource with one). Return/Transfer
+each have their own Manager→Commercial cascading picker (deliberately
+domain-local, ADR-0021); Allocations and Bons have no cascade at all —
+their binding pairs needed two NEW minimal backend reference endpoints
+instead (Companies, then Suppliers — both read-only, ADR-0023). All four
+resources register their own error codes explicitly, never derived
+mechanically from another (13 for Returns, 15 for Transfers, 10 for
+Allocations, 9 for Bons — ADR-0022), and all four reuse the shared
+`LineItemsEditor` (ADR-0019) extracted at Phase 1's own first caller.
 
-**None of the three Stock resources has been manually validated against a
-real running backend browser session yet** (all three passed
-implementation-level verification: full automated suites, quality gates,
-and — for Returns — a prior session's own manual pass; Transfers' and
-Allocations' own manual validation are both still owed). **Allocations'
-manual validation is additionally BLOCKED, not merely deferred**: an
-allocation moves company-owned stock to a manager, and that stock
-originates from the Supplier Bon flow (Phase 5, not yet built) — there is
-no way to get real, non-zero company stock into the system yet, so even a
-manually-triggered `validateAllocation()` call would 409 on
-`ALLOCATION_STOCK_INSUFFICIENT` today (or `ALLOCATION_EXCEEDS_DEPOSIT_
-CAPACITY`/`ALLOCATION_TEAM_HAS_OUTSTANDING_OBLIGATION` first, depending on
-the manager's own grattage state). Manual end-to-end validation of
-Allocations must wait until Bons ships and stock can actually flow in.
-This is a real, external dependency, not a quality gap in this phase's own
-work — automated coverage, backend contract verification and frontend
-implementation are all complete regardless.
+**Two backend contract updates landed after Bons shipped, and the frontend
+was updated to match (re-verified from source, not assumed, ADR-0022):**
+`allocation_number`/`transfer_number` are now backend-generated
+(`DocumentNumberService`) — both create forms' own number input was
+removed entirely, not hidden (ADR-0024). And two new per-owner stock
+endpoints (`GET /admin/companies/{company}/stock`,
+`GET /admin/managers/{manager}/stock`, both pre-filtered to
+`available_quantity > 0`) are now the source of truth for Allocations' and
+Agent Transfers' own "add line" product pickers, replacing the generic,
+unfiltered product catalogue those two pickers used before (ADR-0025) —
+Return's and Bons' own pickers are unchanged, out of that update's scope.
+
+**Manual validation status, unchanged from before Bons shipped and still
+owed:** Agent Stock Returns is manually validated; Agent Transfers,
+Allocations and Bons are not — all three passed implementation-level
+verification only (automated suites, quality gates, backend contract
+verification). Bons' own shipping resolves Allocations' prior external
+blocker (no stock source existed before Bons could materialize real
+company stock) — Allocations can now, in principle, be validated manually
+against real data; that manual pass, and Transfers'/Bons' own, are still
+owed as a follow-up, not attempted in this documentation-only session.
+
+**M6 (Grattage — the seam) is the next milestone** — invoice list/detail/
+cancel, plus the restock-gate hook Stock already reactively defers to
+(BC-AA remains partially open: real per-owner availability now feeds two
+Stock pickers, but no cross-owner ledger view or proactive capacity hint
+exists yet). Needs its own fresh discovery pass before any implementation,
+per the same discipline every M4/M5 phase applied.
 
 M3.x (Admin/Manager/Commercial detail pages, ADR-0014) remains the only
 open M3 item, blocked by FE-2 — unaffected by M4 or M5.
@@ -66,12 +77,26 @@ Deposits detail page (`6ab02a5`), Deposits validate/reject
 (`a64f42f`), Deposits creation (`4dd4d63`), Debt Payments (`c0d3f36`), the
 `useFreshConfirm` freshness-rule retrofit onto Cheques' and Deposits'
 existing dialogs (`7da7804`), Agent Stock Returns (`49af3b7`), Agent
-Transfers (`e559e76`), the M4/M5 documentation-sync pass (`d8b1006`), and
-Allocations (`16aad37`). No uncommitted files remain (this documentation
-pass is the only pending change). See `next-session.md` for verification
-commands.
+Transfers (`e559e76`), the M4/M5 documentation-sync pass (`d8b1006`),
+Allocations (`16aad37`), the M5-Phase-4/Bons-dependency documentation pass
+(`651934c`), Bons (`a8239f9`), and the stock-aware product selection +
+backend-generated document number refactor (`6dea118`). No uncommitted
+files remain (this documentation pass is the only pending change). See
+`next-session.md` for verification commands.
 
 ## Last completed implementation
+
+**Stock-aware product selection + backend-generated document numbers —
+COMPLETE.** A post-Bons backend contract update (Companies/Suppliers/
+company-stock/manager-stock endpoints; `allocation_number`/
+`transfer_number` now backend-generated) integrated into Allocations' and
+Agent Transfers' own create forms and detail pages. See "M5 — Stock is
+COMPLETE" above and ADR-0023/0024/0025. The previous entries, kept for
+continuity:
+
+**M5 Phase 5 — Bons — COMPLETE at the implementation level.** See its own
+section below for the full write-up. The previous entries, kept for
+continuity:
 
 **M5 Phase 4 — Allocations — COMPLETE at the implementation level; manual
 validation BLOCKED on Bons (Phase 5).** See its own section below for the
@@ -1599,6 +1624,30 @@ allocated.
 **No other backend changes** beyond the one `GET /admin/companies`
 endpoint above.
 
+## M5 Phase 5 — Bons (complete at the implementation level)
+
+The fifth and final Stock resource. Draft → add-lines → validate, plus the
+only cancel lifecycle in Stock (BC-AB), reusing `ConfirmActionDialog`'s
+existing `reason` slot rather than a new component. Genuinely new,
+verified from source (ADR-0022), not assumed from Allocation's shape:
+
+- **The only mandatory file upload in Stock** — `evidence`, reusing
+  Money's own `FormData`/`FileUploadField` pattern (Cheques' own
+  precedent), not the M3.6 wizard's.
+- **`BON_CANCEL_STOCK_INSUFFICIENT` is a real, live 409** — cancelling a
+  validated bon can fail if the stock it brought in was already drawn down
+  elsewhere (e.g. a later Allocation). `validateBon()` itself has no
+  capacity check at all — a bon is the source of stock, not a consumer.
+- **Only 9 error codes, no `BON_STOCK_INSUFFICIENT`** — a genuine contract
+  fact (see above), not an incomplete registration.
+- **A new Suppliers reference endpoint** (`GET /admin/suppliers`),
+  byte-identical in shape to Companies' own — see ADR-0023.
+
+**No manual validation blocker** — unlike Allocations, Bons is the SOURCE
+of stock, so it can be exercised end-to-end against the seeded `Default
+Supplier`/`Miza` company immediately. Manual validation is still owed
+(not yet performed), same as Transfers'/Allocations' own.
+
 ## Overall progress
 
 | Milestone | Status |
@@ -1633,16 +1682,21 @@ endpoint above.
 | **M5 Phase 1 — Agent Stock Returns** | ✅ **complete**, manually validated |
 | **M5 Phase 2 — Agent Transfers** | ✅ **complete** — manual validation still owed |
 | M5 Phase 3 — shared-component extraction (per-caller, ongoing) | ✅ `LineItemsEditor`/`useFreshConfirm` already extracted at their first callers — no dedicated phase needed beyond that |
-| **M5 Phase 4 — Allocations** | ✅ **implementation complete** — manual validation BLOCKED on Bons (Phase 5), no stock source exists yet |
-| **M5 Phase 5 — Bons** | ⬜ **next milestone** — fresh discovery pass required before implementation |
-| M6+ — Grattage, Overview | ⬜ not started |
+| **M5 Phase 4 — Allocations** | ✅ **implementation complete** — Bons now shipped, prior stock-source blocker resolved; manual validation still owed |
+| **M5 Phase 5 — Bons** | ✅ **implementation complete** — manual validation still owed, no blocker |
+| **M5 — Stock, full milestone** | ✅ **COMPLETE at the implementation level** (all five phases); manual validation owed for Transfers, Allocations, Bons |
+| **M6 — Grattage (the seam)** | ⬜ **next milestone** — fresh discovery pass required before implementation |
+| M7 — Overview & workspaces | ⬜ not started, depends on M3–M6 all complete |
 
-**Tests: 825/825 across 42 files** (was 407/23 before M3.6; 431/24 at
+**Tests: 949/949 across 48 files** (was 407/23 before M3.6; 431/24 at
 M3.6's initial implementation; 442/24 after M3.6's three post-validation fix
 rounds; 447/25 after M4.1; 473/26 after M4.2 Phase 1+2; 489/27 after M4.2
 Phase 3A; 520/29 after M4.2 Phase 3B; 548/29 after M4.2 Phase 3C; growing
-across M4.3's four phases, M4.4, the freshness-rule retrofit, and M5's two
-phases — now **825/42** as of Agent Transfers' own close-out). Lint ·
+across M4.3's four phases, M4.4, the freshness-rule retrofit, M5's own five
+phases (825/42 after Agent Transfers, 888/45 after Allocations, 951/48
+after Bons), then net **949/48** after the stock-aware product-selection
+refactor removed the allocation/transfer-number field tests it made moot).
+Lint ·
 typecheck · format · build all clean, re-verified fresh this session.
 
 ## Shared pattern layer
@@ -1788,9 +1842,9 @@ precedent that evidence-gated extraction has been abandoned generally.
 | **BC-G** | Secteurs/Products/Admins index endpoints unpaginated | `DataTable`/`FilterBar` extraction |
 | **BC-U** | 🟡 The agent **update** endpoint cannot clear or accept null for `num_d_abonnement` or `ville`, though both columns allow null | Nobody can un-set either field via the UI, ever, until the backend validator changes. Unaffected by M3.3: Commercials' update payload never sends `ville` (that field belongs to Managers only), and `manager_id`/`ville_actuelle`/`secteur` are all correctly `nullable` in the validator |
 | **Operational** | Session permissions are cached at login (ADR-0003) and never refreshed. **Whenever a permission is newly seeded or corrected on the backend, an operator already logged in will not see the effect until they log out and back in** — this is how Block/Activate visibility was investigated and cleared this session (see below); not a code defect | Any future backend permission change while operators hold open sessions |
-| **BC-AA** (new, M5 discovery) | 🟡 No stock-quantity read endpoint exists anywhere in the backend | Every Stock movement type's capacity/stock-insufficient refusal is handled REACTIVELY only (no proactive hint anywhere); a Stock ledger view is unbuildable until this exists. Raised as a backend consultation item, not routed around |
+| **BC-AA** (PARTIALLY resolved post-Bons) | 🟡 Two PER-OWNER stock reads now exist — `GET /admin/companies/{company}/stock`, `GET /admin/managers/{manager}/stock` (both pre-filtered to `available_quantity > 0`) — feeding Allocations'/Transfers' own "add line" pickers (ADR-0025). NO general cross-owner Stock ledger view exists; Return's/Bons' own pickers are unchanged (unfiltered catalogue) | Capacity/stock-insufficient refusals elsewhere remain REACTIVE only. A Stock ledger view (M7 Overview, or earlier if requested) still needs a real aggregate endpoint, not just these two owner-scoped reads |
 | **BC-AB** (new, M5 discovery) | 🟡 Only Bons has a `/cancel` route — Allocations, Agent Transfers and Agent Stock Returns have no cancellation lifecycle at all | No cancel UI exists or was attempted for either Stock resource shipped so far; confirmed absent from `routes/api.php`, not assumed |
-| **B-1** (Companies half resolved M5 Phase 4; Suppliers half still open) | 🟡 A read-only `GET /admin/companies` now exists (added M5 Phase 4, mirrors `SecteurController::index()`, no CRUD — by design, Companies is seeded reference data). **`Suppliers` still has no HTTP surface at all** | Companies unblocks Allocations' own picker/filter (done). Suppliers still blocks Bons' (M5 Phase 5) own create form specifically — raise the identical minimal `GET /admin/suppliers` request before building it |
+| **B-1** (RESOLVED — both halves, M5 Phases 4/5) | ✅ Read-only `GET /admin/companies` and `GET /admin/suppliers` both now exist (ADR-0023, mirror `SecteurController::index()`, no CRUD — by design, both are seeded reference data) | No longer blocks anything. A full CRUD directory screen for either was never the ask and remains out of scope (ADR-0023) — do not build one as a side effect of unrelated work |
 
 ### BC-T — resolved (M3.2, unchanged this session)
 
@@ -1943,8 +1997,8 @@ not inherited from Cheques by resemblance:**
 | — | **verified, positive** | Debt Payments' `show()`/`destroy()` are commented-out dead routes | ✅ no action needed; no detail page, no delete UI attempted |
 | BC-AC (new) | **limitation** | Debt Payments' `total_paid` summary scalar's wire type (JSON number vs. numeric string) was not captured from a live response — the mapper coerces with `String(...)` defensively either way | 🟢 non-blocking; revisit if a live capture ever contradicts the defensive coercion |
 | — | **verified, positive** | Agent Stock Return's 13 and Agent Transfer's 15 error codes were each read directly from their own `*ExceptionRenderer`, not derived from each other — confirmed genuinely divergent in specific, named ways (see the M5 Phase 2 section above) | ✅ no action needed; ADR-0022 records this as a standing discipline, not a one-off check |
-| BC-AA | **limitation** | No stock-quantity read endpoint exists anywhere | 🟡 open — see "Current blockers" above |
-| BC-AB | **limitation** | Only Bons has a `/cancel` route | 🟡 open — see "Current blockers" above |
+| BC-AA | **partially resolved** | Two per-owner stock reads now exist (company/manager); no cross-owner ledger view | 🟡 partially open — see the Backend dependencies table above |
+| BC-AB | **verified, unchanged** | Only Bons has a `/cancel` route — now built on the frontend, for Bons only | ✅ no action needed; Returns/Transfers/Allocations correctly have no cancel UI |
 
 ## Domain inventory
 
@@ -2118,11 +2172,12 @@ src/domains/stock/
                                    with Return's, ADR-0021; no proactive
                                    capacity hint built — reactive only, by
                                    decision)
-└── allocations/            M5 Phase 4 — COMPLETE at the implementation
-                                   level; manual validation BLOCKED (no
-                                   stock source until Bons ships). Binding
-                                   pair is company_id + agent_id(role=
-                                   manager), NOT a manager<->commercial
+├── allocations/            M5 Phase 4 — COMPLETE at the implementation
+                                   level; Bons has since shipped, resolving
+                                   the prior no-stock-source blocker (manual
+                                   validation still owed, not blocked).
+                                   Binding pair is company_id + agent_id
+                                   (role=manager), NOT a manager<->commercial
                                    cascade — two plain independent selects;
                                    montant is LOAD-BEARING (diverges from
                                    Return's/Transfer's own metadata-only
@@ -2131,11 +2186,28 @@ src/domains/stock/
                                    codes (no role-mismatch family — a real
                                    contract fact, not incomplete); no
                                    Consumptions UI (show() never eager-
-                                   loads that relation)
+                                   loads that relation); "add line" product
+                                   picker now reads GET /admin/companies/
+                                   {company}/stock, not the unfiltered
+                                   catalogue (ADR-0025)
+└── bons/                   M5 Phase 5 — COMPLETE at the implementation
+                                   level, manual validation owed but NOT
+                                   blocked (Bons is the source of stock).
+                                   The only Stock resource with a cancel
+                                   lifecycle (BC-AB) and the only mandatory
+                                   file upload (evidence); only 9 error
+                                   codes, no BON_STOCK_INSUFFICIENT
+                                   (validateBon has no capacity check at
+                                   all — BON_CANCEL_STOCK_INSUFFICIENT,
+                                   reachable only via cancel, is the sole
+                                   stock-insufficiency gate here)
 ```
 
-Bons (M5 Phase 5) is the one Stock movement type not yet started. The
-`src/domains/reference/companies/`-shaped directory pair is now HALF
-built: Companies exists (read-only `GET /admin/companies`, added this
-phase); Suppliers remains entirely unbuilt — blocks Bons' own create form
-specifically, the identical gap Allocations found and closed for Companies.
+All five Stock resources are now implementation-complete. The
+`src/domains/reference/companies/`-shaped directory pair is now FULLY
+built: Companies (`GET /admin/companies`, M5 Phase 4) and Suppliers
+(`GET /admin/suppliers`, M5 Phase 5) both exist, both read-only reference
+endpoints by deliberate decision, never CRUD (ADR-0023). `allocation_number`/
+`transfer_number` are backend-generated now (ADR-0024); Allocations'/
+Transfers' own "add line" pickers read real per-owner availability instead
+of the unfiltered product catalogue (ADR-0025).
