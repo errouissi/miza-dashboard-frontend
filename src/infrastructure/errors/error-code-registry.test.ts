@@ -4,19 +4,22 @@ import { ERROR_CODES, resolveErrorDisplay } from "./error-code-registry";
 
 describe("error-code registry", () => {
   it("degrades gracefully for an unregistered code, still surfacing the code", () => {
-    // Entries are empty until O-1 is signed, so EVERY code is unregistered today.
-    // The fallback is therefore the only path that runs — and it must never produce
-    // a blank screen. An unknown failure degrades to "unhelpful but diagnosable".
+    // A genuinely fake code, deliberately not a real backend constant — every
+    // Stock/Money code registered so far (Return/Transfer/Allocation) is real,
+    // so this test must not borrow one of them: a future phase registering
+    // the "next" resource's codes would otherwise silently break this test's
+    // own premise. The fallback must never produce a blank screen regardless
+    // of which codes happen to be registered today.
     const display = resolveErrorDisplay(
       new AppError({
         kind: "domain",
-        code: "ALLOCATION_STOCK_INSUFFICIENT",
+        code: "SOME_UNREGISTERED_CODE",
         requestId: "req-9",
       }),
     );
 
     expect(display.message).toBeUndefined(); // copy is owned by the copy layer (O-1)
-    expect(display.code).toBe("ALLOCATION_STOCK_INSUFFICIENT"); // quotable to support
+    expect(display.code).toBe("SOME_UNREGISTERED_CODE"); // quotable to support
     expect(display.requestId).toBe("req-9");
     expect(display.tone).toBe("danger"); // a failure is never "info"
   });
@@ -162,6 +165,80 @@ describe("Agent Transfer codes (roadmap M5, Phase 2) — registered explicitly, 
     );
 
     for (const [, entry] of transferEntries) {
+      expect(entry.recovery).toBeUndefined();
+    }
+  });
+});
+
+describe("Allocation codes (roadmap M5, Phase 4) — fewer than Return's/Transfer's own, by contract, not omission", () => {
+  it("registers exactly the 10 codes AllocationExceptionRenderer emits", () => {
+    const allocationCodes = Object.keys(ERROR_CODES).filter((code) =>
+      code.startsWith("ALLOCATION_"),
+    );
+
+    expect(allocationCodes.sort()).toEqual(
+      [
+        "ALLOCATION_NOT_DRAFT",
+        "ALLOCATION_HAS_NO_LINES",
+        "ALLOCATION_NOT_EDITABLE",
+        "ALLOCATION_EXCEEDS_DEPOSIT_CAPACITY",
+        "ALLOCATION_TEAM_HAS_OUTSTANDING_OBLIGATION",
+        "ALLOCATION_STOCK_INSUFFICIENT",
+        "ALLOCATION_LINE_DUPLICATE_PRODUCT",
+        "ALLOCATION_NUMBER_DUPLICATE",
+        "ALLOCATION_NOT_FOUND",
+        "ALLOCATION_LINE_NOT_FOUND",
+      ].sort(),
+    );
+  });
+
+  // Allocation has NO role-mismatch/inactive/binding-drift family
+  // (`ALLOCATION_MANAGER_ROLE_INVALID` etc.) — its binding pair is
+  // validated by plain FormRequest `exists()` rules, not a domain
+  // exception, a genuine divergence from Return's/Transfer's own.
+  it("has no role-mismatch or inactive-recipient code family, unlike Return/Transfer", () => {
+    expect(ERROR_CODES["ALLOCATION_MANAGER_ROLE_INVALID"]).toBeUndefined();
+    expect(ERROR_CODES["ALLOCATION_COMMERCIAL_ROLE_INVALID"]).toBeUndefined();
+    expect(ERROR_CODES["ALLOCATION_MANAGER_INACTIVE"]).toBeUndefined();
+    expect(ERROR_CODES["ALLOCATION_RECIPIENT_BINDING_MISMATCH"]).toBeUndefined();
+  });
+
+  it("resolves the deposit-capacity-exceeded code to real copy", () => {
+    const display = resolveErrorDisplay(
+      new AppError({
+        kind: "domain",
+        code: "ALLOCATION_EXCEEDS_DEPOSIT_CAPACITY",
+        requestId: "req-4",
+      }),
+    );
+
+    expect(display.message).toBe(
+      "The manager does not have enough validated grattage-deposit capacity to cover this allocation's amount.",
+    );
+    expect(display.tone).toBe("danger");
+  });
+
+  it("resolves the team outstanding-obligation (restock gate) code to real copy, with no recovery path yet", () => {
+    const display = resolveErrorDisplay(
+      new AppError({
+        kind: "domain",
+        code: "ALLOCATION_TEAM_HAS_OUTSTANDING_OBLIGATION",
+        requestId: "req-5",
+      }),
+    );
+
+    expect(display.message).toBe(
+      "A commercial under this manager has an outstanding grattage obligation. Resolve it before allocating more stock to this team.",
+    );
+    expect(display.recovery).toBeUndefined();
+  });
+
+  it("has no registered recovery path for any ALLOCATION_* code yet", () => {
+    const allocationEntries = Object.entries(ERROR_CODES).filter(([code]) =>
+      code.startsWith("ALLOCATION_"),
+    );
+
+    for (const [, entry] of allocationEntries) {
       expect(entry.recovery).toBeUndefined();
     }
   });

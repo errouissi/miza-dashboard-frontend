@@ -10,7 +10,7 @@ export { MANAGERS_PATH, managersRoutes } from "./routes";
  * like every other picker source in this product.
  */
 export { useManagerOptionsQuery } from "./queries/managers-queries";
-export type { ManagerOption } from "./model/manager";
+export type { ManagerOption, ManagerStatus } from "./model/manager";
 
 /**
  * The area-of-responsibility multi-select, exported for the M3.6 onboarding

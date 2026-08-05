@@ -156,6 +156,28 @@ const INVALIDATION_MAP: Readonly<Record<DomainEvent, readonly QueryKey[]>> =
      * (both M6) exist.
      */
     "agent-transfer.validated": [["agent-transfers"]],
+    /**
+     * Allocations (roadmap M5, Phase 4). A draft touches no balance, no
+     * stock row and no deposit — materialization and deposit consumption
+     * both happen only at validate time. `["allocations"]` only.
+     */
+    "allocation.created": [["allocations"]],
+    /**
+     * Any of the three line mutations (add/update/remove) recomputes the
+     * parent's `montant` — the same key space, no cross-domain effect.
+     */
+    "allocation.line-changed": [["allocations"]],
+    /**
+     * Validating writes `stocks`/`stock_movements`/
+     * `allocation_deposit_consumptions` rows (re-verified from source this
+     * phase, `StockService::validateAllocation`) — it READS but never
+     * WRITES `Agent.montant_avance_grattage`, and Deposits' own `amount`/
+     * `status` columns are untouched (the ADC table is a separate audit
+     * trail, append-only). No Network or Deposits list renders a column
+     * this mutation changes. `["allocations"]` only; revisit once a Stock
+     * ledger view or the Grattage restock-gate hook (both M6) exist.
+     */
+    "allocation.validated": [["allocations"]],
   });
 
 /** The prefixes a given event invalidates, or an empty list for an unregistered one. */

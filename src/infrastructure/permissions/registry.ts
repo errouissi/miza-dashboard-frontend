@@ -246,6 +246,32 @@ export const PERMISSIONS = Object.freeze({
   CREATE_AGENT_TRANSFER_LINE: "create-agent-transfer-line",
   UPDATE_AGENT_TRANSFER_LINE: "update-agent-transfer-line",
   DELETE_AGENT_TRANSFER_LINE: "delete-agent-transfer-line",
+
+  /**
+   * Allocations (roadmap M5, Phase 4) — eight permissions, verified fresh
+   * from source (`App\Authorization\AllocationPermissions::ALL`). Same
+   * FormRequest-gated posture as Return/Transfer (no route middleware,
+   * confirmed from `routes/api.php`'s own `allocations` group).
+   *
+   * `VIEW_ALLOCATIONS` IS PLURAL (`view-allocations`) — copied verbatim
+   * from the backend constant. Matches Transfer's own plurality, NOT
+   * Return's own singular `view-agent-stock-return` — independently
+   * verified from source, not assumed from either sibling (ADR-0022).
+   *
+   * `VALIDATE_ALLOCATION` is excluded from the backend's own `ADMIN_GRANTS`
+   * (super-admin only, verified from source) — allocation validation is an
+   * irreversible stock-materialization AND deposit-consumption act, the
+   * same posture every other validate/approve permission in this registry
+   * already has.
+   */
+  VIEW_ALLOCATIONS: "view-allocations",
+  CREATE_ALLOCATION: "create-allocation",
+  UPDATE_ALLOCATION: "update-allocation",
+  DELETE_ALLOCATION: "delete-allocation",
+  VALIDATE_ALLOCATION: "validate-allocation",
+  CREATE_ALLOCATION_LINE: "create-allocation-line",
+  UPDATE_ALLOCATION_LINE: "update-allocation-line",
+  DELETE_ALLOCATION_LINE: "delete-allocation-line",
 } as const satisfies Record<string, string>);
 
 export type PermissionName = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

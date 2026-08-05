@@ -206,6 +206,72 @@ export const ERROR_CODES: Readonly<Record<string, ErrorCodeEntry>> = Object.free
     message: "This line could not be found.",
     tone: "danger",
   },
+
+  /**
+   * ALLOCATIONS (roadmap M5, Phase 4) — 10 codes, verified fresh from
+   * source (`AllocationExceptionRenderer`). FEWER THAN RETURN'S 13 OR
+   * TRANSFER'S 15 — a genuine divergence, not an incomplete registration:
+   * Allocation's binding pair (`company_id` + `agent_id` role=manager) is
+   * validated by plain FormRequest `exists()` rules, so it has NO
+   * role-mismatch/inactive/binding-drift exception family the way Return's
+   * `RETURN_MANAGER_ROLE_INVALID`/`RETURN_COMMERCIAL_INACTIVE`/
+   * `RETURN_RECIPIENT_BINDING_MISMATCH` (and Transfer's own equivalents) do.
+   *
+   * TWO ALLOCATION-ONLY GATES, with no equivalent in Return or Transfer:
+   *   `ALLOCATION_EXCEEDS_DEPOSIT_CAPACITY` — the manager's available
+   *     grattage-deposit capacity (`avance + deposit_gross - exposure`,
+   *     FIFO-drawn) is less than the allocation's own `montant`.
+   *   `ALLOCATION_TEAM_HAS_OUTSTANDING_OBLIGATION` — Phase 5.10 §2.9's
+   *     restock gate: refuses if ANY commercial under the recipient manager
+   *     has an undischarged grattage obligation.
+   * Both handled reactively only, same restraint Transfer's own
+   * `AGENT_TRANSFER_EXCEEDS_CAPACITY`/`TRANSFER_RECIPIENT_HAS_OUTSTANDING_
+   * OBLIGATION` already established — no proactive hint (BC-AA).
+   */
+  ALLOCATION_NOT_DRAFT: {
+    message: "This allocation has already been processed.",
+    tone: "warning",
+  },
+  ALLOCATION_HAS_NO_LINES: {
+    message: "Add at least one line before validating this allocation.",
+    tone: "warning",
+  },
+  ALLOCATION_NOT_EDITABLE: {
+    message: "This allocation can no longer be edited.",
+    tone: "warning",
+  },
+  ALLOCATION_EXCEEDS_DEPOSIT_CAPACITY: {
+    message:
+      "The manager does not have enough validated grattage-deposit capacity to cover this allocation's amount.",
+    tone: "danger",
+  },
+  ALLOCATION_TEAM_HAS_OUTSTANDING_OBLIGATION: {
+    message:
+      "A commercial under this manager has an outstanding grattage obligation. Resolve it before allocating more stock to this team.",
+    tone: "danger",
+  },
+  ALLOCATION_STOCK_INSUFFICIENT: {
+    message:
+      "The company does not hold enough stock of this product to cover the requested quantity.",
+    tone: "danger",
+  },
+  ALLOCATION_LINE_DUPLICATE_PRODUCT: {
+    message:
+      "This product is already on this allocation. Edit the existing line instead of adding a new one.",
+    tone: "warning",
+  },
+  ALLOCATION_NUMBER_DUPLICATE: {
+    message: "This allocation number is already in use.",
+    tone: "warning",
+  },
+  ALLOCATION_NOT_FOUND: {
+    message: "This allocation could not be found.",
+    tone: "danger",
+  },
+  ALLOCATION_LINE_NOT_FOUND: {
+    message: "This line could not be found.",
+    tone: "danger",
+  },
 });
 
 /** Unregistered codes are still failures, and a failure is never "info". */

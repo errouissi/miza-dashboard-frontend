@@ -8,7 +8,7 @@ import {
   fetchManagerOptions,
   type UpdateManagerInput,
 } from "../api/managers-api";
-import type { ManagerListParams } from "../model/manager";
+import type { ManagerListParams, ManagerStatus } from "../model/manager";
 import { managersKeys } from "./keys";
 
 /**
@@ -32,11 +32,16 @@ export function useManagersQuery(params: ManagerListParams) {
  * The manager set for relation pickers (M3.3). Same SLOW tier as the list
  * itself — a manager's name is part of the identity record the tier already
  * covers, not reference data.
+ *
+ * `status` IS OPTIONAL AND ADDITIVE — see `fetchManagerOptions`'s own
+ * docblock. Every existing caller (no argument) is unaffected; Allocations'
+ * create form (roadmap M5, Phase 4) is the first to pass `{ status:
+ * "active" }`, since `StoreAllocationRequest` rejects an inactive manager.
  */
-export function useManagerOptionsQuery() {
+export function useManagerOptionsQuery(options?: { status?: ManagerStatus }) {
   return useQuery({
-    queryKey: managersKeys.options(),
-    queryFn: fetchManagerOptions,
+    queryKey: managersKeys.options(options?.status),
+    queryFn: () => fetchManagerOptions({ status: options?.status }),
     staleTime: STALE_TIMES.SLOW,
   });
 }

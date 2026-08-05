@@ -40,6 +40,11 @@ import {
   AGENT_TRANSFER_NEW_PATH,
   agentTransferDetailPath,
 } from "@/domains/stock/agent-transfers";
+import {
+  ALLOCATIONS_PATH,
+  ALLOCATION_NEW_PATH,
+  allocationDetailPath,
+} from "@/domains/stock/allocations";
 import { routes } from "./routes";
 
 /**
@@ -279,6 +284,12 @@ describe("every contributed domain route is guarded", () => {
   // divergence from Return's own singular permission, verified from
   // source)/`create-agent-transfer`/`view-agent-transfers` respectively —
   // same FormRequest-gated posture as Return, not route middleware.
+  // ALLOCATIONS_PATH/ALLOCATION_NEW_PATH/`allocationDetailPath(1)`
+  // (roadmap M5, Phase 4 — the fourth Stock resource) are guarded by
+  // `view-allocations` (PLURAL, matching Transfer's own plurality, not
+  // Return's own singular — verified fresh from source,
+  // ADR-0022)/`create-allocation`/`view-allocations` respectively — same
+  // FormRequest-gated posture as Return/Transfer, not route middleware.
   // `unpermittedSession` holds nothing at all, so it exercises every gate
   // identically.
   const domainPaths = [
@@ -305,6 +316,9 @@ describe("every contributed domain route is guarded", () => {
     AGENT_TRANSFERS_PATH,
     AGENT_TRANSFER_NEW_PATH,
     agentTransferDetailPath(1),
+    ALLOCATIONS_PATH,
+    ALLOCATION_NEW_PATH,
+    allocationDetailPath(1),
   ];
 
   it.each(domainPaths)("refuses %s without the permission", async (path) => {

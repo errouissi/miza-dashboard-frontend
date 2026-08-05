@@ -123,12 +123,24 @@ export async function fetchManagers(
  * of writing, so this limit is real but currently invisible; it will bite the
  * day a 101st manager is created; not fixed here.
  *
- * No filters, no search: this is the full picker set, ordered however
- * `indexManagers` orders it (`date_ajout DESC`, BC-L — not alphabetical).
+ * No search: this is the full picker set, ordered however `indexManagers`
+ * orders it (`date_ajout DESC`, BC-L — not alphabetical).
+ *
+ * `status` IS AN OPTIONAL, ADDITIVE FILTER — added for Allocations' own
+ * create form (roadmap M5, Phase 4), whose `agent_id` field is validated
+ * `exists:agents,id` WHERE `status=active` AND `role=manager` (verified
+ * fresh from `StoreAllocationRequest`). Every EXISTING caller (Commercials'
+ * manager filter, the M3.6 wizard) keeps calling this with no argument and
+ * gets the exact same unfiltered set as before — backward compatible,
+ * mirrors how `useVilleOptionsQuery` gained its own `enabled` parameter for
+ * a new caller without disturbing its first one.
  */
-export async function fetchManagerOptions(): Promise<ManagerOption[]> {
+export async function fetchManagerOptions(
+  params: { status?: ManagerStatus } = {},
+): Promise<ManagerOption[]> {
   const page = await fetchManagers({
     ...MANAGER_LIST_DEFAULTS,
+    ...(params.status ? { status: params.status } : {}),
     perPage: MAX_PER_PAGE,
   });
   return page.items.map(({ id, nom, prenom }) => ({ id, nom, prenom }));

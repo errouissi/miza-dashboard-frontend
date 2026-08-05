@@ -13,6 +13,7 @@ import {
   Wallet,
   Undo2,
   ArrowLeftRight,
+  Building2,
 } from "lucide-react";
 import { PERMISSIONS, type PermissionResolver } from "@/infrastructure/permissions";
 import { ADMINS_PATH } from "@/domains/network/admins";
@@ -24,6 +25,7 @@ import { DEPOSITS_PATH } from "@/domains/money/deposits";
 import { DEBT_PAYMENTS_PATH } from "@/domains/money/debt-payments";
 import { AGENT_STOCK_RETURNS_PATH } from "@/domains/stock/agent-stock-returns";
 import { AGENT_TRANSFERS_PATH } from "@/domains/stock/agent-transfers";
+import { ALLOCATIONS_PATH } from "@/domains/stock/allocations";
 import { PRODUCTS_PATH } from "@/domains/reference/products";
 import { SECTEURS_PATH } from "@/domains/reference/secteurs";
 import { VILLES_PATH } from "@/domains/reference/villes";
@@ -203,6 +205,19 @@ export const NAV_TREE: NavGroup[] = [
         // nav entry already follows.
         permission: PERMISSIONS.VIEW_AGENT_TRANSFERS,
         icon: ArrowLeftRight,
+      },
+      {
+        label: "Allocations",
+        to: ALLOCATIONS_PATH,
+        // `view-allocations` (roadmap M5, Phase 4) — its OWN permission,
+        // PLURAL (matches Transfer's own plurality, not Return's own
+        // singular — independently verified, ADR-0022). The other seven
+        // Allocation permissions gate actions (create/update/delete/
+        // validate, plus the three line permissions) inside the page, not
+        // visibility of the list — same convention every prior Stock nav
+        // entry already follows.
+        permission: PERMISSIONS.VIEW_ALLOCATIONS,
+        icon: Building2,
       },
     ],
   },

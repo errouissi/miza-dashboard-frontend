@@ -1,4 +1,4 @@
-import type { ManagerListParams } from "../model/manager";
+import type { ManagerListParams, ManagerStatus } from "../model/manager";
 
 /**
  * The Managers query-key factory (FTA §8).
@@ -16,9 +16,14 @@ export const managersKeys = {
   lists: () => [...managersKeys.all, "list"] as const,
   list: (params: ManagerListParams) => [...managersKeys.lists(), params] as const,
   /**
-   * The relation-picker set (M3.3's Commercials manager filter). One
-   * parameterless key, mirroring `villesKeys.options()` — every consumer reads
-   * the same cache entry and triggers one fetch, however many components ask.
+   * The relation-picker set (M3.3's Commercials manager filter). A bare call
+   * (no `status`) keeps the EXACT SAME key every existing caller already
+   * uses — backward compatible. A `status`-scoped call (Allocations' create
+   * form, roadmap M5, Phase 4, which needs `status=active` only) gets its
+   * OWN distinct key, not sharing the unfiltered set's cache entry.
    */
-  options: () => [...managersKeys.all, "options"] as const,
+  options: (status?: ManagerStatus) =>
+    status
+      ? ([...managersKeys.all, "options", status] as const)
+      : ([...managersKeys.all, "options"] as const),
 };

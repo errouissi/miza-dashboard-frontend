@@ -84,6 +84,18 @@ describe("invalidation map", () => {
     ]);
   });
 
+  it("registers allocation.created — Allocations' own key space only", () => {
+    expect(queryKeyPrefixesFor("allocation.created")).toEqual([["allocations"]]);
+  });
+
+  it("registers allocation.line-changed — Allocations' own key space only", () => {
+    expect(queryKeyPrefixesFor("allocation.line-changed")).toEqual([["allocations"]]);
+  });
+
+  it("registers allocation.validated — no cross-domain prefix (writes stocks/stock_movements/allocation_deposit_consumptions, not Agent balance or Deposit columns)", () => {
+    expect(queryKeyPrefixesFor("allocation.validated")).toEqual([["allocations"]]);
+  });
+
   it("invalidates nothing, and does not throw, for an unregistered event", async () => {
     const queryClient = new QueryClient();
     const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
