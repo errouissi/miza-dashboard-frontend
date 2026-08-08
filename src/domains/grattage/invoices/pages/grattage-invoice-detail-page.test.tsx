@@ -234,7 +234,9 @@ describe("the deposit-link cancellation guard", () => {
     // The facts grid's own "Reconciliation deposit" label always renders
     // (it shows "—" when unset) — only the FREEZE NOTE's own copy is
     // conditional, so this asserts against that specific text.
-    expect(screen.queryByText(/linked to reconciliation deposit/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/linked to reconciliation deposit/i),
+    ).not.toBeInTheDocument();
   });
 });
 

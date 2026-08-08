@@ -94,21 +94,49 @@ const INVALIDATION_MAP: Readonly<Record<DomainEvent, readonly QueryKey[]>> =
      * here — a genuine difference in what the two actions touch, not an
      * oversight.
      */
-    "deposit.validated": [["deposits"]],
     /**
-     * Rejecting touches no balance column and no `GrattageInvoice` status
-     * (only an unlink, for grattage) — verified from source
-     * (`DepositService::reject`).
+     * M6 Phase 2 UPDATE — re-verified from source (`DepositService
+     * ::validate`): for a `type=grattage` deposit, every invoice linked to
+     * it (`deposit_id` = this deposit) flips `pending|overdue -> settled`
+     * in the SAME transaction. That changes the Grattage Invoices list/
+     * detail's own `status` field AND clears the affected agent's
+     * `restock_gate` (an invoice leaving `GrattageInvoice::undischarged()`
+     * is exactly what reopens it — see `model/grattage-outstanding.ts`'s
+     * own docblock). Both prefixes are busted regardless of the deposit's
+     * actual `type` (a `rapped` validation is a harmless no-op bust on
+     * both — cheap `LIVE`-tier reads, over-invalidating is the safer
+     * default this codebase already applies elsewhere).
      */
-    "deposit.rejected": [["deposits"]],
+    "deposit.validated": [["deposits"], ["grattage-invoices"], ["grattage-outstanding"]],
     /**
-     * Creating a deposit only ever adds a new `pending` row — same
-     * reasoning `cheque.created` already established. The legacy
+     * M6 Phase 2 UPDATE — re-verified from source (`DepositService
+     * ::reject`): for a `type=grattage` deposit, every invoice linked to
+     * it is UNLINKED (`deposit_id -> NULL`, status untouched). That
+     * re-enables Cancel on those invoices (the Phase 1 `deposit_id !==
+     * null` freeze guard) AND raises the affected agent's
+     * `summary.requiredTotal` back up (re-entering
+     * `GrattageInvoice::outstanding()`) — `restock_gate` is UNAFFECTED
+     * (it was never gated by `deposit_id` in the first place). Both
+     * prefixes are busted regardless of `type`, same reasoning as
+     * `deposit.validated` above.
+     */
+    "deposit.rejected": [["deposits"], ["grattage-invoices"], ["grattage-outstanding"]],
+    /**
+     * M6 Phase 2 UPDATE — re-verified from source
+     * (`DepositService::createGrattageReconciliation`): for a
+     * `type=grattage` deposit, EVERY currently-outstanding invoice for
+     * that agent is linked (`deposit_id` set) THE INSTANT THE DEPOSIT IS
+     * CREATED, before any validation. This changes those invoices'
+     * `depositId` (the Phase 1 cancel-freeze guard) AND drops the agent's
+     * `summary.requiredTotal` to exclude them immediately —
+     * `restock_gate` is UNAFFECTED at this step (stays blocked; only
+     * `validate()` clears it, per decision #8a). The legacy
      * rapped+cash-method side effect (`currentAdmin->debt`) touches
      * `User.debt`, a column no Network list renders (re-verified from
-     * source this phase, `DepoController::store`).
+     * source this phase, `DepoController::store`). Both new prefixes are
+     * busted regardless of `type`, same reasoning as above.
      */
-    "deposit.created": [["deposits"]],
+    "deposit.created": [["deposits"], ["grattage-invoices"], ["grattage-outstanding"]],
     /**
      * Recording a debt payment writes `User.debt` only (`DebtPaymentController
      * ::store`) — a column no Network list renders (Managers'/Commercials'
@@ -217,9 +245,21 @@ const INVALIDATION_MAP: Readonly<Record<DomainEvent, readonly QueryKey[]>> =
      * Allocations'/Transfers' own use company/manager-side stock, never
      * commercial-side), so there is no Stock cache to bust. No balance
      * column is touched either (grattage never writes
-     * `solde`/`cash`/`dept`). `["grattage-invoices"]` only.
+     * `solde`/`cash`/`dept`).
+     *
+     * M6 Phase 2 UPDATE — `["grattage-outstanding"]` added:
+     * `isCancellable()` only permits cancelling a `deposit_id IS NULL`
+     * invoice (Phase 1's own freeze guard), so a cancelled invoice was
+     * ALWAYS in `GrattageInvoice::outstanding()` AND
+     * `GrattageInvoice::undischarged()` the instant before its status
+     * flipped — cancelling therefore removes it from BOTH scopes at once,
+     * lowering `summary.requiredTotal` and potentially clearing
+     * `restock_gate` for that agent (and, for a commercial, their
+     * manager's own `TEAM_OUTSTANDING_GRATTAGE` gate too — re-verified
+     * from `computeGrattageRestockGate`, which reads live, not from a
+     * cached snapshot).
      */
-    "grattage-invoice.cancelled": [["grattage-invoices"]],
+    "grattage-invoice.cancelled": [["grattage-invoices"], ["grattage-outstanding"]],
   });
 
 /** The prefixes a given event invalidates, or an empty list for an unregistered one. */

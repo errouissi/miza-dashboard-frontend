@@ -34,16 +34,28 @@ describe("invalidation map", () => {
     expect(queryKeyPrefixesFor("cheque.rejected")).toEqual([["cheques"]]);
   });
 
-  it("registers deposit.validated — Deposits' own key space only, no Network prefix (unlike cheque.approved)", () => {
-    expect(queryKeyPrefixesFor("deposit.validated")).toEqual([["deposits"]]);
+  it("registers deposit.validated — Deposits, plus Grattage Invoices and Grattage Outstanding (M6 Phase 2: settling flips invoice status and clears the restock gate)", () => {
+    expect(queryKeyPrefixesFor("deposit.validated")).toEqual([
+      ["deposits"],
+      ["grattage-invoices"],
+      ["grattage-outstanding"],
+    ]);
   });
 
-  it("registers deposit.rejected — Deposits' own key space only", () => {
-    expect(queryKeyPrefixesFor("deposit.rejected")).toEqual([["deposits"]]);
+  it("registers deposit.rejected — Deposits, plus Grattage Invoices and Grattage Outstanding (M6 Phase 2: unlinking re-enables Cancel and raises the outstanding total)", () => {
+    expect(queryKeyPrefixesFor("deposit.rejected")).toEqual([
+      ["deposits"],
+      ["grattage-invoices"],
+      ["grattage-outstanding"],
+    ]);
   });
 
-  it("registers deposit.created — Deposits' own key space only", () => {
-    expect(queryKeyPrefixesFor("deposit.created")).toEqual([["deposits"]]);
+  it("registers deposit.created — Deposits, plus Grattage Invoices and Grattage Outstanding (M6 Phase 2: a reconciliation deposit links invoices immediately, dropping the outstanding total)", () => {
+    expect(queryKeyPrefixesFor("deposit.created")).toEqual([
+      ["deposits"],
+      ["grattage-invoices"],
+      ["grattage-outstanding"],
+    ]);
   });
 
   it("registers debt-payment.created — Debt Payments' own key space only", () => {
@@ -110,6 +122,13 @@ describe("invalidation map", () => {
 
   it("registers bon.cancelled — no cross-domain prefix (reverses stock plus the bon's own cancellation-audit columns only)", () => {
     expect(queryKeyPrefixesFor("bon.cancelled")).toEqual([["bons"]]);
+  });
+
+  it("registers grattage-invoice.cancelled — Grattage Invoices' own key space, plus Grattage Outstanding (M6 Phase 2: cancelling removes the invoice from both the outstanding and undischarged scopes)", () => {
+    expect(queryKeyPrefixesFor("grattage-invoice.cancelled")).toEqual([
+      ["grattage-invoices"],
+      ["grattage-outstanding"],
+    ]);
   });
 
   it("invalidates nothing, and does not throw, for an unregistered event", async () => {
