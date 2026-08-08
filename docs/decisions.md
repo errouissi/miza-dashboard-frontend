@@ -613,3 +613,214 @@ decisions made *during implementation*.
   own product pickers still use the unfiltered catalogue by choice (out of
   this change's scope — revisit only with a fresh, explicit decision, not
   as a side effect of unrelated work).
+
+## ADR-0026 — Grattage Outstanding: a private full read plus one narrow public hook; the per-agent UI is an M7 concern, not M6's
+
+- **Date:** 2026-08-08
+- **Status:** Accepted
+- **Context:** M6 Phase 2 needed to expose the Grattage restock-gate signal
+  (`blocked`/`reason`, sourced from `GET /admin/agents/{agent}/grattage-outstanding`)
+  to Stock, but the full Outstanding read also carries a per-agent list of
+  undischarged invoices with no consumer yet — the frozen roadmap's own
+  per-agent Outstanding-obligation view is explicitly an M7 Agent 360
+  deliverable, not an M6 one.
+- **Decision:** `domains/grattage/outstanding/` builds the full mapped read
+  (`fetchGrattageOutstanding`, `useGrattageOutstandingQuery`) but its
+  `index.ts` exports **only** the narrow, `select`-projected
+  `useGrattageRestockGateQuery(agentId)`. `useGrattageOutstandingQuery`
+  stays domain-private and unexported until an M7 caller actually needs it.
+  Both hooks share one cache key
+  (`grattageOutstandingKeys.detail(agentId)`), so a future page consuming
+  both never double-fetches.
+- **Rationale:** Building the full data layer once (rather than twice, once
+  narrow for M6 and again broad for M7) avoids rework, but exporting the
+  broad surface ahead of a real caller would be exactly the kind of
+  speculative shared surface ADR-0008/D-11 already forbid elsewhere in this
+  codebase. The module boundary keeps the "what M6 needs" and "what M7 will
+  need" distinction enforceable by the compiler, not just documentation.
+- **Consequences:** M7's own Agent 360 Outstanding view starts by exporting
+  `useGrattageOutstandingQuery` from this same `index.ts` — no new
+  `api`/`model`/`queries` files, just a widened public surface at the point
+  a real page needs it.
+
+## ADR-0027 — Stock←Grattage: exactly one sanctioned domain-to-domain import, consumed by Agent Transfer only
+
+- **Date:** 2026-08-08
+- **Status:** Accepted
+- **Context:** FTA §4's "mechanism 2" allows one deliberate domain-to-domain
+  import where a genuine cross-domain business rule exists. Grattage's
+  restock gate is exactly this: Stock's own `validateTransfer()`/
+  `validateAllocation()` both, at the time of M6 Phase 3's initial
+  implementation, blocked on a commercial's/manager's team's undischarged
+  grattage obligation.
+- **Decision:** `AgentTransferDetailPage` imports
+  `useGrattageRestockGateQuery` from `domains/grattage/outstanding` — the
+  ONE sanctioned Stock←Grattage import in the codebase. No other Stock
+  resource (Agent Stock Returns, Bons) imports anything from Grattage;
+  confirmed via negative-scope tests that neither requests the endpoint.
+- **Rationale:** A single, narrow, `select`-projected hook is a much smaller
+  surface than importing Grattage's full Outstanding shape, and keeping the
+  import count at exactly one (enforced by review, not tooling — see the
+  ESLint gap recorded in `next-session.md`) keeps the boundary auditable by
+  grep alone.
+- **Consequences:** Allocation briefly became a SECOND consumer of this same
+  hook (M6 Phase 3's own initial implementation) and was removed once its
+  underlying backend gate stopped being authoritative for Allocation — see
+  ADR-0029. This ADR's "consumed by Agent Transfer only" statement is the
+  CURRENT, post-correction state, not the mid-milestone one.
+
+## ADR-0028 — Agent Transfer's Grattage restock-gate hard block is unaffected by the Allocation contract change and stays as built
+
+- **Date:** 2026-08-08
+- **Status:** Accepted
+- **Context:** Backend commit `9af5d00` changed Allocation's own capacity
+  rules mid-milestone (see ADR-0029). Before correcting Allocation, a
+  re-verification-only pass confirmed from source that
+  `StockService::validateTransfer()` STEP 7c — the hard block on
+  `GrattageInvoice::undischarged()->where('agent_id', $commercialId)`,
+  surfaced as `TRANSFER_RECIPIENT_HAS_OUTSTANDING_OBLIGATION` (409) — was
+  untouched by that commit.
+- **Decision:** `AgentTransferDetailPage`'s restock-gate integration (the
+  proactive `useGrattageRestockGateQuery` call, the warning banner, and the
+  `restockGateBlocked` prop into `ValidateTransferDialog`'s
+  `confirmDisabled`) is left exactly as M6 Phase 3 built it. Nothing about
+  Transfer changed during the Allocation correction.
+- **Rationale:** Conflating Transfer's and Allocation's gates because they
+  share one hook would risk an accidental regression during the Allocation
+  fix — verifying and explicitly recording that they are independent
+  contracts, on different backend code paths, protected this from
+  happening.
+- **Consequences:** `useGrattageRestockGateQuery`'s only remaining call site
+  is `AgentTransferDetailPage` (ADR-0027). A future change to Transfer's own
+  gate needs its own fresh backend re-verification — it must never be
+  assumed stable just because Allocation's own equivalent gate turned out
+  not to be.
+
+## ADR-0029 — Allocation's proactive restock-gate integration is removed following backend commit `9af5d00`; the reactive capacity gate is now the only one
+
+- **Date:** 2026-08-08
+- **Status:** Accepted
+- **Context:** Backend commit `9af5d00`
+  (`feat(allocation): settlement-aware Company -> Manager grattage
+  capacity`) deleted `AllocationTeamHasOutstandingObligation` as an
+  exception class outright and removed `validateAllocation()`'s team-wide
+  hard block. M6 Phase 3 had already shipped a proactive frontend
+  integration mirroring that exact block
+  (`useGrattageRestockGateQuery(allocation.agentId)` on
+  `AllocationDetailPage`, disabling Validate on
+  `TEAM_OUTSTANDING_GRATTAGE`). The backend's own
+  `computeGrattageRestockGate()` docblock now explicitly states the
+  manager-level reason is "NOT AUTHORITATIVE" for Allocation.
+- **Decision:** Removed entirely, not adapted: the hook call, the warning
+  banner, and the `restockGateBlocked` prop on both
+  `AllocationDetailPage` and `ValidateAllocationDialog`; the
+  `ALLOCATION_TEAM_HAS_OUTSTANDING_OBLIGATION` entry in
+  `error-code-registry.ts`; the five gate-specific tests in
+  `allocation-detail-page.test.tsx`, replaced with one negative-scope test
+  proving the gate is genuinely no longer consumed. `model/allocation.ts`'s
+  and `AllocationDetailPage`'s own docblocks were rewritten to describe the
+  current capacity formula and this history.
+- **Rationale:** A gate the backend itself now documents as non-authoritative
+  for this actor must not keep disabling a real action on the frontend —
+  that would be a frontend-invented false refusal, the opposite failure mode
+  from missing a real one. Removing rather than reinterpreting the signal
+  also avoids inventing a new client-side meaning for a field the backend
+  no longer intends to be load-bearing here.
+- **Consequences:** Allocation's only remaining validate-time gate is the
+  reactive `ALLOCATION_EXCEEDS_DEPOSIT_CAPACITY` 409 — see ADR-0032 for the
+  standing rule this establishes about not re-deriving that number
+  client-side. `AllocationDetailPage` no longer imports anything from
+  `domains/grattage` (confirmed by grep) — `AgentTransferDetailPage` is now
+  the only remaining Stock←Grattage import site (ADR-0027).
+
+## ADR-0030 — Deposit ↔ Grattage Invoice linking uses a private, domain-local read inside Deposits (Option B), not a new Money↔Grattage domain import
+
+- **Date:** 2026-08-08
+- **Status:** Accepted
+- **Context:** M6 Phase 4 needed `DepositDetailPage` to show the Grattage
+  invoices a given grattage deposit reconciles/settles. Three options were
+  presented: (A) extend Grattage's own public surface with a
+  by-deposit-id query for Deposits to import; (B) build a private,
+  domain-local duplicate read inside Deposits, mirroring the pre-existing
+  M4.3 `fetchGrattageOutstanding` precedent already living there; (C) a
+  hybrid.
+- **Decision:** Option B, explicitly chosen by the user over A and C.
+  `domains/money/deposits/api/deposits-api.ts` gained
+  `fetchLinkedGrattageInvoices(depositId)` (`GET /admin/grattage-invoices
+  ?deposit_id=...`, using the new backend filter from commit `057c8b2`) and
+  its own narrow `LinkedGrattageInvoice` type (`id`, `status`,
+  `totalAmount`, `soldAt` only) — not an import of Grattage's own
+  `GrattageInvoice` model type.
+- **Rationale:** A is a real Money→Grattage architectural edge, on top of
+  the already-existing Stock←Grattage one — two live cross-domain couplings
+  instead of one is more surface than this seam needs, and would make a
+  future domain-boundary lint rule harder to write. Option B costs a small
+  amount of duplication (a second place that knows the shape of a Grattage
+  invoice, narrowly) in exchange for zero new domain edges — the same
+  trade-off ADR-0012 already made for domain-local mappers/key-factories.
+- **Consequences:** Deposits and Grattage now both independently read
+  `GET /admin/grattage-invoices`, each mapping only the fields their own
+  page needs. Cross-page navigation (Invoice→Deposit, Deposit→Invoices) is
+  built as literal path strings (`/money/deposits/${id}`,
+  `/grattage/invoices/${id}`), never a route-module import — mirroring
+  `invalidation-map.ts`'s own pre-existing literal-key precedent. A future
+  domain needing the same Grattage invoice data should default to this same
+  private-read pattern unless a fresh decision says otherwise (see
+  `next-session.md`).
+
+## ADR-0031 — The Grattage Invoice detail page's deposit link uses a status-aware "Reconciliation" / "Settling" label, not a generic "Deposit" label
+
+- **Date:** 2026-08-08
+- **Status:** Accepted
+- **Context:** `deposit_id` is set on a `GrattageInvoice` at deposit
+  **creation** time (before that deposit is ever validated), but the
+  invoice's own `status` only flips to `settled` once the deposit is
+  **validated** (`DepositService::createGrattageReconciliation()`/
+  `validate()`, verified from source). A single generic "Deposit #N" label
+  would be accurate at both points but would obscure this timing gap — an
+  operator could read "Deposit #N" on a still-pending invoice and
+  reasonably assume it was already settled.
+- **Decision:** `GrattageInvoiceDetailPage`'s deposit link's label is
+  computed from the invoice's own `status`:
+  `invoice.status === "settled" ? "Settling deposit #N" : "Reconciliation deposit #N"`.
+- **Rationale:** The two-word label is cheap and makes the
+  creation/validation timing gap visible in the UI instead of only in this
+  document — an operator reading "Reconciliation deposit #12" on a still-
+  `pending` invoice correctly understands the deposit exists but has not yet
+  discharged the invoice.
+- **Consequences:** Any future page rendering a Grattage invoice's own
+  deposit link should reuse this same status-aware convention rather than
+  inventing a third label — there is no shared component for it yet (a
+  single caller, per ADR-0008/D-11's own restraint on premature extraction).
+
+## ADR-0032 — The backend is the sole authority for Allocation's (and any future Stock resource's) numeric capacity; the frontend never re-derives it from deposits, invoices, or movements
+
+- **Date:** 2026-08-08
+- **Status:** Accepted
+- **Context:** Established directly out of the ADR-0029 correction: once the
+  proactive team-obligation gate was removed, it would have been possible
+  to instead build a client-side approximation of the manager's available
+  grattage-deposit capacity (summing validated deposits, subtracting
+  validated allocations) to restore some proactive UX. This was explicitly
+  considered and explicitly rejected.
+- **Decision:** Do not compute Allocation's (or any future Stock resource's)
+  available capacity on the frontend from raw deposit/invoice/movement
+  data. The number is only ever known correctly, at the moment it matters,
+  inside `AllocationExceedsDepositCapacity`'s own exception `context`
+  (`{agentId, requested, available}`) — a genuine 409 refusal is the sole
+  source of this number today, and the frontend surfaces it reactively,
+  never proactively.
+- **Rationale:** The capacity formula is genuinely backend-owned business
+  logic (it already changed once, unannounced from the frontend's
+  perspective, in `9af5d00`) — a client-side reimplementation would silently
+  drift from the real formula the next time the backend changes it again,
+  producing a UI that confidently shows a wrong number instead of honestly
+  showing none. This mirrors the same restraint already applied to
+  Transfer's own `AGENT_TRANSFER_EXCEEDS_CAPACITY` gate, which has never had
+  a proactive hint either.
+- **Consequences:** BC-AA stays partially open specifically on this point —
+  a proactive capacity hint remains impossible until the backend exposes a
+  real read for it. Test fixtures for `ALLOCATION_EXCEEDS_DEPOSIT_CAPACITY`
+  must construct the 409's `context` directly rather than deriving it from
+  simulated deposit/allocation totals, so the tests cannot drift into
+  encoding the formula themselves.

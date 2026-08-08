@@ -3,7 +3,7 @@
 **The current state of the project.** Overwrite this file after every completed
 milestone — it describes *now*, not history. History lives in `decisions.md` and git.
 
-_Last updated: 2026-08-05_
+_Last updated: 2026-08-08_
 
 ---
 
@@ -59,32 +59,67 @@ company stock) — Allocations can now, in principle, be validated manually
 against real data; that manual pass, and Transfers'/Bons' own, are still
 owed as a follow-up, not attempted in this documentation-only session.
 
-**M6 (Grattage — the seam) is the next milestone** — invoice list/detail/
-cancel, plus the restock-gate hook Stock already reactively defers to
-(BC-AA remains partially open: real per-owner availability now feeds two
-Stock pickers, but no cross-owner ledger view or proactive capacity hint
-exists yet). Needs its own fresh discovery pass before any implementation,
-per the same discipline every M4/M5 phase applied.
+**M6 — Grattage (the seam) — COMPLETE, manual QA passed.** Four phases,
+each its own discovery → approval → implementation → commit cycle
+(ADR-0022 discipline throughout): Grattage Invoices (list/detail/cancel),
+the Grattage Outstanding restock-gate domain (a private full read plus one
+narrow public hook), Stock → Grattage restock-gate integration (Agent
+Transfer's hard block; Allocation's own proactive gate was added then
+removed — see below), and Deposit ↔ Grattage Invoice linking. See "M6 —
+Grattage (the seam)" below for the full write-up, and ADR-0026 through
+ADR-0032 for the permanent decisions this milestone produced.
+
+**A backend contract change landed mid-milestone and the frontend was
+corrected to match, re-verified from source rather than assumed
+(ADR-0022):** backend commit `9af5d00` replaced Allocation's team-wide hard
+block (`ALLOCATION_TEAM_HAS_OUTSTANDING_OBLIGATION`, exception class
+deleted outright) with a numeric, settlement-aware deposit-capacity formula
+that a commercial's validated grattage settlement now feeds into — an
+undischarged obligation restores zero capacity but is never, by itself, a
+refusal. The proactive restock-gate integration that had briefly shipped on
+`AllocationDetailPage` (reading `useGrattageRestockGateQuery`) was removed
+in a targeted, approved correction (`59888a5`); Allocation's sole remaining
+gate is the reactive `ALLOCATION_EXCEEDS_DEPOSIT_CAPACITY` 409, and the
+frontend does not (and must not) re-derive that capacity client-side.
+Agent Transfer's own hard gate
+(`TRANSFER_RECIPIENT_HAS_OUTSTANDING_OBLIGATION`) is unaffected — its
+backend contract did not change, and it remains the only live caller of
+`useGrattageRestockGateQuery` (the one sanctioned Stock←Grattage
+domain-to-domain import).
+
+**Explicitly NOT delivered by M6, carried into M7 by decision:** a
+per-agent Outstanding-obligation UI view. The data layer exists
+(`useGrattageOutstandingQuery`, kept domain-private) but has no page,
+route, or navigation entry — that UI is an M7 Agent 360 deliverable, not an
+M6 one (see `next-session.md`).
+
+**M7 — Overview & workspaces, Agent 360, Client 360 — is the next
+milestone.** Needs its own fresh discovery pass before any implementation,
+per the same discipline every prior milestone applied.
 
 M3.x (Admin/Manager/Commercial detail pages, ADR-0014) remains the only
-open M3 item, blocked by FE-2 — unaffected by M4 or M5.
+open M3 item, blocked by FE-2 — unaffected by M4, M5 or M6.
 
 ## Current branch
 
-`main`, level with `origin/main`. Since M4.2 Phase 3C (`bba78d3`), the
-following are each their own commit, in order: Deposits list (`dcb8380`),
-Deposits detail page (`6ab02a5`), Deposits validate/reject
-(`a64f42f`), Deposits creation (`4dd4d63`), Debt Payments (`c0d3f36`), the
-`useFreshConfirm` freshness-rule retrofit onto Cheques' and Deposits'
-existing dialogs (`7da7804`), Agent Stock Returns (`49af3b7`), Agent
-Transfers (`e559e76`), the M4/M5 documentation-sync pass (`d8b1006`),
-Allocations (`16aad37`), the M5-Phase-4/Bons-dependency documentation pass
-(`651934c`), Bons (`a8239f9`), and the stock-aware product selection +
-backend-generated document number refactor (`6dea118`). No uncommitted
-files remain (this documentation pass is the only pending change). See
-`next-session.md` for verification commands.
+`main`, level with `origin/main` (pushed after this documentation pass).
+Since the M4/M5 documentation-sync pass (`d8b1006`): Allocations
+(`16aad37`), the M5-Phase-4/Bons-dependency documentation pass
+(`651934c`), Bons (`a8239f9`), the stock-aware product selection +
+backend-generated document number refactor (`6dea118`), the M5-completion
+documentation-sync pass (`96bf302`), Grattage Invoices (`b1713af`), the
+Grattage Outstanding restock-gate domain (`8514662`), Stock → Grattage
+restock-gate integration (`0ce24e2`), Deposit ↔ Grattage Invoice linking
+(`8d5bf60`), an invalidation-map comment cleanup (`f843008`), and the
+Allocation capacity-validation correction for backend commit `9af5d00`
+(`59888a5`). No uncommitted files remain (this documentation pass is the
+only pending change). See `next-session.md` for verification commands.
 
 ## Last completed implementation
+
+**M6 — Grattage (the seam) — COMPLETE, manual QA passed.** See its own
+section below for the full write-up. The previous entries, kept for
+continuity:
 
 **Stock-aware product selection + backend-generated document numbers —
 COMPLETE.** A post-Bons backend contract update (Companies/Suppliers/
@@ -1648,6 +1683,131 @@ of stock, so it can be exercised end-to-end against the seeded `Default
 Supplier`/`Miza` company immediately. Manual validation is still owed
 (not yet performed), same as Transfers'/Allocations' own.
 
+## M6 — Grattage (the seam) — COMPLETE, manual QA passed
+
+Four phases, each its own discovery → approval → implementation → commit
+cycle. The name "the seam" is the frozen roadmap's own — Grattage is the
+resource every Stock movement type reactively defers to (a restock-gate
+check) and that Money's Deposits domain settles against, without ever
+becoming a full third leg of either domain's own architecture.
+
+**Phase 1 — Grattage Invoices (`b1713af`).** The domain itself:
+list/detail/cancel, `access-dashboard`-gated (reusing the existing
+constant, not a new permission), `isGrattageInvoiceCancellable()` mirroring
+the backend's own `(status IN (pending,overdue)) AND deposit_id IS NULL`
+predicate. No admin Create or Settle — both are backend-initiated flows,
+out of scope by decision. Status vocabulary: pending (warning) → overdue
+(danger) → settled (success) / cancelled (muted). List filters are
+page/status/date-range only — no agent/client filter (deliberate scope
+narrowing, matching the frozen roadmap).
+
+**Phase 2 — Grattage Outstanding restock-gate domain (`8514662`).** A data
+layer with no UI: `fetchGrattageOutstanding(agentId)` (full mapped read),
+but the domain's `index.ts` exports **only** the narrow
+`useGrattageRestockGateQuery(agentId)` (`select`-projected to
+`{blocked, reason}`) — the full `useGrattageOutstandingQuery` stays
+domain-private, unexported, with no caller until M7's own per-agent
+Outstanding view needs it (ADR-0026). Both hooks share one cache key
+(`grattageOutstandingKeys.detail(agentId)`), so a page consuming both
+never double-fetches. `invalidation-map.ts`'s existing `deposit.created`/
+`deposit.validated`/`deposit.rejected`/`grattage-invoice.cancelled`
+entries were extended to include the `grattage-outstanding`/
+`grattage-invoices` key prefixes — no new domain event needed.
+
+**Phase 3 — Stock → Grattage restock-gate integration (`0ce24e2`,
+corrected by `59888a5`).** The ONE sanctioned Stock←Grattage
+domain-to-domain import (ADR-0027): `AgentTransferDetailPage` calls
+`useGrattageRestockGateQuery(agentTransfer.commercialId)` and disables
+Validate with an inline warning when the recipient commercial has an
+undischarged grattage obligation — this mirrors the backend's own
+**unchanged, still-hard** `StockService::validateTransfer()` STEP 7c block
+(`TRANSFER_RECIPIENT_HAS_OUTSTANDING_OBLIGATION`, 409). A parallel gate
+was also added to `AllocationDetailPage` for the Manager-level
+`TEAM_OUTSTANDING_GRATTAGE` reason, mirroring the then-current backend
+block (`ALLOCATION_TEAM_HAS_OUTSTANDING_OBLIGATION`) — **this half was
+later removed** (see the correction below) once the backend contract it
+mirrored stopped existing. Both gates were deliberately kept separate from
+`useFreshConfirm` (ADR-0018) — a foreign-domain advisory read is not the
+same kind of check as a record's own staleness. Not wired into Agent Stock
+Returns or Bons (verified, negative-scope tests confirm zero requests) —
+neither resource has a Grattage-relevant actor in its own flow.
+
+**Backend contract change and correction, mid-milestone.** Backend commit
+`9af5d00` (`feat(allocation): settlement-aware Company -> Manager grattage
+capacity`) removed `StockService::validateAllocation()`'s team-wide hard
+block entirely (`AllocationTeamHasOutstandingObligation` deleted as a
+class; `ALLOCATION_TEAM_HAS_OUTSTANDING_OBLIGATION` can never be emitted
+again) and replaced it with a numeric formula: available capacity now
+sums the manager's own validated grattage deposits **plus** validated
+grattage deposits from any team commercial, minus the manager's own
+validated allocations — an undischarged commercial obligation now restores
+**zero** capacity but is **never, by itself,** a refusal. The sole
+remaining Allocation gate is `ALLOCATION_EXCEEDS_DEPOSIT_CAPACITY` (409,
+unchanged exception/context shape), exposed only reactively (inside that
+exception's own `context.available`) — no backend read exposes a manager's
+capacity proactively, before or after this commit. After a
+re-verification-only pass (per explicit request) confirmed this from
+source, `59888a5` performed the approved, targeted correction:
+`AllocationDetailPage`'s and `ValidateAllocationDialog`'s restock-gate
+call/banner/prop plumbing were removed entirely, the
+`ALLOCATION_TEAM_HAS_OUTSTANDING_OBLIGATION` entry was removed from the
+error-code registry, and both files' docblocks were rewritten to describe
+the current formula and explicitly forbid a client-side capacity
+derivation (see ADR-0029, and ADR-0032 for the standing no-client-side-
+derivation rule). Agent Transfer's own gate was untouched —
+its backend contract did not change. Test count moved from 30 to 25 in
+`allocation-detail-page.test.tsx` (five gate-specific tests removed,
+replaced by one negative-scope test proving the gate is genuinely no
+longer consumed there).
+
+**Phase 4 — Deposit ↔ Grattage Invoice linking (`8d5bf60`).** Two
+directions, both literal-path navigation (never a route-module import,
+mirroring `invalidation-map.ts`'s own existing literal-key precedent):
+- **Invoice → Deposit**: `GrattageInvoiceDetailPage`'s `depositId` row
+  became a real link to `/money/deposits/${depositId}`, with a
+  status-aware label (`Settling deposit #N` once `settled`,
+  `Reconciliation deposit #N` before that — mirroring the backend's own
+  `deposit_id`-set-at-creation / `status`-flips-at-validation timing).
+- **Deposit → Invoices**: a new "Grattage invoices" section on
+  `DepositDetailPage`, gated on `type === "grattage"` AND
+  `access-dashboard`, backed by a **private, domain-local** read inside
+  Deposits (`fetchLinkedGrattageInvoices`, `GET /admin/grattage-invoices
+  ?deposit_id=...`) — **Option B** (ADR-0030): the user explicitly rejected
+  extending Grattage's own public surface (Option A) and a hybrid (Option
+  C) to avoid a second Money↔Grattage domain edge; this mirrors the
+  pre-existing M4.3 `fetchGrattageOutstanding`/`useGrattageOutstandingQuery`
+  precedent already living inside Deposits. Used the new backend
+  `deposit_id` filter on `GET /admin/grattage-invoices` (backend commit
+  `057c8b2`, combinable with `agent_id`/`client_id`, same envelope, same
+  gate — confirmed live before implementation).
+
+**Final M6 completion review** (before manual QA) re-audited the
+implementation against the frozen roadmap's own M6 requirements across ten
+areas and found one non-blocking issue: a stale, orphaned docblock on
+`invalidation-map.ts`'s `deposit.validated` entry (Phase 2's edit had left
+the original pre-M6 comment stacked above the new one). Fixed as a
+comment-only cleanup (`f843008`, confirmed via diff to be 1 insertion / 2
+deletions, no behavior change). The review also surfaced one scope
+decision, made explicitly by the user rather than assumed: the per-agent
+Outstanding-obligation UI view stays an M7 Agent 360 deliverable, not
+retroactively credited to M6 just because its data layer already exists.
+
+**Manual QA has passed**, including the corrected Allocation capacity
+scenario (re-tested by the user after `59888a5` shipped).
+
+**No new permission constants.** Grattage reuses the existing
+`ACCESS_DASHBOARD` permission throughout — the backend's own
+`GrattageSalePermissions` catalogue exists but is unenforced by any route
+this milestone touches (disclosed, not a defect this frontend can fix).
+
+**Known, disclosed, non-blocking gap carried forward:** `eslint.config.js`
+has no actual domain-to-domain boundary rule — only a deep-import ban and a
+`domains → app` ban exist. The roadmap's own claim that the Stock←Grattage
+boundary is "verified by the boundary lint" is not literally true; the ONE
+sanctioned import is enforced by review discipline and this document, not
+tooling. Not fixed this milestone (out of scope, flagged as a follow-up —
+see `next-session.md`).
+
 ## Overall progress
 
 | Milestone | Status |
@@ -1685,17 +1845,18 @@ Supplier`/`Miza` company immediately. Manual validation is still owed
 | **M5 Phase 4 — Allocations** | ✅ **implementation complete** — Bons now shipped, prior stock-source blocker resolved; manual validation still owed |
 | **M5 Phase 5 — Bons** | ✅ **implementation complete** — manual validation still owed, no blocker |
 | **M5 — Stock, full milestone** | ✅ **COMPLETE at the implementation level** (all five phases); manual validation owed for Transfers, Allocations, Bons |
-| **M6 — Grattage (the seam)** | ⬜ **next milestone** — fresh discovery pass required before implementation |
-| M7 — Overview & workspaces | ⬜ not started, depends on M3–M6 all complete |
+| **M6 — Grattage (the seam)** | ✅ **COMPLETE, manual QA passed** — Invoices, restock-gate domain, Stock integration, Deposit↔Invoice linking |
+| M7 — Overview & workspaces, Agent 360, Client 360 | ⬜ next milestone, not started |
 
-**Tests: 949/949 across 48 files** (was 407/23 before M3.6; 431/24 at
+**Tests: 1022/1022 across 52 files** (was 407/23 before M3.6; 431/24 at
 M3.6's initial implementation; 442/24 after M3.6's three post-validation fix
 rounds; 447/25 after M4.1; 473/26 after M4.2 Phase 1+2; 489/27 after M4.2
 Phase 3A; 520/29 after M4.2 Phase 3B; 548/29 after M4.2 Phase 3C; growing
 across M4.3's four phases, M4.4, the freshness-rule retrofit, M5's own five
 phases (825/42 after Agent Transfers, 888/45 after Allocations, 951/48
-after Bons), then net **949/48** after the stock-aware product-selection
-refactor removed the allocation/transfer-number field tests it made moot).
+after Bons), 949/48 after the stock-aware product-selection refactor
+removed the allocation/transfer-number field tests it made moot, then M6's
+own four phases plus the Allocation capacity correction, net **1022/52**).
 Lint ·
 typecheck · format · build all clean, re-verified fresh this session.
 
@@ -2000,6 +2161,18 @@ not inherited from Cheques by resemblance:**
 | BC-AA | **partially resolved** | Two per-owner stock reads now exist (company/manager); no cross-owner ledger view | 🟡 partially open — see the Backend dependencies table above |
 | BC-AB | **verified, unchanged** | Only Bons has a `/cancel` route — now built on the frontend, for Bons only | ✅ no action needed; Returns/Transfers/Allocations correctly have no cancel UI |
 
+**From the M6 contract verification, against `GrattageInvoiceController`,
+`AgentController::computeGrattageRestockGate`, `StockService::validateAllocation`/
+`validateTransfer`, and `DepositService`, independently re-confirmed rather
+than assumed from Stock's/Money's own patterns:**
+
+| ID | Class | Item | Status |
+| --- | --- | --- | --- |
+| — | **verified, positive** | `GET /admin/grattage-invoices` gained a combinable `deposit_id` filter (`nullable\|exists:deposits,id`, backend commit `057c8b2`), same flat-paginator envelope, same `access-dashboard` gate | ✅ no action needed; powers Deposits' own linked-invoices read (Option B, ADR-0030) |
+| BC-AD (new, resolved during M6) | **defect → resolved** | The Allocation team-wide hard block (`ALLOCATION_TEAM_HAS_OUTSTANDING_OBLIGATION`) was REMOVED by backend commit `9af5d00`, mid-milestone, requiring a targeted frontend correction (`59888a5`) | ✅ resolved; see the "M6 — Grattage" section above and ADR-0029. Recorded here so a future session understands why this code briefly existed in the registry and no longer does |
+| — | **verified, positive** | `computeGrattageRestockGate()`'s manager-level `TEAM_OUTSTANDING_GRATTAGE` reason is explicitly documented (post `9af5d00`) as NOT AUTHORITATIVE for Allocation — informational only. `OUTSTANDING_GRATTAGE` (commercial-level) remains fully authoritative for Agent Transfer's own hard gate, unaffected | ✅ no action needed; Agent Transfer keeps consuming the gate, Allocation no longer does |
+| — | **verified, positive** | No backend read exposes a manager's numeric Allocation capacity proactively, before or after `9af5d00` — `available` is only ever known reactively, inside `AllocationExceedsDepositCapacity`'s own exception `context` | ✅ no action needed; confirms BC-AA stays only partially resolved (no capacity read exists) — do not build a proactive capacity hint without a fresh backend read to back it |
+
 ## Domain inventory
 
 ```
@@ -2201,6 +2374,34 @@ src/domains/stock/
                                    all — BON_CANCEL_STOCK_INSUFFICIENT,
                                    reachable only via cancel, is the sole
                                    stock-insufficiency gate here)
+
+src/domains/grattage/
+├── invoices/               M6 Phase 1 — COMPLETE (list/detail/cancel;
+│                                  `access-dashboard`-gated, reusing the
+│                                  existing constant; no admin Create or
+│                                  Settle — both backend-initiated, out of
+│                                  scope; list filters are page/status/
+│                                  date-range only, no agent/client filter;
+│                                  `depositId` row on the detail page links
+│                                  to `/money/deposits/${id}` with a
+│                                  status-aware label, M6 Phase 4)
+└── outstanding/             M6 Phase 2 — COMPLETE, DATA LAYER ONLY, no
+                                   page/route/component (deliberate — the
+                                   per-agent Outstanding UI is an M7 Agent
+                                   360 deliverable, not M6's). Exports ONLY
+                                   the narrow `useGrattageRestockGateQuery
+                                   (agentId)` (ADR-0026); the full
+                                   `useGrattageOutstandingQuery` stays
+                                   domain-private, unexported, no caller yet.
+                                   Consumed by exactly one Stock page —
+                                   `AgentTransferDetailPage` — the ONE
+                                   sanctioned Stock←Grattage
+                                   domain-to-domain import (ADR-0027). A
+                                   second consumer briefly existed on
+                                   `AllocationDetailPage` (M6 Phase 3) and
+                                   was removed once backend commit `9af5d00`
+                                   made its underlying gate non-authoritative
+                                   (ADR-0028)
 ```
 
 All five Stock resources are now implementation-complete. The
@@ -2210,4 +2411,8 @@ built: Companies (`GET /admin/companies`, M5 Phase 4) and Suppliers
 endpoints by deliberate decision, never CRUD (ADR-0023). `allocation_number`/
 `transfer_number` are backend-generated now (ADR-0024); Allocations'/
 Transfers' own "add line" pickers read real per-owner availability instead
-of the unfiltered product catalogue (ADR-0025).
+of the unfiltered product catalogue (ADR-0025). M6 added
+`src/domains/grattage/` (Invoices, complete; Outstanding, data-layer-only
+by decision — ADR-0026) and one Money-side private read inside
+`src/domains/money/deposits/` (`fetchLinkedGrattageInvoices`, Option B,
+ADR-0030) — no new top-level domain directory beyond `grattage/` itself.
