@@ -93,8 +93,7 @@ const INVALIDATION_MAP: Readonly<Record<DomainEvent, readonly QueryKey[]>> =
      * affected. Unlike `cheque.approved`, NO Network prefix is invalidated
      * here — a genuine difference in what the two actions touch, not an
      * oversight.
-     */
-    /**
+     *
      * M6 Phase 2 UPDATE — re-verified from source (`DepositService
      * ::validate`): for a `type=grattage` deposit, every invoice linked to
      * it (`deposit_id` = this deposit) flips `pending|overdue -> settled`
