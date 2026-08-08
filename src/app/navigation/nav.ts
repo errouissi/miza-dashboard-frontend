@@ -15,6 +15,7 @@ import {
   ArrowLeftRight,
   Building2,
   Truck,
+  Receipt,
 } from "lucide-react";
 import { PERMISSIONS, type PermissionResolver } from "@/infrastructure/permissions";
 import { ADMINS_PATH } from "@/domains/network/admins";
@@ -28,6 +29,7 @@ import { AGENT_STOCK_RETURNS_PATH } from "@/domains/stock/agent-stock-returns";
 import { AGENT_TRANSFERS_PATH } from "@/domains/stock/agent-transfers";
 import { ALLOCATIONS_PATH } from "@/domains/stock/allocations";
 import { BONS_PATH } from "@/domains/stock/bons";
+import { GRATTAGE_INVOICES_PATH } from "@/domains/grattage/invoices";
 import { PRODUCTS_PATH } from "@/domains/reference/products";
 import { SECTEURS_PATH } from "@/domains/reference/secteurs";
 import { VILLES_PATH } from "@/domains/reference/villes";
@@ -231,6 +233,24 @@ export const NAV_TREE: NavGroup[] = [
         // every prior Stock nav entry already follows.
         permission: PERMISSIONS.VIEW_BONS,
         icon: Truck,
+      },
+    ],
+  },
+  {
+    // English, matching Money/Stock's own O-1-pending convention.
+    label: "Grattage",
+    items: [
+      {
+        label: "Grattage Invoices",
+        to: GRATTAGE_INVOICES_PATH,
+        // `access-dashboard` — the SAME coarse permission reference data
+        // uses (roadmap M6, Phase 1), mirroring the route and the backend
+        // exactly: `GET /admin/grattage-invoices` carries
+        // `permission:access-dashboard`, NOT a dedicated
+        // `view-grattage-invoices` string. See `registry.ts`'s own
+        // `ACCESS_DASHBOARD` docblock for the full reasoning.
+        permission: PERMISSIONS.ACCESS_DASHBOARD,
+        icon: Receipt,
       },
     ],
   },

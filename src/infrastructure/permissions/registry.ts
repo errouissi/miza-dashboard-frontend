@@ -25,6 +25,23 @@ export const PERMISSIONS = Object.freeze({
    * here; it mirrors what the server actually enforces, which is the whole point
    * of this registry. Granular ville permissions are an open backend question —
    * when they land, the entries split here and the call sites follow.
+   *
+   * ALSO REUSED BY GRATTAGE INVOICES (roadmap M6, Phase 1) — verified fresh
+   * from source: `GET /admin/grattage-invoices`, `GET
+   * /admin/grattage-invoices/{id}` and `PUT
+   * /admin/grattage-invoices/{id}/cancel` all carry
+   * `permission:access-dashboard` (`routes/api.php:378-400`), the same
+   * coarse posture as reference data. A SEPARATE catalogue,
+   * `App\Authorization\GrattageSalePermissions` (`view-grattage-sale`,
+   * `view-any-grattage-sale`), exists and is seeded/assignable in the
+   * admin permission picker — but does NOT gate any admin route (verified
+   * from source: no controller or FormRequest anywhere references it
+   * outside the commercial-only create path). No `cancel-grattage-sale`
+   * permission exists at all (the class's own docblock defers it to
+   * "Phase 7"). This registry mirrors what the routes actually check, not
+   * what is merely seeded — do not invent a dedicated
+   * `VIEW_GRATTAGE_INVOICES`/`CANCEL_GRATTAGE_INVOICE` entry ahead of a
+   * real backend gate; that would misrepresent the contract (ADR-0009).
    */
   ACCESS_DASHBOARD: "access-dashboard",
 

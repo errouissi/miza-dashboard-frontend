@@ -46,6 +46,10 @@ import {
   allocationDetailPath,
 } from "@/domains/stock/allocations";
 import { BONS_PATH, BON_NEW_PATH, bonDetailPath } from "@/domains/stock/bons";
+import {
+  GRATTAGE_INVOICES_PATH,
+  grattageInvoiceDetailPath,
+} from "@/domains/grattage/invoices";
 import { routes } from "./routes";
 
 /**
@@ -296,6 +300,14 @@ describe("every contributed domain route is guarded", () => {
   // matching Transfer's/Allocation's own plurality)/`create-bon`/
   // `view-bons` respectively — same FormRequest-gated posture, not route
   // middleware.
+  // GRATTAGE_INVOICES_PATH/`grattageInvoiceDetailPath(1)` (roadmap M6,
+  // Phase 1 — the first Grattage resource) are BOTH guarded by
+  // `access-dashboard` — the SAME coarse permission reference data uses,
+  // verified fresh from source (`GET /admin/grattage-invoices`/`GET
+  // /admin/grattage-invoices/{id}` both carry
+  // `permission:access-dashboard`), NOT a dedicated
+  // `view-grattage-invoices` string. See `registry.ts`'s own
+  // `ACCESS_DASHBOARD` docblock.
   // `unpermittedSession` holds nothing at all, so it exercises every gate
   // identically.
   const domainPaths = [
@@ -328,6 +340,8 @@ describe("every contributed domain route is guarded", () => {
     BONS_PATH,
     BON_NEW_PATH,
     bonDetailPath(1),
+    GRATTAGE_INVOICES_PATH,
+    grattageInvoiceDetailPath(1),
   ];
 
   it.each(domainPaths)("refuses %s without the permission", async (path) => {

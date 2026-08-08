@@ -207,6 +207,19 @@ const INVALIDATION_MAP: Readonly<Record<DomainEvent, readonly QueryKey[]>> =
      * domain's own list renders any of these. `["bons"]` only.
      */
     "bon.cancelled": [["bons"]],
+    /**
+     * Grattage Invoices (roadmap M6, Phase 1 — the first Grattage
+     * resource). Cancelling restores the commercial's stock via
+     * `StockService::cancelSale` (`stock_movements`/`stocks` rows only,
+     * re-verified from source) — no frontend query anywhere currently
+     * reads a COMMERCIAL's own available stock reactively (Return's/Bons'
+     * own "add line" pickers use the unfiltered product catalogue;
+     * Allocations'/Transfers' own use company/manager-side stock, never
+     * commercial-side), so there is no Stock cache to bust. No balance
+     * column is touched either (grattage never writes
+     * `solde`/`cash`/`dept`). `["grattage-invoices"]` only.
+     */
+    "grattage-invoice.cancelled": [["grattage-invoices"]],
   });
 
 /** The prefixes a given event invalidates, or an empty list for an unregistered one. */
