@@ -1,7 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { http, HttpResponse } from "msw";
 import { server } from "@/test/msw/server";
-import { activateAgent, blockAgent, fetchAgent } from "./agents-api";
+import { httpClient } from "@/infrastructure/http";
+import {
+  activateAgent,
+  blockAgent,
+  fetchAgent,
+  updateAgent,
+  type UpdateAgentInput,
+} from "./agents-api";
 
 const API = "http://localhost/api/v1";
 
@@ -31,6 +38,10 @@ const managerRow = {
   certificat_habitat_url: null,
   fiche_antroprometrique_url: null,
   fiche_incident_bancaire_url: null,
+  salaire: "3000.00",
+  montant_essence: "0.00",
+  montant_declaration_cnss: "1500.00",
+  charge_auto_entrepreneur: "200.00",
   ville_sous_responsabilite: "Grand Casablanca",
   ville_actuelle: null,
   secteur: null,
@@ -56,6 +67,10 @@ const commercialRow = {
   certificat_habitat_url: null,
   fiche_antroprometrique_url: null,
   fiche_incident_bancaire_url: null,
+  salaire: "0.00",
+  montant_essence: "0.00",
+  montant_declaration_cnss: "0.00",
+  charge_auto_entrepreneur: "0.00",
   ville_sous_responsabilite: null,
   ville_actuelle: "Rabat",
   secteur: "Agdal",
@@ -93,6 +108,10 @@ describe("fetchAgent", () => {
       certificatHabitatUrl: null,
       ficheAntroprometriqueUrl: null,
       ficheIncidentBancaireUrl: null,
+      salaire: "3000.00",
+      montantEssence: "0.00",
+      montantDeclarationCnss: "1500.00",
+      chargeAutoEntrepreneur: "200.00",
       role: "manager",
       villeSousResponsabilite: "Grand Casablanca",
     });
@@ -125,6 +144,10 @@ describe("fetchAgent", () => {
       certificatHabitatUrl: null,
       ficheAntroprometriqueUrl: null,
       ficheIncidentBancaireUrl: null,
+      salaire: "0.00",
+      montantEssence: "0.00",
+      montantDeclarationCnss: "0.00",
+      chargeAutoEntrepreneur: "0.00",
       role: "commercial",
       villeActuelle: "Rabat",
       secteur: "Agdal",
@@ -186,5 +209,194 @@ describe("blockAgent / activateAgent", () => {
     await activateAgent(5);
 
     expect(method).toBe("PUT");
+  });
+});
+
+const managerInput: UpdateAgentInput = {
+  role: "manager",
+  nom: "Idrissi",
+  prenom: "Youssef",
+  ville: "Casablanca",
+  adresse: "12 Rue Mohammed V",
+  numCin: "CIN005",
+  numIce: "ICE005",
+  numAbonnement: "AB-005",
+  salaire: "3000",
+  montantEssence: "150.5",
+  montantDeclarationCnss: "1500",
+  chargeAutoEntrepreneur: "200",
+  villeSousResponsabilite: "Grand Casablanca",
+};
+
+const commercialInput: UpdateAgentInput = {
+  role: "commercial",
+  nom: "Alaoui",
+  prenom: "Sara",
+  ville: "Rabat",
+  adresse: "3 Avenue Hassan II",
+  numCin: "CIN012",
+  numIce: "ICE012",
+  numAbonnement: "AB-012",
+  salaire: "0",
+  montantEssence: "0",
+  montantDeclarationCnss: "0",
+  chargeAutoEntrepreneur: "0",
+  villeActuelle: "Rabat",
+  secteur: "Agdal",
+};
+
+describe("updateAgent", () => {
+  it("POSTs (not PUT) multipart form data to /admin/agents/{id}", async () => {
+    let method: string | undefined;
+    let contentType: string | null = null;
+    server.use(
+      http.post(`${API}/admin/agents/5`, ({ request }) => {
+        method = request.method;
+        contentType = request.headers.get("content-type");
+        return HttpResponse.json({ success: true, message: "ok", data: managerRow });
+      }),
+    );
+
+    await updateAgent(5, managerInput);
+
+    expect(method).toBe("POST");
+    expect(contentType).toMatch(/^multipart\/form-data/);
+  });
+
+  it("sends every common field, using the API's own wire spellings", async () => {
+    let body: FormData | undefined;
+    server.use(
+      http.post(`${API}/admin/agents/5`, async ({ request }) => {
+        body = await request.formData();
+        return HttpResponse.json({ success: true, message: "ok", data: managerRow });
+      }),
+    );
+
+    await updateAgent(5, managerInput);
+
+    expect(body?.get("nom")).toBe("Idrissi");
+    expect(body?.get("prenom")).toBe("Youssef");
+    expect(body?.get("ville")).toBe("Casablanca");
+    expect(body?.get("adresse")).toBe("12 Rue Mohammed V");
+    expect(body?.get("num_cin")).toBe("CIN005");
+    expect(body?.get("num_ice")).toBe("ICE005");
+    expect(body?.get("num_d_abonnement")).toBe("AB-005");
+    expect(body?.get("salaire")).toBe("3000");
+    expect(body?.get("montant_essence")).toBe("150.5");
+    expect(body?.get("montant_declaration_cnss")).toBe("1500");
+    expect(body?.get("charge_auto_entrepreneur")).toBe("200");
+  });
+
+  it("sends ville_sous_responsabilite for a manager, and no commercial-only field", async () => {
+    let body: FormData | undefined;
+    server.use(
+      http.post(`${API}/admin/agents/5`, async ({ request }) => {
+        body = await request.formData();
+        return HttpResponse.json({ success: true, message: "ok", data: managerRow });
+      }),
+    );
+
+    await updateAgent(5, managerInput);
+
+    expect(body?.get("ville_sous_responsabilite")).toBe("Grand Casablanca");
+    expect(body?.has("ville_actuelle")).toBe(false);
+    expect(body?.has("secteur")).toBe(false);
+    expect(body?.has("manager_id")).toBe(false);
+  });
+
+  it("sends ville_actuelle and secteur for a commercial, and no manager-only field", async () => {
+    let body: FormData | undefined;
+    server.use(
+      http.post(`${API}/admin/agents/12`, async ({ request }) => {
+        body = await request.formData();
+        return HttpResponse.json({ success: true, message: "ok", data: commercialRow });
+      }),
+    );
+
+    await updateAgent(12, commercialInput);
+
+    expect(body?.get("ville_actuelle")).toBe("Rabat");
+    expect(body?.get("secteur")).toBe("Agdal");
+    expect(body?.has("ville_sous_responsabilite")).toBe(false);
+  });
+
+  it("never sends status, manager_id, moto fields, or the legacy identity/password aliases", async () => {
+    let body: FormData | undefined;
+    server.use(
+      http.post(`${API}/admin/agents/5`, async ({ request }) => {
+        body = await request.formData();
+        return HttpResponse.json({ success: true, message: "ok", data: managerRow });
+      }),
+    );
+
+    await updateAgent(5, managerInput);
+
+    for (const forbidden of [
+      "status",
+      "manager_id",
+      "type_moto",
+      "num_de_chassis",
+      "cart_grise_recto",
+      "cart_grise_verso",
+      "assurance",
+      "engagement_moto",
+      "num_de_compte",
+      "date_ajouter",
+      "mdp",
+    ]) {
+      expect(body?.has(forbidden)).toBe(false);
+    }
+  });
+
+  it("sends no file key at all when no replacement was selected — preserves the existing files", async () => {
+    let body: FormData | undefined;
+    server.use(
+      http.post(`${API}/admin/agents/5`, async ({ request }) => {
+        body = await request.formData();
+        return HttpResponse.json({ success: true, message: "ok", data: managerRow });
+      }),
+    );
+
+    await updateAgent(5, managerInput, {});
+
+    for (const fileField of [
+      "photo",
+      "photo_cin_recto",
+      "photo_cin_verso",
+      "certificat_d_habitat",
+      "carte_auto_entrepreneur",
+      "fiche_antroprometrique",
+      "fiche_d_incident_banquaire",
+    ]) {
+      expect(body?.has(fileField)).toBe(false);
+    }
+  });
+
+  // A `FormData` carrying a real `File` hangs indefinitely if inspected via
+  // MSW's own `request.formData()` under this jsdom setup — the same,
+  // empirically-verified gotcha `create-cheque-page.test.tsx`'s own
+  // docblock documents. Spy on `httpClient.post` directly instead, exactly
+  // that file's established fix, rather than reaching for MSW here.
+  describe("with a real File attached", () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("sends only the file(s) actually replaced, under their own wire names", async () => {
+      const postSpy = vi
+        .spyOn(httpClient, "post")
+        .mockResolvedValue({ data: { success: true, message: "ok", data: managerRow } });
+
+      const newPhoto = new File(["binary"], "new-photo.png", { type: "image/png" });
+      await updateAgent(5, managerInput, { photo: newPhoto });
+
+      expect(postSpy).toHaveBeenCalled();
+      const [url, body] = postSpy.mock.calls[0] as [string, FormData];
+      expect(url).toBe("/admin/agents/5");
+      expect(body.get("photo")).toBeInstanceOf(File);
+      expect((body.get("photo") as File).name).toBe("new-photo.png");
+      expect(body.has("photo_cin_recto")).toBe(false);
+      expect(body.has("certificat_d_habitat")).toBe(false);
+    });
   });
 });

@@ -10,6 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/shared/components/ui/avat
 import { Skeleton } from "@/shared/components/ui/skeleton";
 import { ListErrorState } from "@/shared/components/patterns/list-states";
 import { WorkspacePage } from "@/shared/components/patterns/workspace-page";
+import { AgentEditDrawer } from "../components/agent-edit-drawer";
 import { AgentStatusDialog } from "../components/agent-status-dialog";
 import { useAgentQuery } from "../queries/agents-queries";
 import { AGENT_STATUS_LABELS, AGENT_STATUS_TONES } from "../model/agent";
@@ -35,12 +36,10 @@ import { AGENT_STATUS_LABELS, AGENT_STATUS_TONES } from "../model/agent";
  * private mutations — both are private to their own domains, and the
  * underlying endpoints are identical regardless of role (ADR-0012).
  *
- * UPDATE/EDIT IS DELIBERATELY ABSENT — scoped out to a dedicated M7 Phase
- * 1.5 (full role-aware Agent edit, including every document
- * upload/replace/preserve behavior), not merely deferred without a plan.
- * The action row below is a flex container specifically so Phase 1.5 can
- * add an Edit button beside Block/Activate without restructuring this page
- * or `WorkspacePage` itself.
+ * EDIT (M7 Phase 1.5) — `AgentEditDrawer`, gated independently on
+ * `update-agent`, exactly like Block/Activate each gate independently on
+ * their own permission. Slots into the action row Phase 1 already reserved
+ * for it — no restructuring of this page or `WorkspacePage` was needed.
  */
 export function AgentWorkspacePage() {
   const navigate = useNavigate();
@@ -53,9 +52,11 @@ export function AgentWorkspacePage() {
 
   const [blocking, setBlocking] = useState(false);
   const [activating, setActivating] = useState(false);
+  const [editing, setEditing] = useState(false);
 
   const canBlock = has(PERMISSIONS.BLOCK_AGENT);
   const canActivate = has(PERMISSIONS.ACTIVATE_AGENT);
+  const canUpdate = has(PERMISSIONS.UPDATE_AGENT);
 
   const errorReference = isAppError(agentQuery.error)
     ? resolveErrorDisplay(agentQuery.error).requestId
@@ -131,6 +132,11 @@ export function AgentWorkspacePage() {
       }
       actions={
         <>
+          {canUpdate ? (
+            <Button variant="outline" onClick={() => setEditing(true)}>
+              Edit
+            </Button>
+          ) : null}
           {canBlock && agent.status !== "blocked" ? (
             <Button variant="outline" onClick={() => setBlocking(true)}>
               Block
@@ -246,6 +252,7 @@ export function AgentWorkspacePage() {
         action="activate"
         onOpenChange={setActivating}
       />
+      <AgentEditDrawer open={editing} onOpenChange={setEditing} agent={agent} />
     </WorkspacePage>
   );
 }

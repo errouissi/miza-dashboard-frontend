@@ -1,6 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { STALE_TIMES, invalidateForEvent } from "@/infrastructure/query";
-import { activateAgent, blockAgent, fetchAgent } from "../api/agents-api";
+import {
+  activateAgent,
+  blockAgent,
+  fetchAgent,
+  updateAgent,
+  type UpdateAgentFiles,
+  type UpdateAgentInput,
+} from "../api/agents-api";
 import { agentsKeys } from "./keys";
 
 /**
@@ -48,5 +55,31 @@ export function useActivateAgentMutation() {
   return useMutation({
     mutationFn: (id: number) => activateAgent(id),
     onSuccess: () => invalidateForEvent(queryClient, "agent.activated"),
+  });
+}
+
+/**
+ * Edit — `POST /admin/agents/{id}` (multipart), M7 Phase 1.5. Same
+ * over-invalidation reasoning as Block/Activate above: `"agent.updated"`
+ * busts `["agents"], ["managers"], ["commercials"]` regardless of which
+ * list the agent's role actually belongs to. `status` is never part of
+ * this mutation's input (owned by Block/Activate), so there is no ordering
+ * concern between them. No optimistic update, no automatic retry (FTA D-7,
+ * §11) — doubly true here, since a retried multipart submit risks
+ * redundant file-storage churn on top of the usual double-write risk.
+ */
+export function useUpdateAgentMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      input,
+      files,
+    }: {
+      id: number;
+      input: UpdateAgentInput;
+      files?: UpdateAgentFiles;
+    }) => updateAgent(id, input, files),
+    onSuccess: () => invalidateForEvent(queryClient, "agent.updated"),
   });
 }

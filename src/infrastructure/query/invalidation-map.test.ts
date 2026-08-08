@@ -147,6 +147,14 @@ describe("invalidation map", () => {
     ]);
   });
 
+  it("registers agent.updated — the same three prefixes (M7 Phase 1.5: same POST /admin/agents/{id} endpoint Managers'/Commercials' own edit drawers already call)", () => {
+    expect(queryKeyPrefixesFor("agent.updated")).toEqual([
+      ["agents"],
+      ["managers"],
+      ["commercials"],
+    ]);
+  });
+
   it("invalidates nothing, and does not throw, for an unregistered event", async () => {
     const queryClient = new QueryClient();
     const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");

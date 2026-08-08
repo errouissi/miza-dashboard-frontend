@@ -274,6 +274,15 @@ const INVALIDATION_MAP: Readonly<Record<DomainEvent, readonly QueryKey[]>> =
      */
     "agent.blocked": [["agents"], ["managers"], ["commercials"]],
     "agent.activated": [["agents"], ["managers"], ["commercials"]],
+    /**
+     * Agent Edit (M7 Phase 1.5) — `POST /admin/agents/{id}`, the same
+     * endpoint `Manager`'s/`Commercial`'s own edit drawers already call.
+     * Same reasoning as `agent.blocked`/`agent.activated` above: which of
+     * `managers`/`commercials` is the "right" prefix is not known without
+     * an extra read, so both are busted alongside this workspace's own
+     * `agents` cache.
+     */
+    "agent.updated": [["agents"], ["managers"], ["commercials"]],
   });
 
 /** The prefixes a given event invalidates, or an empty list for an unregistered one. */

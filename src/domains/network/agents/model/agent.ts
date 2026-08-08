@@ -22,15 +22,28 @@ import type { StatusTone } from "@/shared/components/business/status-badge";
  * below are genuinely always meaningful for one role and genuinely always null
  * for the other — not two optional fields glued onto one flat shape.
  *
- * PHASE 1 SCOPE ONLY — IDENTITY/PROFILE FIELDS. Deliberately NOT modelled here
+ * PHASE 1 SCOPE — IDENTITY/PROFILE FIELDS. Deliberately NOT modelled here
  * (ADR-0008 — a field is modelled when a screen reads it, not before), despite
  * being present on the wire:
- *   - Every financial column (`montant_avance_grattage/rapped`, `solde`, `cash`,
- *     `dept`, `salaire`, `montant_essence`, `montant_declaration_cnss`,
- *     `charge_auto_entrepreneur`) — Money-panel territory, a later M7 phase.
- *   - `moto`/`moto_id` — out of Phase 1's Network-only scope.
+ *   - `montant_avance_grattage/rapped`, `solde`, `cash`, `dept` — genuine
+ *     Money/Grattage-relevant balances, no screen in this domain reads any
+ *     of them. Stay excluded.
+ *   - `moto`/`moto_id` — a distinct conditional sub-entity, explicitly
+ *     tracked as separate future scope (M7 Phase 1.5 discovery, D1).
  *   - `created_at`/`updated_at` (Laravel's own timestamps, distinct from
  *     `date_ajout`) — no caller.
+ *
+ * PHASE 1.5 ADDITION — `salaire`, `montantEssence`, `montantDeclarationCnss`,
+ * `chargeAutoEntrepreneur`. Genuinely Agent-owned HR/payroll fields (no
+ * relation to Cheques/Deposits/Grattage Invoices), added because
+ * `AgentEditDrawer` reads and submits all four — not modelled ahead of that
+ * caller (M7 Phase 1.5 discovery, D3). Each is a `decimal:2`-cast STRING on
+ * the wire (`Agent::$casts`), same discipline as every other money-shaped
+ * field in this product — carried verbatim here too. `AgentEditDrawer` does
+ * its own local parsing at the point of editing (see that component's own
+ * docblock for why `salaire`/`montantDeclarationCnss`/`chargeAutoEntrepreneur`
+ * must be re-derived as whole-number strings for their inputs, despite
+ * arriving as `"3000.00"`), never here in the model.
  *
  * `dateAjout` IS A FULL ISO DATETIME, NOT `Y-M-D` — a genuine divergence from
  * `Manager.dateDebut`/`Commercial.dateDebut`. Verified from source: `show()`
@@ -111,6 +124,14 @@ type AgentCommon = {
   certificatHabitatUrl: string | null;
   ficheAntroprometriqueUrl: string | null;
   ficheIncidentBancaireUrl: string | null;
+  /** `decimal:2`-cast STRING (e.g. `"3000.00"`), validated `integer` server-side. Never null — DB default `0`. */
+  salaire: string;
+  /** `decimal:2`-cast STRING, validated `numeric` server-side (genuinely decimal, unlike the other three). Never null — DB default `0`. */
+  montantEssence: string;
+  /** `decimal:2`-cast STRING, validated `integer` server-side. Never null — DB default `0`. */
+  montantDeclarationCnss: string;
+  /** `decimal:2`-cast STRING, validated `integer` server-side. Never null — DB default `0`. */
+  chargeAutoEntrepreneur: string;
 };
 
 export type ManagerAgent = AgentCommon & {

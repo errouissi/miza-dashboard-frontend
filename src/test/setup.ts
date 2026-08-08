@@ -42,6 +42,21 @@ if (!Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = () => {};
 }
 
+/**
+ * jsdom does not implement `URL.createObjectURL`/`revokeObjectURL` — needed
+ * by `FileUploadField`'s own local-file preview (M7 Phase 1.5, the first
+ * caller to preview a selected file rather than just name it). A fake,
+ * unique-per-call URL is sufficient: nothing in a test actually loads it as
+ * an image, only asserts the `<img src>` it was assigned.
+ */
+if (!URL.createObjectURL) {
+  let counter = 0;
+  URL.createObjectURL = () => `blob:mock-${++counter}`;
+}
+if (!URL.revokeObjectURL) {
+  URL.revokeObjectURL = () => {};
+}
+
 // `onUnhandledRequest: "error"` is deliberate: a request with no handler is a
 // test reaching for a real network, and it must fail loudly rather than hang.
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
