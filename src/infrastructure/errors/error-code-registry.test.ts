@@ -284,3 +284,21 @@ describe("Bon codes (roadmap M5, Phase 5) — the fifth and final Stock resource
     }
   });
 });
+
+describe("COMMERCIAL_HAS_STOCK_CANNOT_REASSIGN (M7 Agent 360 completion item)", () => {
+  it("resolves to real copy, danger tone, no recovery path", () => {
+    const display = resolveErrorDisplay(
+      new AppError({
+        kind: "domain",
+        code: "COMMERCIAL_HAS_STOCK_CANNOT_REASSIGN",
+        requestId: "req-7",
+      }),
+    );
+
+    expect(display.message).toBe(
+      "This commercial still holds stock and cannot be reassigned to another manager until it is returned or cleared.",
+    );
+    expect(display.tone).toBe("danger");
+    expect(display.recovery).toBeUndefined();
+  });
+});

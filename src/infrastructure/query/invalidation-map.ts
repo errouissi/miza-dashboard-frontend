@@ -156,13 +156,19 @@ const INVALIDATION_MAP: Readonly<Record<DomainEvent, readonly QueryKey[]>> =
     "agent-stock-return.line-changed": [["agent-stock-returns"]],
     /**
      * Validating materializes stock movements (commercial debited, manager
-     * credited) — but NO frontend query anywhere reads a stock quantity
-     * yet (no `StockController`, verified from source this phase, and no
-     * consumer in this codebase). `["agent-stock-returns"]` only; revisit
-     * once a Stock ledger view or the Grattage restock-gate hook (both M6)
-     * exist.
+     * credited) — re-verified this phase (`StockService::validateReturn`).
+     *
+     * M7 AGENT 360 COMPLETION ITEM — `["commercial-stock-quantity"]` added:
+     * this is exactly the "Stock ledger view" this event's own docblock
+     * previously flagged as the trigger to revisit. A return debits the
+     * commercial's held stock (`owner_type='agent'`), which is precisely
+     * what `AgentEditDrawer`'s Zero-stock reassignment guard reads — a
+     * validated return can turn a blocked reassignment into an eligible one.
      */
-    "agent-stock-return.validated": [["agent-stock-returns"]],
+    "agent-stock-return.validated": [
+      ["agent-stock-returns"],
+      ["commercial-stock-quantity"],
+    ],
     /**
      * Agent Transfers (roadmap M5, Phase 2). A draft touches no balance
      * and no stock row — materialization only happens at validate time.
@@ -178,11 +184,20 @@ const INVALIDATION_MAP: Readonly<Record<DomainEvent, readonly QueryKey[]>> =
      * Validating writes ONLY `stocks`/`stock_movements` rows (re-verified
      * from source this phase, `StockService::validateTransfer` Step 8) —
      * NOT `Agent.montant_avance_grattage` or any other balance column
-     * Managers'/Commercials' own lists render. `["agent-transfers"]` only;
-     * revisit once a Stock ledger view or the Grattage restock-gate hook
-     * (both M6) exist.
+     * Managers'/Commercials' own lists render.
+     *
+     * M7 AGENT 360 COMPLETION ITEM — `["commercial-stock-quantity"]` added:
+     * this is exactly the "Stock ledger view" this event's own docblock
+     * previously flagged as the trigger to revisit (the Grattage
+     * restock-gate hook, the OTHER thing that docblock named, was already
+     * wired in M6 Phase 3 via the separate `useGrattageRestockGateQuery`
+     * import — unrelated to this key space). A validated transfer credits
+     * the recipient commercial's held stock, which is precisely what
+     * `AgentEditDrawer`'s Zero-stock reassignment guard reads — a
+     * validated transfer can turn an eligible reassignment into a blocked
+     * one.
      */
-    "agent-transfer.validated": [["agent-transfers"]],
+    "agent-transfer.validated": [["agent-transfers"], ["commercial-stock-quantity"]],
     /**
      * Allocations (roadmap M5, Phase 4). A draft touches no balance, no
      * stock row and no deposit — materialization and deposit consumption
@@ -249,13 +264,8 @@ const INVALIDATION_MAP: Readonly<Record<DomainEvent, readonly QueryKey[]>> =
      * Grattage Invoices (roadmap M6, Phase 1 — the first Grattage
      * resource). Cancelling restores the commercial's stock via
      * `StockService::cancelSale` (`stock_movements`/`stocks` rows only,
-     * re-verified from source) — no frontend query anywhere currently
-     * reads a COMMERCIAL's own available stock reactively (Return's/Bons'
-     * own "add line" pickers use the unfiltered product catalogue;
-     * Allocations'/Transfers' own use company/manager-side stock, never
-     * commercial-side), so there is no Stock cache to bust. No balance
-     * column is touched either (grattage never writes
-     * `solde`/`cash`/`dept`).
+     * re-verified from source). No balance column is touched either
+     * (grattage never writes `solde`/`cash`/`dept`).
      *
      * M6 Phase 2 UPDATE — `["grattage-outstanding"]` added:
      * `isCancellable()` only permits cancelling a `deposit_id IS NULL`
@@ -268,8 +278,20 @@ const INVALIDATION_MAP: Readonly<Record<DomainEvent, readonly QueryKey[]>> =
      * manager's own `TEAM_OUTSTANDING_GRATTAGE` gate too — re-verified
      * from `computeGrattageRestockGate`, which reads live, not from a
      * cached snapshot).
+     *
+     * M7 AGENT 360 COMPLETION ITEM — `["commercial-stock-quantity"]` added:
+     * previously there was genuinely no frontend query reading a
+     * commercial's own available stock reactively, as this docblock's own
+     * prior revision noted — that gap is exactly what
+     * `AgentEditDrawer`'s Zero-stock reassignment guard now closes.
+     * Restoring stock via cancellation can turn an eligible reassignment
+     * into a blocked one.
      */
-    "grattage-invoice.cancelled": [["grattage-invoices"], ["grattage-outstanding"]],
+    "grattage-invoice.cancelled": [
+      ["grattage-invoices"],
+      ["grattage-outstanding"],
+      ["commercial-stock-quantity"],
+    ],
     /**
      * Agents (roadmap M7, Phase 1 — the fifth Network resource, and the
      * first real consumer of `GET /admin/agents/{id}`). Block/Activate hit

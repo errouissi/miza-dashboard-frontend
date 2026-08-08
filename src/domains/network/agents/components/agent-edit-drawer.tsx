@@ -1,14 +1,23 @@
 import { useEffect } from "react";
-import { Controller, useForm } from "react-hook-form";
+import { Controller, useForm, type Control } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { isAppError } from "@/infrastructure/errors";
+import { isAppError, resolveErrorDisplay } from "@/infrastructure/errors";
+import { PERMISSIONS } from "@/infrastructure/permissions";
+import { usePermission } from "@/shared/hooks";
 import { formatMoneyValue, parseMoney } from "@/shared/formatters";
 import { Input } from "@/shared/components/ui/input";
 import { FileUploadField } from "@/shared/components/business/file-upload-field";
 import { FormDrawer } from "@/shared/components/patterns/form-drawer";
-import { useUpdateAgentMutation } from "../queries/agents-queries";
-import type { Agent } from "../model/agent";
+import { useManagerOptionsQuery } from "@/domains/network/managers";
+import {
+  useCommercialStockQuantityQuery,
+  useUpdateAgentMutation,
+} from "../queries/agents-queries";
+import type { Agent, CommercialAgent } from "../model/agent";
+
+const SELECT_CLASS =
+  "border-input focus-visible:border-ring focus-visible:ring-ring/50 h-9 rounded-md border bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-[3px]";
 
 /**
  * Full role-aware Agent edit (M7 Phase 1.5). Opened from `AgentWorkspacePage`'s
@@ -25,18 +34,32 @@ import type { Agent } from "../model/agent";
  *
  * THE FIELD SET IS THE FULL BACKEND-SUPPORTED EDITABLE SET, VERIFIED FIELD
  * BY FIELD AGAINST `AgentController::update()` (M7 Phase 1.5 discovery,
- * approved) — not merely everything `GET /admin/agents/{id}` happens to
- * return. Deliberately EXCLUDED, each for its own reason already recorded
- * in that discovery pass:
+ * approved; widened for the M7 Agent 360 completion item) — not merely
+ * everything `GET /admin/agents/{id}` happens to return. Deliberately
+ * EXCLUDED, each for its own reason:
  *   - `status` — owned by Block/Activate, their own endpoints/permissions.
- *   - `manager_id` — a stock-sensitive reassignment business operation
- *     (`COMMERCIAL_HAS_STOCK_CANNOT_REASSIGN`), not a profile field (D2).
  *   - Every Moto field — a distinct conditional sub-entity, its own future
  *     scope (D1).
  *   - `num_de_compte`/`date_ajouter`/`mdp` — technically accepted by the
  *     same endpoint via its legacy `$keyMapping`, but backend-generated,
  *     creation-time-set, or a raw password-set alias with no relation to
  *     any real password-change feature. None gets a field, ever.
+ *
+ * `manager_id` (COMMERCIAL ONLY) — REASSIGNMENT WITH THE ZERO-STOCK GUARD
+ * (M7 Agent 360 completion item, supersedes Phase 1.5's own D2 exclusion).
+ * The frozen architecture names this exact workflow as the Agent edit
+ * form's own responsibility; D2 excluded it on a since-resolved blocker (no
+ * authoritative Commercial stock read existed). Backend commit `5302f99`
+ * closed that gap: `GET /admin/agents/{agent}/stock-quantity` (see
+ * `ManagerReassignmentField` below) plus a hardened, atomic `update()`
+ * guard. `useManagerOptionsQuery({ status: "active" })` — Managers' own
+ * public picker surface, the SAME hook `create-allocation-page.tsx`
+ * already uses for an identical "backend has no eligibility check of its
+ * own beyond bare existence" reason (BC-H's `per_page=100` bound applies
+ * here too, documented not specially warned about, matching every other
+ * picker in this codebase). The proactive stock read is a UX hint only —
+ * `update()`'s own atomic, locked guard remains the sole authority; see
+ * `useUpdateAgentMutation`'s own `onError` for the race-recovery path.
  *
  * `numIce` IS CLIENT-SIDE REQUIRED despite being nullable server-side — NOT
  * a stricter rule invented here, but an honest reflection of a REAL,
@@ -67,14 +90,15 @@ import type { Agent } from "../model/agent";
  * guard already does. No field offers bare removal — the backend has no
  * such capability.
  *
- * FIELD-LEVEL 422 MAPPING IS BUILT BUT CURRENTLY UNREACHABLE — a real,
- * disclosed backend defect (BC-N class): `update()`'s own
- * `$request->validate([...])` sits inside its own broad
- * `catch (\Exception $e)`, so a validation failure returns a generic 500,
- * never Laravel's `{errors:{...}}` shape. The mapping below is
- * forward-compatible (matches `ManagerFormSheet`'s/`CommercialFormSheet`'s
- * own identical, currently-dead field-mapping code) and the generic banner
- * is the path that actually fires today.
+ * FIELD-LEVEL 422 MAPPING IS NOW GENUINELY REACHABLE — the BC-N-class
+ * defect this docblock previously disclosed (`update()`'s own
+ * `$request->validate([...])` swallowed by a broad `catch (\Exception $e)`,
+ * turning a validation failure into a generic 500) was fixed in the same
+ * backend commit (`5302f99`) that added the reassignment guard: `update()`
+ * now catches `ValidationException` before the generic handler, mirroring
+ * `store()`. A genuine Laravel `{message, errors:{...}}` 422 — e.g. an
+ * eligibility-rejected `manager_id` — now maps onto its own field below,
+ * not just the generic banner.
  */
 
 const ALNUM_DASH_REGEX = /^[A-Za-z0-9_-]+$/;
@@ -143,6 +167,14 @@ const editSchema = z
     villeActuelle: z.string().trim().max(255, "This value is too long.").optional(),
     /** Commercial-only. Nullable server-side. No reference options source exists (BC-V) — a free-text field, matching the backend's own unstructured column. */
     secteur: z.string().trim().max(255, "This value is too long.").optional(),
+    /**
+     * Commercial-only. A native `<select>`-bound string id (mirrors
+     * `create-allocation.ts`'s own `companyId`/`agentId` fields exactly),
+     * converted to a number only at submit time. Required-ness is
+     * role-conditional — see `superRefine` below — because it is simply
+     * unused, never rendered, for a manager.
+     */
+    managerId: z.string().trim(),
 
     photo: z.instanceof(File).nullable(),
     photoCinRecto: z.instanceof(File).nullable(),
@@ -153,16 +185,19 @@ const editSchema = z
     ficheDIncidentBanquaire: z.instanceof(File).nullable(),
   })
   .superRefine((values, ctx) => {
-    // No cross-field rule needed today — neither role adds required-ness to
-    // the other's own field (both `villeSousResponsabilite` and
-    // `villeActuelle`/`secteur` are genuinely optional server-side,
-    // verified from source). Kept as an explicit, empty extension point:
-    // `agent-onboarding.ts`'s own `superRefine` is where its one real
-    // cross-field rule (the moto/essence business check) lives, and this
-    // is the same seam should Agent Edit ever need one — not a placeholder
-    // suggesting one is missing today.
-    void values;
-    void ctx;
+    // `villeSousResponsabilite`/`villeActuelle`/`secteur` need no rule here
+    // — all three are genuinely optional server-side, verified from
+    // source. `managerId` is the one real cross-field requirement this
+    // schema carries: required for a commercial (a reassignment target
+    // must always be a real selection, matching how the select's own
+    // options never include a "none" choice), unused for a manager.
+    if (values.role === "commercial" && !values.managerId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Manager is required.",
+        path: ["managerId"],
+      });
+    }
   });
 
 type FormValues = z.infer<typeof editSchema>;
@@ -198,6 +233,7 @@ export function AgentEditDrawer({ open, onOpenChange, agent }: AgentEditDrawerPr
       villeSousResponsabilite: "",
       villeActuelle: "",
       secteur: "",
+      managerId: "",
       photo: null,
       photoCinRecto: null,
       photoCinVerso: null,
@@ -232,6 +268,8 @@ export function AgentEditDrawer({ open, onOpenChange, agent }: AgentEditDrawerPr
           agent.role === "manager" ? (agent.villeSousResponsabilite ?? "") : "",
         villeActuelle: agent.role === "commercial" ? (agent.villeActuelle ?? "") : "",
         secteur: agent.role === "commercial" ? (agent.secteur ?? "") : "",
+        managerId:
+          agent.role === "commercial" && agent.manager ? String(agent.manager.id) : "",
         photo: null,
         photoCinRecto: null,
         photoCinVerso: null,
@@ -277,6 +315,7 @@ export function AgentEditDrawer({ open, onOpenChange, agent }: AgentEditDrawerPr
                 role: "commercial",
                 villeActuelle: values.villeActuelle ?? "",
                 secteur: values.secteur ?? "",
+                managerId: Number(values.managerId),
               },
         files: {
           photo: values.photo,
@@ -292,8 +331,8 @@ export function AgentEditDrawer({ open, onOpenChange, agent }: AgentEditDrawerPr
     );
   });
 
-  // Field-level 422s map to their own fields — forward-compatible, see the
-  // module docblock for why this is currently unreachable in production.
+  // Field-level 422s map to their own fields — see the module docblock for
+  // why this is now genuinely reachable, not just forward-compatible.
   const error = updateMutation.error;
   const fieldError = (wireName: string): string | undefined =>
     isAppError(error) ? error.fieldErrors?.[wireName]?.[0] : undefined;
@@ -312,6 +351,7 @@ export function AgentEditDrawer({ open, onOpenChange, agent }: AgentEditDrawerPr
   const villeSousResponsabiliteError = fieldError("ville_sous_responsabilite");
   const villeActuelleError = fieldError("ville_actuelle");
   const secteurError = fieldError("secteur");
+  const managerIdError = fieldError("manager_id");
 
   const hasFieldError =
     !!nomError ||
@@ -327,14 +367,26 @@ export function AgentEditDrawer({ open, onOpenChange, agent }: AgentEditDrawerPr
     !!chargeAutoEntrepreneurError ||
     !!villeSousResponsabiliteError ||
     !!villeActuelleError ||
-    !!secteurError;
+    !!secteurError ||
+    !!managerIdError;
+
+  // The reassignment race (M7 Agent 360 completion item): the proactive
+  // stock-quantity read said zero, but `update()`'s own atomic guard
+  // re-checked under lock and found otherwise. Surfaced via the registry's
+  // own copy (`resolveErrorDisplay`), not a hand-rolled string, so this and
+  // any other future consumer of the same code can never drift apart.
+  const reassignmentBlockedMessage =
+    isAppError(error) && error.code === "COMMERCIAL_HAS_STOCK_CANNOT_REASSIGN"
+      ? resolveErrorDisplay(error).message
+      : undefined;
 
   const generalError =
-    isAppError(error) && !hasFieldError && error.kind !== "validation"
+    reassignmentBlockedMessage ??
+    (isAppError(error) && !hasFieldError && error.kind !== "validation"
       ? error.kind === "permission"
         ? "This account cannot be modified."
         : "Something went wrong. Please try again."
-      : undefined;
+      : undefined);
 
   const role = form.watch("role");
 
@@ -609,6 +661,15 @@ export function AgentEditDrawer({ open, onOpenChange, agent }: AgentEditDrawerPr
               <p className="text-destructive text-xs">{secteurError}</p>
             ) : null}
           </div>
+
+          {agent && agent.role === "commercial" ? (
+            <ManagerReassignmentField
+              agent={agent}
+              control={form.control}
+              invalid={!!form.formState.errors.managerId || !!managerIdError}
+              error={form.formState.errors.managerId?.message ?? managerIdError}
+            />
+          ) : null}
         </>
       )}
 
@@ -718,5 +779,136 @@ export function AgentEditDrawer({ open, onOpenChange, agent }: AgentEditDrawerPr
         )}
       />
     </FormDrawer>
+  );
+}
+
+/**
+ * The Zero-stock reassignment guard's UI (M7 Agent 360 completion item) —
+ * a separate component, conditionally MOUNTED only when `agent.role ===
+ * "commercial"` (the same zero-footprint pattern `AgentStockPanel`'s own
+ * role-branched sub-components already established in Phase 2): both
+ * hooks below are always called unconditionally here, but this component
+ * itself is never rendered for a manager, so neither ever fires for one —
+ * satisfying "Manager Agent Edit must not request the Commercial
+ * stock-quantity endpoint" without adding an `enabled` branch to a shared
+ * hook signature.
+ *
+ * `access-dashboard` GATES THE STOCK READ, RE-VERIFIED FROM SOURCE — the
+ * endpoint's own permission (`routes/api.php`), independent of `update-
+ * agent` (which merely reaches this drawer at all). Without it, the field
+ * FAILS CLOSED: disabled, with an explanation that stock could not be
+ * verified — never silently allowed just because the read could not run.
+ *
+ * FAIL-CLOSED ALSO APPLIES TO LOADING/ERROR — `hasStock` defaults to `true`
+ * (blocking) whenever the authoritative quantity is not yet a confirmed
+ * `0`, exactly the same "a missing/loading read never enables an
+ * irreversible action" discipline `AgentTransferDetailPage`'s own restock-
+ * gate integration already established, inverted (there, a missing read
+ * never BLOCKS; here, a missing read never UNBLOCKS — the asymmetry is
+ * correct, because here safety means refusing reassignment, not refusing
+ * to warn).
+ *
+ * NO STOCK QUANTITY IS EVER DERIVED FROM TRANSFERS/RETURNS/MOVEMENT
+ * HISTORY — the ONLY figure rendered is `stock_quantity` from the
+ * authoritative endpoint, verbatim. No client-side sum, no activity-based
+ * inference.
+ */
+function ManagerReassignmentField({
+  agent,
+  control,
+  invalid,
+  error,
+}: {
+  agent: CommercialAgent;
+  control: Control<FormValues>;
+  invalid: boolean;
+  error?: string;
+}) {
+  const { has } = usePermission();
+  const canReadStock = has(PERMISSIONS.ACCESS_DASHBOARD);
+  const stockQuery = useCommercialStockQuantityQuery(agent.id, {
+    enabled: canReadStock,
+  });
+  const managersQuery = useManagerOptionsQuery({ status: "active" });
+
+  const stockConfirmedZero = canReadStock && stockQuery.data === 0;
+  const stockConfirmedPositive = canReadStock && (stockQuery.data ?? 0) > 0;
+  // Fail closed: enabled only once the authoritative read has confirmed
+  // zero. Loading, error, and unauthorized all leave it disabled.
+  const fieldDisabled = !stockConfirmedZero;
+
+  const currentManagerLabel = agent.manager
+    ? `${agent.manager.prenom} ${agent.manager.nom}`
+    : "None";
+
+  const stockStatusText = !canReadStock
+    ? "Current stock could not be verified."
+    : stockQuery.isPending
+      ? "Checking current stock…"
+      : stockQuery.isError
+        ? "Current stock could not be verified."
+        : `Current stock: ${stockQuery.data}`;
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor="agentManagerId" className="text-sm font-medium">
+        Manager
+      </label>
+      <p className="text-muted-foreground text-xs">
+        Current manager: {currentManagerLabel}
+      </p>
+      {/*
+       * `Controller`, NOT `register` — the seeded value (the commercial's
+       * CURRENT manager id) must survive `useManagerOptionsQuery` resolving
+       * AFTER this field first mounts. `register`'s uncontrolled ref sets
+       * the DOM `<select>.value` once, at mount; assigning a value with no
+       * matching `<option>` yet is a silent no-op that does NOT retroactively
+       * apply once a matching option is added later (verified browser/jsdom
+       * behavior) — the seeded manager would render as unselected. A
+       * controlled select (`value={field.value}`) re-applies on every
+       * render, so the correct option is selected the moment it exists.
+       */}
+      <Controller
+        control={control}
+        name="managerId"
+        render={({ field }) => (
+          <select
+            id="agentManagerId"
+            className={SELECT_CLASS}
+            disabled={fieldDisabled}
+            aria-invalid={invalid}
+            name={field.name}
+            value={field.value}
+            onChange={field.onChange}
+            onBlur={field.onBlur}
+            ref={field.ref}
+          >
+            <option value="">Select a manager</option>
+            {(managersQuery.data ?? []).map((manager) => (
+              <option key={manager.id} value={manager.id}>
+                {manager.prenom} {manager.nom}
+              </option>
+            ))}
+          </select>
+        )}
+      />
+      <p className="text-muted-foreground text-xs">{stockStatusText}</p>
+      {stockConfirmedPositive ? (
+        <p className="text-destructive text-xs">
+          This commercial must return or clear their current stock before changing
+          Manager.
+        </p>
+      ) : null}
+      {canReadStock && stockQuery.isError ? (
+        <button
+          type="button"
+          className="text-primary w-fit text-xs underline underline-offset-4"
+          onClick={() => void stockQuery.refetch()}
+        >
+          Retry
+        </button>
+      ) : null}
+      {error ? <p className="text-destructive text-xs">{error}</p> : null}
+    </div>
   );
 }

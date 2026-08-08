@@ -146,12 +146,45 @@ export async function activateAgent(id: number): Promise<void> {
 }
 
 /**
- * The Agent Edit field set (M7 Phase 1.5), verified field-by-field against
- * `AgentController::update()`'s own validator — NOT every field the
- * validator accepts (`status`, `manager_id`, every Moto field, and the
- * legacy `num_de_compte`/`date_ajouter`/`mdp` aliases are all real,
- * technically-writable inputs this form deliberately never sends; see the
- * M7 Phase 1.5 discovery pass for why each is excluded).
+ * `GET /admin/agents/{agent}/stock-quantity` (`access-dashboard`) — added in
+ * backend commit `5302f99` specifically to power the Agent Edit Zero-stock
+ * reassignment guard (M7 Agent 360 completion item). Commercial-only:
+ * verified from source (`AgentController::stockQuantity`) that a manager id
+ * 404s, matching the `stock()` endpoint's own convention.
+ *
+ * `{ stock_quantity: <int> }` — no `success`/`data` envelope, no pagination,
+ * a single bounded number. Reuses `StockService::listOwnerStock('agent',
+ * ...)->sum('quantity')` verbatim — the EXACT same definition the backend's
+ * own `update()` reassignment guard re-checks atomically at save time. This
+ * read is informational only, per the backend's own docblock: a proactive
+ * UI hint, never the authorization check itself.
+ */
+type StockQuantityEnvelope = { stock_quantity: number };
+
+export async function fetchCommercialStockQuantity(agentId: number): Promise<number> {
+  const { data } = await httpClient.get<StockQuantityEnvelope>(
+    `/admin/agents/${agentId}/stock-quantity`,
+  );
+  return data.stock_quantity;
+}
+
+/**
+ * The Agent Edit field set (M7 Phase 1.5, widened M7 Agent 360 completion
+ * item), verified field-by-field against `AgentController::update()`'s own
+ * validator — NOT every field the validator accepts (`status`, every Moto
+ * field, and the legacy `num_de_compte`/`date_ajouter`/`mdp` aliases are
+ * all real, technically-writable inputs this form deliberately never
+ * sends; see the M7 Phase 1.5 discovery pass for why each is excluded).
+ *
+ * `manager_id` (COMMERCIAL ONLY) WAS EXCLUDED THROUGH M7 PHASE 1.5 (D2),
+ * ON A CONTRADICTION NOW RESOLVED: the frozen architecture names the
+ * "Zero-stock reassignment guard" — reassigning a commercial's manager
+ * while they hold stock — as this exact form's own responsibility. Backend
+ * commit `5302f99` closed the one real blocker (no authoritative Commercial
+ * stock read existed) by adding `GET /admin/agents/{agent}/stock-quantity`
+ * and hardening `manager_id`'s own eligibility (`role=manager AND
+ * status=active`, `Rule::exists`) and atomicity (lock+check+write in one
+ * transaction). See `AgentEditDrawer`'s own docblock for the UI-side guard.
  *
  * `numIce` HAS A REAL, DISCLOSED BACKEND LIMITATION: the validator is
  * `sometimes|required|string|max:255|unique:...` — combining `sometimes`
@@ -188,6 +221,16 @@ export type UpdateAgentInput =
       role: "commercial";
       villeActuelle: string;
       secteur: string;
+      /**
+       * ALWAYS SENT for a commercial, whether interactively changed or not —
+       * the same "text fields always sent" convention every other field
+       * here already follows. Re-sending the CURRENT manager id is a
+       * verified no-op server-side (`update()`'s guard only triggers when
+       * the value actually differs from `agent.manager_id`), so this never
+       * risks an unwanted reassignment attempt merely because the field was
+       * disabled or untouched.
+       */
+      managerId: number;
     });
 
 /**
@@ -250,6 +293,7 @@ function buildUpdateFormData(input: UpdateAgentInput, files: UpdateAgentFiles): 
   } else {
     formData.append("ville_actuelle", input.villeActuelle.trim());
     formData.append("secteur", input.secteur.trim());
+    formData.append("manager_id", String(input.managerId));
   }
 
   if (files.photo) formData.append("photo", files.photo);

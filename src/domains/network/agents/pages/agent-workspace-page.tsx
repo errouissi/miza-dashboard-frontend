@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { isAppError, resolveErrorDisplay } from "@/infrastructure/errors";
 import { PERMISSIONS } from "@/infrastructure/permissions";
 import { usePermission } from "@/shared/hooks";
@@ -17,6 +17,7 @@ import { AgentOutstandingPanel } from "../components/agent-outstanding-panel";
 import { AgentStatusDialog } from "../components/agent-status-dialog";
 import { AgentStockPanel } from "../components/agent-stock-panel";
 import { useAgentQuery } from "../queries/agents-queries";
+import { agentDetailPath } from "../routes";
 import { AGENT_STATUS_LABELS, AGENT_STATUS_TONES } from "../model/agent";
 
 /**
@@ -59,6 +60,11 @@ import { AGENT_STATUS_LABELS, AGENT_STATUS_TONES } from "../model/agent";
  * still does not import anything from Stock's own Grattage restock-gate
  * integration (`AgentTransferDetailPage`) and vice versa — two separate,
  * unrelated consumers of the same underlying Grattage Outstanding read.
+ *
+ * MANAGER NAME DEEP-LINKS TO THAT MANAGER'S OWN AGENT 360 (Agent 360
+ * completion item, small polish) — `agentDetailPath(agent.manager.id)`,
+ * the same route helper this page's own callers already use; no new
+ * surface, `AgentManagerSummary.id` was already in hand.
  */
 export function AgentWorkspacePage() {
   const navigate = useNavigate();
@@ -231,9 +237,16 @@ export function AgentWorkspacePage() {
               <div>
                 <dt className="text-muted-foreground text-sm">Manager</dt>
                 <dd className="text-sm">
-                  {agent.manager
-                    ? `${agent.manager.prenom} ${agent.manager.nom}`
-                    : ABSENT}
+                  {agent.manager ? (
+                    <Link
+                      to={agentDetailPath(agent.manager.id)}
+                      className="text-primary underline underline-offset-4"
+                    >
+                      {agent.manager.prenom} {agent.manager.nom}
+                    </Link>
+                  ) : (
+                    ABSENT
+                  )}
                 </dd>
               </div>
             </>

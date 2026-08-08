@@ -6,6 +6,7 @@ import {
   activateAgent,
   blockAgent,
   fetchAgent,
+  fetchCommercialStockQuantity,
   updateAgent,
   type UpdateAgentInput,
 } from "./agents-api";
@@ -243,6 +244,7 @@ const commercialInput: UpdateAgentInput = {
   chargeAutoEntrepreneur: "0",
   villeActuelle: "Rabat",
   secteur: "Agdal",
+  managerId: 5,
 };
 
 describe("updateAgent", () => {
@@ -318,6 +320,20 @@ describe("updateAgent", () => {
     expect(body?.get("ville_actuelle")).toBe("Rabat");
     expect(body?.get("secteur")).toBe("Agdal");
     expect(body?.has("ville_sous_responsabilite")).toBe(false);
+  });
+
+  it("sends manager_id for a commercial (M7 Agent 360 completion item)", async () => {
+    let body: FormData | undefined;
+    server.use(
+      http.post(`${API}/admin/agents/12`, async ({ request }) => {
+        body = await request.formData();
+        return HttpResponse.json({ success: true, message: "ok", data: commercialRow });
+      }),
+    );
+
+    await updateAgent(12, commercialInput);
+
+    expect(body?.get("manager_id")).toBe("5");
   });
 
   it("never sends status, manager_id, moto fields, or the legacy identity/password aliases", async () => {
@@ -398,5 +414,33 @@ describe("updateAgent", () => {
       expect(body.has("photo_cin_recto")).toBe(false);
       expect(body.has("certificat_d_habitat")).toBe(false);
     });
+  });
+});
+
+describe("fetchCommercialStockQuantity (M7 Agent 360 completion item)", () => {
+  it("maps the flat { stock_quantity } envelope verbatim", async () => {
+    server.use(
+      http.get(`${API}/admin/agents/12/stock-quantity`, () =>
+        HttpResponse.json({ stock_quantity: 7 }),
+      ),
+    );
+
+    const result = await fetchCommercialStockQuantity(12);
+
+    expect(result).toBe(7);
+  });
+
+  it("requests the exact commercial id", async () => {
+    let url: URL | undefined;
+    server.use(
+      http.get(`${API}/admin/agents/12/stock-quantity`, ({ request }) => {
+        url = new URL(request.url);
+        return HttpResponse.json({ stock_quantity: 0 });
+      }),
+    );
+
+    await fetchCommercialStockQuantity(12);
+
+    expect(url?.pathname).toBe("/api/v1/admin/agents/12/stock-quantity");
   });
 });

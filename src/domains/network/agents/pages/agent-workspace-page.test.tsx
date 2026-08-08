@@ -84,6 +84,44 @@ function showHandler(
   );
 }
 
+/** `GET /admin/agents/{agent}/stock-quantity` (M7 Agent 360 completion item). */
+function stockQuantityHandler(
+  agentId: number,
+  quantity: number,
+  onRequest?: (url: URL) => void,
+) {
+  return http.get(`${API}/admin/agents/${agentId}/stock-quantity`, ({ request }) => {
+    onRequest?.(new URL(request.url));
+    return HttpResponse.json({ stock_quantity: quantity });
+  });
+}
+
+/**
+ * `GET /admin/agents/managers` (`useManagerOptionsQuery` — Managers' own
+ * public picker surface, reused verbatim, not a second implementation).
+ */
+function managerOptionsHandler(
+  rows: { id: number; nom: string; prenom: string; status?: string }[] = [
+    { id: 5, nom: "Idrissi", prenom: "Youssef", status: "active" },
+    { id: 20, nom: "Bennani", prenom: "Amine", status: "active" },
+  ],
+  onRequest?: (url: URL) => void,
+) {
+  return http.get(`${API}/admin/agents/managers`, ({ request }) => {
+    onRequest?.(new URL(request.url));
+    return HttpResponse.json({
+      success: true,
+      data: {
+        data: rows,
+        current_page: 1,
+        per_page: 100,
+        total: rows.length,
+        last_page: 1,
+      },
+    });
+  });
+}
+
 function renderPage(initialPath: string) {
   const router = createMemoryRouter([{ path: PATH, element: <AgentWorkspacePage /> }], {
     initialEntries: [initialPath],
@@ -322,7 +360,7 @@ describe("Edit — permission gating and seeding (M7 Phase 1.5)", () => {
   });
 
   it("seeds the drawer with the commercial's values and only the commercial-only fields", async () => {
-    server.use(showHandler(12, "commercial", commercialRow));
+    server.use(showHandler(12, "commercial", commercialRow), managerOptionsHandler());
     renderPage("/network/agents/12");
 
     fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
@@ -334,6 +372,12 @@ describe("Edit — permission gating and seeding (M7 Phase 1.5)", () => {
     expect(
       within(dialog).queryByLabelText("Area of responsibility"),
     ).not.toBeInTheDocument();
+    // The Manager reassignment control (M7 Agent 360 completion item) — seeded
+    // with the commercial's current manager, id 5 (Youssef Idrissi). Waits
+    // for the manager options to load first — a <select>'s DOM value only
+    // reflects a matching <option> once one actually exists.
+    await within(dialog).findByRole("option", { name: "Youssef Idrissi" });
+    expect(within(dialog).getByLabelText("Manager")).toHaveValue("5");
   });
 });
 
@@ -476,6 +520,186 @@ describe("Edit — validation, submission and errors (M7 Phase 1.5)", () => {
 
     expect(await within(dialog).findByText(/something went wrong/i)).toBeInTheDocument();
     expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+});
+
+describe("Edit — Manager reassignment guard (M7 Agent 360 completion item)", () => {
+  const PERMISSIONS_WITH_ACCESS_DASHBOARD = [
+    ...ALL_AGENT_PERMISSIONS,
+    PERMISSIONS.ACCESS_DASHBOARD,
+  ];
+
+  it("does not render a Manager reassignment control for a manager-role agent, and never requests stock-quantity", async () => {
+    signInWith(PERMISSIONS_WITH_ACCESS_DASHBOARD);
+    let stockRequested = false;
+    server.use(
+      showHandler(5, "manager"),
+      stockQuantityHandler(5, 0, () => (stockRequested = true)),
+    );
+    renderPage("/network/agents/5");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    const dialog = await screen.findByRole("dialog");
+
+    expect(within(dialog).queryByLabelText("Manager")).not.toBeInTheDocument();
+    expect(stockRequested).toBe(false);
+  });
+
+  it("shows the authoritative quantity and disables reassignment when stock > 0, with an explanation", async () => {
+    signInWith(PERMISSIONS_WITH_ACCESS_DASHBOARD);
+    server.use(
+      showHandler(12, "commercial", commercialRow),
+      stockQuantityHandler(12, 3),
+      managerOptionsHandler(),
+    );
+    renderPage("/network/agents/12");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    const dialog = await screen.findByRole("dialog");
+
+    expect(await within(dialog).findByText("Current stock: 3")).toBeInTheDocument();
+    expect(within(dialog).getByLabelText("Manager")).toBeDisabled();
+    expect(
+      within(dialog).getByText(
+        /must return or clear their current stock before changing/i,
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("enables reassignment when stock is 0, seeds the current manager, offers active managers, and sends the new manager_id on save", async () => {
+    signInWith(PERMISSIONS_WITH_ACCESS_DASHBOARD);
+    let body: FormData | undefined;
+    server.use(
+      showHandler(12, "commercial", commercialRow),
+      stockQuantityHandler(12, 0),
+      managerOptionsHandler(),
+      http.post(`${API}/admin/agents/12`, async ({ request }) => {
+        body = await request.formData();
+        return HttpResponse.json({ success: true, message: "ok", data: commercialRow });
+      }),
+    );
+    renderPage("/network/agents/12");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    const dialog = await screen.findByRole("dialog");
+
+    await within(dialog).findByText("Current stock: 0");
+    await within(dialog).findByRole("option", { name: "Youssef Idrissi" });
+    const managerSelect = within(dialog).getByLabelText("Manager");
+    expect(managerSelect).toBeEnabled();
+    // Seeded with the current manager (id 5, Youssef Idrissi).
+    expect(managerSelect).toHaveValue("5");
+    expect(
+      within(managerSelect).getByRole("option", { name: "Amine Bennani" }),
+    ).toBeInTheDocument();
+
+    fireEvent.change(managerSelect, { target: { value: "20" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(body).toBeDefined());
+    expect(body?.get("manager_id")).toBe("20");
+  });
+
+  it("fails closed — without access-dashboard, the field stays disabled and no stock-quantity request fires", async () => {
+    // ALL_AGENT_PERMISSIONS has no access-dashboard — update-agent alone
+    // reaches the drawer, but must not be enough to reassign blind.
+    signInWith(ALL_AGENT_PERMISSIONS);
+    let stockRequested = false;
+    server.use(
+      showHandler(12, "commercial", commercialRow),
+      stockQuantityHandler(12, 0, () => (stockRequested = true)),
+      managerOptionsHandler(),
+    );
+    renderPage("/network/agents/12");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    const dialog = await screen.findByRole("dialog");
+
+    expect(
+      await within(dialog).findByText("Current stock could not be verified."),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByLabelText("Manager")).toBeDisabled();
+    expect(stockRequested).toBe(false);
+  });
+
+  it("backend race: a save rejected with COMMERCIAL_HAS_STOCK_CANNOT_REASSIGN keeps the drawer open, surfaces the message, and refreshes the stock-quantity read", async () => {
+    signInWith(PERMISSIONS_WITH_ACCESS_DASHBOARD);
+    let stockRequestCount = 0;
+    server.use(
+      showHandler(12, "commercial", commercialRow),
+      stockQuantityHandler(12, 0, () => stockRequestCount++),
+      managerOptionsHandler(),
+      http.post(`${API}/admin/agents/12`, () =>
+        HttpResponse.json(
+          {
+            success: false,
+            code: "COMMERCIAL_HAS_STOCK_CANNOT_REASSIGN",
+            message: "Commercial still holds grattage stock.",
+            context: {
+              commercial_id: 12,
+              current_manager_id: 5,
+              requested_manager_id: 20,
+              stock_quantity: 2,
+            },
+          },
+          { status: 422 },
+        ),
+      ),
+    );
+    renderPage("/network/agents/12");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    const dialog = await screen.findByRole("dialog");
+    await within(dialog).findByText("Current stock: 0");
+    await waitFor(() => expect(stockRequestCount).toBe(1));
+
+    fireEvent.change(within(dialog).getByLabelText("Manager"), {
+      target: { value: "20" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    expect(
+      await within(dialog).findByText(
+        "This commercial still holds stock and cannot be reassigned to another manager until it is returned or cleared.",
+      ),
+    ).toBeInTheDocument();
+    // Stays open.
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    // The stock-quantity read is invalidated and refetched — a second request.
+    await waitFor(() => expect(stockRequestCount).toBe(2));
+  });
+
+  it("never derives stock from Transfers, Returns, or movement history — no such request fires", async () => {
+    signInWith(PERMISSIONS_WITH_ACCESS_DASHBOARD);
+    let transfersRequested = false;
+    let returnsRequested = false;
+    server.use(
+      showHandler(12, "commercial", commercialRow),
+      stockQuantityHandler(12, 3),
+      managerOptionsHandler(),
+      http.get(`${API}/admin/agent-transfers`, () => {
+        transfersRequested = true;
+        return HttpResponse.json({
+          data: [],
+          meta: { current_page: 1, per_page: 15, total: 0, last_page: 1 },
+        });
+      }),
+      http.get(`${API}/admin/agent-stock-returns`, () => {
+        returnsRequested = true;
+        return HttpResponse.json({
+          data: [],
+          meta: { current_page: 1, per_page: 15, total: 0, last_page: 1 },
+        });
+      }),
+    );
+    renderPage("/network/agents/12");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    const dialog = await screen.findByRole("dialog");
+    await within(dialog).findByText("Current stock: 3");
+
+    expect(transfersRequested).toBe(false);
+    expect(returnsRequested).toBe(false);
   });
 });
 

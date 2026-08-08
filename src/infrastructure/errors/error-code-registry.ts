@@ -334,6 +334,21 @@ export const ERROR_CODES: Readonly<Record<string, ErrorCodeEntry>> = Object.free
     message: "This line could not be found.",
     tone: "danger",
   },
+
+  /**
+   * Agents (roadmap M7, Agent 360 completion item) — the Zero-stock
+   * reassignment guard's own reactive fallback. `AgentController::update()`
+   * returns this atomically, under lock, when a commercial's manager_id
+   * reassignment is attempted while their held stock is nonzero — the
+   * proactive `stock-quantity` read `AgentEditDrawer` shows inline is only
+   * a UX hint; this is the authoritative refusal, reachable even when that
+   * proactive read said zero moments earlier (a genuine race).
+   */
+  COMMERCIAL_HAS_STOCK_CANNOT_REASSIGN: {
+    message:
+      "This commercial still holds stock and cannot be reassigned to another manager until it is returned or cleared.",
+    tone: "danger",
+  },
 });
 
 /** Unregistered codes are still failures, and a failure is never "info". */

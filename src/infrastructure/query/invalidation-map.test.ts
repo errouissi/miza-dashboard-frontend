@@ -74,9 +74,10 @@ describe("invalidation map", () => {
     ]);
   });
 
-  it("registers agent-stock-return.validated — no cross-domain prefix yet (no stock-read consumer exists)", () => {
+  it("registers agent-stock-return.validated — plus commercial-stock-quantity (M7 Agent 360 completion item: the reassignment guard's own live read)", () => {
     expect(queryKeyPrefixesFor("agent-stock-return.validated")).toEqual([
       ["agent-stock-returns"],
+      ["commercial-stock-quantity"],
     ]);
   });
 
@@ -90,9 +91,10 @@ describe("invalidation map", () => {
     ]);
   });
 
-  it("registers agent-transfer.validated — no cross-domain prefix (writes only stocks/stock_movements, not Agent balance columns)", () => {
+  it("registers agent-transfer.validated — plus commercial-stock-quantity (M7 Agent 360 completion item: the reassignment guard's own live read)", () => {
     expect(queryKeyPrefixesFor("agent-transfer.validated")).toEqual([
       ["agent-transfers"],
+      ["commercial-stock-quantity"],
     ]);
   });
 
@@ -127,10 +129,11 @@ describe("invalidation map", () => {
     expect(queryKeyPrefixesFor("bon.cancelled")).toEqual([["bons"]]);
   });
 
-  it("registers grattage-invoice.cancelled — Grattage Invoices' own key space, plus Grattage Outstanding (M6 Phase 2: cancelling removes the invoice from both the outstanding and undischarged scopes)", () => {
+  it("registers grattage-invoice.cancelled — Grattage Invoices' own key space, plus Grattage Outstanding (M6 Phase 2: cancelling removes the invoice from both the outstanding and undischarged scopes) plus commercial-stock-quantity (M7 Agent 360 completion item)", () => {
     expect(queryKeyPrefixesFor("grattage-invoice.cancelled")).toEqual([
       ["grattage-invoices"],
       ["grattage-outstanding"],
+      ["commercial-stock-quantity"],
     ]);
   });
 
