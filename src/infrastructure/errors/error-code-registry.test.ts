@@ -171,7 +171,7 @@ describe("Agent Transfer codes (roadmap M5, Phase 2) — registered explicitly, 
 });
 
 describe("Allocation codes (roadmap M5, Phase 4) — fewer than Return's/Transfer's own, by contract, not omission", () => {
-  it("registers exactly the 10 codes AllocationExceptionRenderer emits", () => {
+  it("registers exactly the 9 codes AllocationExceptionRenderer emits (backend commit 9af5d00 removed ALLOCATION_TEAM_HAS_OUTSTANDING_OBLIGATION)", () => {
     const allocationCodes = Object.keys(ERROR_CODES).filter((code) =>
       code.startsWith("ALLOCATION_"),
     );
@@ -182,7 +182,6 @@ describe("Allocation codes (roadmap M5, Phase 4) — fewer than Return's/Transfe
         "ALLOCATION_HAS_NO_LINES",
         "ALLOCATION_NOT_EDITABLE",
         "ALLOCATION_EXCEEDS_DEPOSIT_CAPACITY",
-        "ALLOCATION_TEAM_HAS_OUTSTANDING_OBLIGATION",
         "ALLOCATION_STOCK_INSUFFICIENT",
         "ALLOCATION_LINE_DUPLICATE_PRODUCT",
         "ALLOCATION_NUMBER_DUPLICATE",
@@ -190,6 +189,10 @@ describe("Allocation codes (roadmap M5, Phase 4) — fewer than Return's/Transfe
         "ALLOCATION_LINE_NOT_FOUND",
       ].sort(),
     );
+  });
+
+  it("no longer registers ALLOCATION_TEAM_HAS_OUTSTANDING_OBLIGATION — the backend can never emit it again", () => {
+    expect(ERROR_CODES["ALLOCATION_TEAM_HAS_OUTSTANDING_OBLIGATION"]).toBeUndefined();
   });
 
   // Allocation has NO role-mismatch/inactive/binding-drift family
@@ -216,21 +219,6 @@ describe("Allocation codes (roadmap M5, Phase 4) — fewer than Return's/Transfe
       "The manager does not have enough validated grattage-deposit capacity to cover this allocation's amount.",
     );
     expect(display.tone).toBe("danger");
-  });
-
-  it("resolves the team outstanding-obligation (restock gate) code to real copy, with no recovery path yet", () => {
-    const display = resolveErrorDisplay(
-      new AppError({
-        kind: "domain",
-        code: "ALLOCATION_TEAM_HAS_OUTSTANDING_OBLIGATION",
-        requestId: "req-5",
-      }),
-    );
-
-    expect(display.message).toBe(
-      "A commercial under this manager has an outstanding grattage obligation. Resolve it before allocating more stock to this team.",
-    );
-    expect(display.recovery).toBeUndefined();
   });
 
   it("has no registered recovery path for any ALLOCATION_* code yet", () => {

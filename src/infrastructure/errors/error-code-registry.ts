@@ -211,7 +211,7 @@ export const ERROR_CODES: Readonly<Record<string, ErrorCodeEntry>> = Object.free
   },
 
   /**
-   * ALLOCATIONS (roadmap M5, Phase 4) — 10 codes, verified fresh from
+   * ALLOCATIONS (roadmap M5, Phase 4) — 9 codes, verified fresh from
    * source (`AllocationExceptionRenderer`). FEWER THAN RETURN'S 13 OR
    * TRANSFER'S 15 — a genuine divergence, not an incomplete registration:
    * Allocation's binding pair (`company_id` + `agent_id` role=manager) is
@@ -220,22 +220,26 @@ export const ERROR_CODES: Readonly<Record<string, ErrorCodeEntry>> = Object.free
    * `RETURN_MANAGER_ROLE_INVALID`/`RETURN_COMMERCIAL_INACTIVE`/
    * `RETURN_RECIPIENT_BINDING_MISMATCH` (and Transfer's own equivalents) do.
    *
-   * TWO ALLOCATION-ONLY GATES, with no equivalent in Return or Transfer:
-   *   `ALLOCATION_EXCEEDS_DEPOSIT_CAPACITY` — the manager's available
-   *     grattage-deposit capacity (`avance + deposit_gross - exposure`,
-   *     FIFO-drawn) is less than the allocation's own `montant`.
-   *   `ALLOCATION_TEAM_HAS_OUTSTANDING_OBLIGATION` — Phase 5.10 §2.9's
-   *     restock gate: refuses if ANY commercial under the recipient manager
-   *     has an undischarged grattage obligation. UPDATED M6 PHASE 3 — now
-   *     ALSO surfaced PROACTIVELY: `AllocationDetailPage` reads
-   *     `useGrattageRestockGateQuery(allocation.agentId)` (Grattage's ONE
-   *     sanctioned public surface) and disables Validate directly; this
-   *     entry's own `message` is reused verbatim by that proactive banner
-   *     via `lookupErrorCode`.
-   * `ALLOCATION_EXCEEDS_DEPOSIT_CAPACITY` remains REACTIVE ONLY, same
-   * restraint Transfer's own `AGENT_TRANSFER_EXCEEDS_CAPACITY` still has —
-   * no proactive capacity/stock-quantity read exists for either (BC-AA
-   * stays partially open).
+   * THE SOLE ALLOCATION-ONLY GATE: `ALLOCATION_EXCEEDS_DEPOSIT_CAPACITY` —
+   * the manager's available grattage-deposit capacity is less than the
+   * allocation's own `montant`. REACTIVE ONLY — no proactive capacity read
+   * exists (BC-AA stays partially open), same restraint Transfer's own
+   * `AGENT_TRANSFER_EXCEEDS_CAPACITY` still has.
+   *
+   * `ALLOCATION_TEAM_HAS_OUTSTANDING_OBLIGATION` NO LONGER EXISTS — backend
+   * commit `9af5d00` REMOVED the team-wide hard block this code used to
+   * mean (`AllocationTeamHasOutstandingObligation` was deleted outright;
+   * the renderer can never emit this code again). It briefly gained a
+   * PROACTIVE consumer at M6 Phase 3 (`AllocationDetailPage` reading
+   * `useGrattageRestockGateQuery`) — both the entry and that consumer were
+   * removed together once the backend contract changed. The eligible
+   * validated-grattage-deposit pool behind `ALLOCATION_EXCEEDS_DEPOSIT_
+   * CAPACITY`'s own formula was widened instead (manager + team
+   * commercials) — an outstanding commercial obligation now restores zero
+   * capacity but is never, by itself, a refusal. Do NOT re-add this code
+   * or re-derive its old meaning client-side. Transfer's own equivalent
+   * gate (`TRANSFER_RECIPIENT_HAS_OUTSTANDING_OBLIGATION`) is UNCHANGED
+   * and still real — see that entry below.
    */
   ALLOCATION_NOT_DRAFT: {
     message: "This allocation has already been processed.",
@@ -252,11 +256,6 @@ export const ERROR_CODES: Readonly<Record<string, ErrorCodeEntry>> = Object.free
   ALLOCATION_EXCEEDS_DEPOSIT_CAPACITY: {
     message:
       "The manager does not have enough validated grattage-deposit capacity to cover this allocation's amount.",
-    tone: "danger",
-  },
-  ALLOCATION_TEAM_HAS_OUTSTANDING_OBLIGATION: {
-    message:
-      "A commercial under this manager has an outstanding grattage obligation. Resolve it before allocating more stock to this team.",
     tone: "danger",
   },
   ALLOCATION_STOCK_INSUFFICIENT: {

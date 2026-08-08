@@ -22,22 +22,37 @@ import type { StatusTone } from "@/shared/components/business/status-badge";
  * recomputed server-side on every line mutation, and it is the REAL GATE at
  * validate time: `StockService::validateAllocation` refuses
  * (`ALLOCATION_EXCEEDS_DEPOSIT_CAPACITY`) when it exceeds the recipient
- * manager's available grattage-deposit capacity
- * (`avance + deposit_gross - exposure`, FIFO-drawn against validated
- * deposits). Still a `decimal:2`-cast STRING — rendered verbatim, never
- * parsed, same discipline as Return's/Transfer's own.
+ * manager's available grattage-deposit capacity. Still a `decimal:2`-cast
+ * STRING — rendered verbatim, never parsed, same discipline as Return's/
+ * Transfer's own.
  *
- * A SECOND, ALLOCATION-ONLY GATE EXISTS —
- * `ALLOCATION_TEAM_HAS_OUTSTANDING_OBLIGATION`: validation is refused if
- * ANY commercial under the recipient manager has an undischarged grattage
- * obligation. No equivalent in Return or Transfer. UPDATED M6 PHASE 3 —
- * this gate is now ALSO surfaced PROACTIVELY: `AllocationDetailPage` reads
- * `useGrattageRestockGateQuery(allocation.agentId)` (Grattage's ONE
- * sanctioned public surface) and disables Validate directly, ahead of any
- * submission. The deposit-capacity gate (`ALLOCATION_EXCEEDS_DEPOSIT_
- * CAPACITY`) remains REACTIVE ONLY — no proactive capacity/stock-quantity
- * read exists for it (BC-AA stays partially open), same restraint
- * Transfer's own `AGENT_TRANSFER_EXCEEDS_CAPACITY` still has.
+ * THE ONLY ALLOCATION-ONLY GATE IS THIS SAME `ALLOCATION_EXCEEDS_DEPOSIT_
+ * CAPACITY` CHECK — RE-VERIFIED FRESH FROM SOURCE against backend commit
+ * `9af5d00` (`feat(allocation): settlement-aware Company -> Manager
+ * grattage capacity`), which REMOVED the team-wide hard block this file
+ * previously documented (`ALLOCATION_TEAM_HAS_OUTSTANDING_OBLIGATION` —
+ * the exception class was deleted outright and can never be thrown again).
+ * The eligible validated-grattage-deposit pool behind the CAPACITY
+ * FORMULA was widened instead — `agent_id IN {manager, team commercials}`,
+ * not just the manager's own deposits — so a commercial's VALIDATED
+ * grattage settlement now restores the manager's own allocation capacity
+ * exactly like the manager's own deposit always did. An UNDISCHARGED
+ * commercial obligation restores ZERO capacity but is never, by itself, a
+ * refusal reason (a real product change, not a bug fix — see
+ * `docs/architecture-roadmap.md` §2.9 amendment, backend repo). This gate
+ * is REACTIVE ONLY — no proactive capacity read exists (BC-AA stays
+ * partially open), same restraint Transfer's own
+ * `AGENT_TRANSFER_EXCEEDS_CAPACITY` still has. A proactive Grattage
+ * restock-gate integration briefly lived on `AllocationDetailPage` (M6
+ * Phase 3) and was REMOVED once this backend contract changed — the
+ * backend's own `computeGrattageRestockGate()` docblock now explicitly
+ * states its `restock_gate` field is "NOT AUTHORITATIVE" for a manager.
+ * Do not re-add a client-side capacity derivation from deposits/invoices/
+ * movements — the backend is the sole authority for this number, and
+ * currently exposes it only reactively, inside this exception's own
+ * `context.available`. Transfer's own equivalent gate
+ * (`TRANSFER_RECIPIENT_HAS_OUTSTANDING_OBLIGATION`, still a hard,
+ * unchanged block) is unaffected by any of this.
  *
  * NO DATE FIELD — unlike Transfer's own `transfer_date`, `StoreAllocationRequest`
  * has no date field at all (verified from source); not omitted by oversight.
