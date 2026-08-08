@@ -13,6 +13,7 @@ import { PRODUCTS_PATH } from "@/domains/reference/products";
 import { ADMINS_PATH } from "@/domains/network/admins";
 import { MANAGERS_PATH } from "@/domains/network/managers";
 import { COMMERCIALS_PATH } from "@/domains/network/commercials";
+import { agentDetailPath } from "@/domains/network/agents";
 import { CLIENTS_PATH } from "@/domains/network/clients";
 import { AGENT_ONBOARDING_PATH } from "@/domains/network/agent-onboarding";
 import {
@@ -308,6 +309,12 @@ describe("every contributed domain route is guarded", () => {
   // `permission:access-dashboard`), NOT a dedicated
   // `view-grattage-invoices` string. See `registry.ts`'s own
   // `ACCESS_DASHBOARD` docblock.
+  // `agentDetailPath(1)` (roadmap M7, Phase 1 — Agent 360, resolving
+  // ADR-0014's own deferral) is guarded by `view-agents` — the SAME string
+  // MANAGERS_PATH/COMMERCIALS_PATH already use, mirroring
+  // `GET /admin/agents/{identifier}`'s own check (`routes/api.php:244-245`),
+  // which sits behind the identical `agents` route group as both list
+  // endpoints.
   // `unpermittedSession` holds nothing at all, so it exercises every gate
   // identically.
   const domainPaths = [
@@ -342,6 +349,7 @@ describe("every contributed domain route is guarded", () => {
     bonDetailPath(1),
     GRATTAGE_INVOICES_PATH,
     grattageInvoiceDetailPath(1),
+    agentDetailPath(1),
   ];
 
   it.each(domainPaths)("refuses %s without the permission", async (path) => {

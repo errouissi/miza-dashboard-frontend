@@ -125,9 +125,17 @@ function villesHandler() {
 }
 
 function renderPage(initialPath: string = PATH) {
-  const router = createMemoryRouter([{ path: PATH, element: <ManagersListPage /> }], {
-    initialEntries: [initialPath],
-  });
+  const router = createMemoryRouter(
+    [
+      { path: PATH, element: <ManagersListPage /> },
+      // A stub for Agent 360 (roadmap M7, Phase 1) — the "View" navigation
+      // test's own destination, mirroring the cross-page stub-route
+      // precedent every prior cross-domain link test already established
+      // (e.g. Grattage Invoices' own `/money/deposits/:id` stub).
+      { path: "/network/agents/:id", element: <p>agent workspace stub</p> },
+    ],
+    { initialEntries: [initialPath] },
+  );
   render(
     <QueryClientProvider client={createQueryClient()}>
       <RouterProvider router={router} />
@@ -1087,6 +1095,27 @@ describe("edit", () => {
     expect(
       await within(dialog).findByText(/subscription number is taken/i),
     ).toBeInTheDocument();
+  });
+});
+
+describe("navigation to Agent 360 (roadmap M7, Phase 1)", () => {
+  it("offers a View link on every row, regardless of block/activate/update permissions", async () => {
+    signInWith([PERMISSIONS.VIEW_AGENTS]);
+    server.use(managersHandler([row(1, "Sara", "Alaoui")]), villesHandler());
+    renderPage();
+
+    expect(
+      await screen.findByRole("button", { name: /view sara alaoui/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("navigates to the agent's own workspace route on click", async () => {
+    server.use(managersHandler([row(1, "Sara", "Alaoui")]), villesHandler());
+    const router = renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: /view sara alaoui/i }));
+
+    expect(router.state.location.pathname).toBe("/network/agents/1");
   });
 });
 

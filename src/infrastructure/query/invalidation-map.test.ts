@@ -131,6 +131,22 @@ describe("invalidation map", () => {
     ]);
   });
 
+  it("registers agent.blocked — Agents' own key space plus both Network list prefixes (M7 Phase 1: same block endpoint Managers/Commercials already call)", () => {
+    expect(queryKeyPrefixesFor("agent.blocked")).toEqual([
+      ["agents"],
+      ["managers"],
+      ["commercials"],
+    ]);
+  });
+
+  it("registers agent.activated — the same three prefixes as agent.blocked", () => {
+    expect(queryKeyPrefixesFor("agent.activated")).toEqual([
+      ["agents"],
+      ["managers"],
+      ["commercials"],
+    ]);
+  });
+
   it("invalidates nothing, and does not throw, for an unregistered event", async () => {
     const queryClient = new QueryClient();
     const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");

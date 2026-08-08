@@ -259,6 +259,21 @@ const INVALIDATION_MAP: Readonly<Record<DomainEvent, readonly QueryKey[]>> =
      * cached snapshot).
      */
     "grattage-invoice.cancelled": [["grattage-invoices"], ["grattage-outstanding"]],
+    /**
+     * Agents (roadmap M7, Phase 1 — the fifth Network resource, and the
+     * first real consumer of `GET /admin/agents/{id}`). Block/Activate hit
+     * the IDENTICAL `/admin/agents/{id}/block`/`.../activate` endpoints
+     * `Manager`'s/`Commercial`'s own mutations already call — so a status
+     * change made from the Agent 360 workspace must also refresh either
+     * list, not just this domain's own cache. Which of `managers`/
+     * `commercials` is the "right" one is not known without an extra read
+     * (the workspace does not import either domain), so both are busted
+     * regardless of the agent's actual role — the same over-invalidation
+     * reasoning `cheque.approved` already established for a cheap
+     * `SLOW`-tier list.
+     */
+    "agent.blocked": [["agents"], ["managers"], ["commercials"]],
+    "agent.activated": [["agents"], ["managers"], ["commercials"]],
   });
 
 /** The prefixes a given event invalidates, or an empty list for an unregistered one. */

@@ -9,6 +9,7 @@ import { RequirePermission } from "@/app/guards";
 import { adminsRoutes } from "@/domains/network/admins";
 import { managersRoutes } from "@/domains/network/managers";
 import { commercialsRoutes } from "@/domains/network/commercials";
+import { agentsRoutes } from "@/domains/network/agents";
 import { clientsRoutes } from "@/domains/network/clients";
 import { agentOnboardingRoutes } from "@/domains/network/agent-onboarding";
 import { chequesRoutes } from "@/domains/money/cheques";
@@ -108,6 +109,7 @@ const domainRoutes: RouteObject[] = withPermissionGuards([
   ...adminsRoutes,
   ...managersRoutes,
   ...commercialsRoutes,
+  ...agentsRoutes,
   ...clientsRoutes,
   ...agentOnboardingRoutes,
   ...chequesRoutes,

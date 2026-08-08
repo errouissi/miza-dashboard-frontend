@@ -5,6 +5,7 @@ import { PERMISSIONS } from "@/infrastructure/permissions";
 import { usePermission } from "@/shared/hooks";
 import { ABSENT, formatDate } from "@/shared/formatters";
 import { AGENT_ONBOARDING_PATH } from "@/domains/network/agent-onboarding";
+import { agentDetailPath } from "@/domains/network/agents";
 import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/shared/components/ui/avatar";
@@ -46,7 +47,11 @@ import {
  *   - pagination and search: YES, same shape as Managers, live-confirmed.
  *   - sorting: NO. `indexCommercials` accepts no sort parameter of any kind
  *     and hardcodes `date_ajout DESC` (BC-L), identically to Managers.
- *   - a detail page: NOT IN THIS MILESTONE (ADR-0014). No row links anywhere.
+ *   - a detail page OF ITS OWN: still none — ADR-0014's deferral is resolved
+ *     by Agent 360 instead (roadmap M7, Phase 1), a cross-domain WorkspacePage
+ *     living in `domains/network/agents/`, not a plain detail page hosted
+ *     here. Each row now links to it (a "View" button) — the ONLY change
+ *     this file makes for M7: no new columns, filters, or mutations.
  *   - a secteur filter: DEFERRED BY DECISION. The filter exists server-side
  *     (`secteur`, exact match) but the transform never returns it, no
  *     secteurs are seeded in the dev database, and there is no options source
@@ -129,7 +134,6 @@ export function CommercialsListPage() {
   const canUpdate = has(PERMISSIONS.UPDATE_AGENT);
   const canBlock = has(PERMISSIONS.BLOCK_AGENT);
   const canActivate = has(PERMISSIONS.ACTIVATE_AGENT);
-  const hasAnyRowAction = canUpdate || canBlock || canActivate;
 
   /**
    * `create-agent` gates the M3.6 wizard's own route too (fail-closed there
@@ -412,43 +416,52 @@ export function CommercialsListPage() {
                     </td>
                     <td className="p-2">{formatDate(commercial.dateDebut)}</td>
                     <td className="p-2">
-                      {hasAnyRowAction ? (
-                        <div className="flex justify-end gap-2">
-                          {canUpdate ? (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setEditing(commercial)}
-                              aria-label={`Edit ${fullName}`}
-                            >
-                              Edit
-                            </Button>
-                          ) : null}
-                          {/* The backend 400s on a no-op, so each action is
-                              offered only where it would actually change
-                              something. An `inactive` account can receive either. */}
-                          {canBlock && commercial.status !== "blocked" ? (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setBlocking(commercial)}
-                              aria-label={`Block ${fullName}`}
-                            >
-                              Block
-                            </Button>
-                          ) : null}
-                          {canActivate && commercial.status !== "active" ? (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setActivating(commercial)}
-                              aria-label={`Activate ${fullName}`}
-                            >
-                              Activate
-                            </Button>
-                          ) : null}
-                        </div>
-                      ) : null}
+                      <div className="flex justify-end gap-2">
+                        {/* Always offered — `view-agents` already gates this
+                            whole list, and Agent 360 (`domains/network/agents`)
+                            checks the same permission independently. */}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => navigate(agentDetailPath(commercial.id))}
+                          aria-label={`View ${fullName}`}
+                        >
+                          View
+                        </Button>
+                        {canUpdate ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setEditing(commercial)}
+                            aria-label={`Edit ${fullName}`}
+                          >
+                            Edit
+                          </Button>
+                        ) : null}
+                        {/* The backend 400s on a no-op, so each action is
+                            offered only where it would actually change
+                            something. An `inactive` account can receive either. */}
+                        {canBlock && commercial.status !== "blocked" ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setBlocking(commercial)}
+                            aria-label={`Block ${fullName}`}
+                          >
+                            Block
+                          </Button>
+                        ) : null}
+                        {canActivate && commercial.status !== "active" ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setActivating(commercial)}
+                            aria-label={`Activate ${fullName}`}
+                          >
+                            Activate
+                          </Button>
+                        ) : null}
+                      </div>
                     </td>
                   </tr>
                 );

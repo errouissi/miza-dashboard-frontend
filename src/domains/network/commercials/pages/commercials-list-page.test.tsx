@@ -175,9 +175,15 @@ function managersOptionsHandler() {
 }
 
 function renderPage(initialPath: string = PATH) {
-  const router = createMemoryRouter([{ path: PATH, element: <CommercialsListPage /> }], {
-    initialEntries: [initialPath],
-  });
+  const router = createMemoryRouter(
+    [
+      { path: PATH, element: <CommercialsListPage /> },
+      // A stub for Agent 360 (roadmap M7, Phase 1) — mirrors Managers' own
+      // identical stub-route precedent.
+      { path: "/network/agents/:id", element: <p>agent workspace stub</p> },
+    ],
+    { initialEntries: [initialPath] },
+  );
   render(
     <QueryClientProvider client={createQueryClient()}>
       <RouterProvider router={router} />
@@ -1006,6 +1012,31 @@ describe("edit", () => {
     expect(
       await within(dialog).findByText(/subscription number is taken/i),
     ).toBeInTheDocument();
+  });
+});
+
+describe("navigation to Agent 360 (roadmap M7, Phase 1)", () => {
+  it("offers a View link on every row, regardless of block/activate/update permissions", async () => {
+    signInWith([PERMISSIONS.VIEW_AGENTS]);
+    server.use(commercialsHandler([row(1, "Salma", "Alaoui")]), managersOptionsHandler());
+    renderPage();
+
+    expect(
+      await screen.findByRole("button", { name: /view salma alaoui/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("navigates to the agent's own workspace route on click", async () => {
+    server.use(
+      commercialsHandler([row(1, "Salma", "Alaoui")]),
+      villesHandler(),
+      managersOptionsHandler(),
+    );
+    const router = renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: /view salma alaoui/i }));
+
+    expect(router.state.location.pathname).toBe("/network/agents/1");
   });
 });
 
