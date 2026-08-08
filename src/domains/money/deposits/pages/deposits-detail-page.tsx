@@ -4,14 +4,17 @@ import { isAppError, resolveErrorDisplay } from "@/infrastructure/errors";
 import { PERMISSIONS } from "@/infrastructure/permissions";
 import { usePermission } from "@/shared/hooks";
 import { formatDate, formatDateTime, formatIdentifier } from "@/shared/formatters";
-import { StatusBadge } from "@/shared/components/business/status-badge";
+import { StatusBadge, type StatusTone } from "@/shared/components/business/status-badge";
 import { MoneyAmount } from "@/shared/components/business/money-amount";
 import { Button } from "@/shared/components/ui/button";
 import { Skeleton } from "@/shared/components/ui/skeleton";
 import { ListErrorState } from "@/shared/components/patterns/list-states";
 import { ValidateDepositDialog } from "../components/validate-deposit-dialog";
 import { RejectDepositDialog } from "../components/reject-deposit-dialog";
-import { useDepositQuery } from "../queries/deposits-queries";
+import {
+  useDepositQuery,
+  useLinkedGrattageInvoicesQuery,
+} from "../queries/deposits-queries";
 import { DEPOSITS_PATH } from "../routes";
 import {
   DEPOSIT_METHOD_LABELS,
@@ -20,6 +23,30 @@ import {
   DEPOSIT_STATUS_TONES,
   DEPOSIT_TYPE_LABELS,
 } from "../model/deposit";
+
+/**
+ * A DOMAIN-LOCAL COPY of Grattage's own four-status vocabulary (M6 Phase
+ * 4) — NOT an import from `domains/grattage/invoices` (Option B, see
+ * `fetchLinkedGrattageInvoices`'s own docblock in `api/deposits-api.ts`
+ * for the full reasoning). Copied verbatim from Design System §17's own
+ * canonical mapping, the same source Grattage's own
+ * `GRATTAGE_INVOICE_STATUS_TONES` was built from — both are independent,
+ * correct readings of the same frozen spec, not one derived from the
+ * other.
+ */
+const LINKED_INVOICE_STATUS_LABELS: Record<string, string> = {
+  pending: "Pending",
+  overdue: "Overdue",
+  settled: "Settled",
+  cancelled: "Cancelled",
+};
+
+const LINKED_INVOICE_STATUS_TONES: Record<string, StatusTone> = {
+  pending: "warning",
+  overdue: "danger",
+  settled: "success",
+  cancelled: "muted",
+};
 
 /**
  * The Deposit Detail page (M4.3 Phase 2) — the second detail page in this
@@ -81,6 +108,22 @@ import {
  * refetches, and the new status (`StatusBadge` here, plus the newly
  * revealed "Processed" section) IS the confirmation, exactly like
  * `ChequeDetailPage`'s own approve/reject/annuler dialogs.
+ *
+ * "GRATTAGE INVOICES" SECTION (M6 Phase 4) — shown ONLY for
+ * `type === "grattage"` (a `rapped` deposit can never have linked
+ * invoices) AND ONLY when the viewer separately holds `access-dashboard`
+ * (`useLinkedGrattageInvoicesQuery`'s own docblock has the full
+ * permission-independence reasoning). Reads
+ * `fetchLinkedGrattageInvoices` — a NARROW, PRIVATE, Deposits-owned
+ * duplicate of a slice of Grattage's own `index()` mapper (Option B,
+ * `api/deposits-api.ts`'s own docblock), not an import of
+ * `domains/grattage/invoices`. NO ROW CAP — a reconciliation deposit's
+ * linked set is inherently small (bounded by one agent's outstanding
+ * invoices at one moment), so every returned row is rendered, each
+ * linking to its own Grattage Invoice detail page via a LITERAL
+ * `/grattage/invoices/{id}` path (same "literal, not an import"
+ * discipline the reverse direction uses — see
+ * `GrattageInvoiceDetailPage`'s own docblock).
  */
 export function DepositDetailPage() {
   const navigate = useNavigate();
@@ -91,6 +134,24 @@ export function DepositDetailPage() {
   const [activeAction, setActiveAction] = useState<"validate" | "reject" | null>(null);
 
   const depositQuery = useDepositQuery(id ?? -1, { enabled: id !== undefined });
+
+  /**
+   * M6 Phase 4 — gated on BOTH `deposit.type === "grattage"` (a `rapped`
+   * deposit can never have linked invoices) AND `access-dashboard`
+   * INDEPENDENTLY of `view-depos` (already required to reach this page at
+   * all) — see `useLinkedGrattageInvoicesQuery`'s own docblock for why
+   * these are genuinely separate grants, not one implying the other.
+   */
+  const canViewGrattageSection = has(PERMISSIONS.ACCESS_DASHBOARD);
+  const linkedInvoicesQuery = useLinkedGrattageInvoicesQuery(
+    depositQuery.data?.id ?? -1,
+    {
+      enabled:
+        depositQuery.data !== undefined &&
+        depositQuery.data.type === "grattage" &&
+        canViewGrattageSection,
+    },
+  );
 
   const errorReference = isAppError(depositQuery.error)
     ? resolveErrorDisplay(depositQuery.error).requestId
@@ -259,6 +320,64 @@ export function DepositDetailPage() {
         <div className="flex flex-col gap-2">
           <h2 className="text-lg font-semibold">Reject reason</h2>
           <p className="text-sm">{deposit.rejectReason}</p>
+        </div>
+      ) : null}
+
+      {deposit.type === "grattage" && canViewGrattageSection ? (
+        <div className="flex flex-col gap-2">
+          <h2 className="text-lg font-semibold">Grattage invoices</h2>
+          {linkedInvoicesQuery.isPending ? (
+            <Skeleton className="h-9 w-full" />
+          ) : linkedInvoicesQuery.isError ? (
+            <p className="text-destructive text-sm">
+              The linked invoices could not be loaded.
+            </p>
+          ) : linkedInvoicesQuery.data.length === 0 ? (
+            <p className="text-muted-foreground text-sm">
+              No grattage invoices are linked to this deposit.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-muted-foreground text-left">
+                    <th className="py-1.5 pr-4 font-medium">Invoice</th>
+                    <th className="py-1.5 pr-4 font-medium">Status</th>
+                    <th className="py-1.5 pr-4 text-right font-medium">Amount</th>
+                    <th className="py-1.5 pr-4 font-medium">Sold</th>
+                    <th className="py-1.5 font-medium sr-only">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {linkedInvoicesQuery.data.map((invoice) => (
+                    <tr key={invoice.id} className="border-t">
+                      <td className="py-1.5 pr-4">#{invoice.id}</td>
+                      <td className="py-1.5 pr-4">
+                        <StatusBadge
+                          tone={LINKED_INVOICE_STATUS_TONES[invoice.status]}
+                          label={LINKED_INVOICE_STATUS_LABELS[invoice.status]}
+                        />
+                      </td>
+                      <td className="py-1.5 pr-4 text-right tabular-nums">
+                        {invoice.totalAmount} DH
+                      </td>
+                      <td className="py-1.5 pr-4">{formatDate(invoice.soldAt)}</td>
+                      <td className="py-1.5">
+                        <Button
+                          variant="link"
+                          size="sm"
+                          className="h-auto p-0"
+                          onClick={() => navigate(`/grattage/invoices/${invoice.id}`)}
+                        >
+                          View
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       ) : null}
 

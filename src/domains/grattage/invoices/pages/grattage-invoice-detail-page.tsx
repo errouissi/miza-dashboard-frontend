@@ -31,11 +31,35 @@ import {
  * (ADR-0008) — id, status, totalAmount, soldAt, dueAt, declaredAt, agent,
  * client, depositId, sales lines.
  *
- * `depositId` RENDERS AS PLAIN TEXT ("Deposit #N"), NOT A LINK —
- * Deposit ↔ Invoice cross-navigation is explicitly out of scope for this
- * phase (M6 discovery report, confirmed with the product owner). When
- * set, an explanatory note also replaces the (absent) Cancel button's
- * spot — the deposit-link freeze is a real, non-obvious edge case
+ * `depositId` RENDERS AS A REAL LINK TO `/money/deposits/{id}` (M6 Phase
+ * 4) — a LITERAL path string, NOT an import of `depositDetailPath` from
+ * `@/domains/money/deposits`. Deliberately: importing even a pure
+ * path-builder would be a Grattage→Money domain edge, and the one
+ * sanctioned domain→domain import in this app is Stock←Grattage (FTA §4,
+ * mechanism 2) — adding a second one here, even a lightweight one, was
+ * explicitly rejected in favour of the SAME "literal, not an import"
+ * discipline `invalidation-map.ts` already uses for exactly this class of
+ * problem (a cross-domain reference with no cross-domain coupling). Keep
+ * the literal in sync by hand if Money's own route pattern ever changes.
+ * No permission check gates the LINK ITSELF — clicking through hits
+ * Money's own existing route guard (`view-depos`), which already fails
+ * closed correctly; nothing here needs to know or duplicate that check.
+ *
+ * THE LINK'S LABEL IS STATUS-AWARE, not a fixed string — re-verified from
+ * source this phase (`DepositService::createGrattageReconciliation`/
+ * `validate`/`reject`): `deposit_id` is set at the DEPOSIT'S OWN
+ * *creation*, before it is ever validated, so "settling deposit" would be
+ * inaccurate while the deposit (and this invoice) is still
+ * `pending`/`overdue` — nothing has settled yet. `invoice.status` is a
+ * reliable proxy for which case applies (no extra fetch needed): `status
+ * === "settled"` only ever happens once the linked deposit is actually
+ * validated, so "Settling deposit" is accurate exactly then; every other
+ * `depositId !== null` case (still pending/overdue) keeps the ORIGINAL
+ * Phase 1 "Reconciliation deposit" wording, which makes no settlement
+ * claim.
+ *
+ * THE EXPLANATORY FREEZE NOTE (below) is unchanged from Phase 1 — the
+ * deposit-link freeze is a real, non-obvious edge case
  * (`GrattageInvoice::isCancellable()`, backend) worth surfacing rather
  * than leaving the operator to guess why Cancel disappeared while the
  * status still reads `pending`/`overdue`.
@@ -124,6 +148,13 @@ export function GrattageInvoiceDetailPage() {
     productOptionsQuery.data?.find((option) => option.id === productId)?.name ??
     `Product #${productId}`;
 
+  // See the module docblock — status-aware label, literal path (no
+  // cross-domain import).
+  const depositLinkLabel =
+    invoice.status === "settled"
+      ? `Settling deposit #${invoice.depositId}`
+      : `Reconciliation deposit #${invoice.depositId}`;
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between gap-4">
@@ -197,7 +228,17 @@ export function GrattageInvoiceDetailPage() {
         <div>
           <dt className="text-muted-foreground text-sm">Reconciliation deposit</dt>
           <dd className="text-sm">
-            {invoice.depositId !== null ? `Deposit #${invoice.depositId}` : "—"}
+            {invoice.depositId !== null ? (
+              <Button
+                variant="link"
+                className="h-auto p-0"
+                onClick={() => navigate(`/money/deposits/${invoice.depositId}`)}
+              >
+                {depositLinkLabel}
+              </Button>
+            ) : (
+              "—"
+            )}
           </dd>
         </div>
       </dl>

@@ -123,6 +123,10 @@ function renderPage(initialPath: string, queryClient: QueryClient = createQueryC
     [
       { path: DETAIL_PATTERN, element: <GrattageInvoiceDetailPage /> },
       { path: LIST_PATH, element: <p>Grattage invoices list</p> },
+      // A stub so the deposit-link navigation test (M6 Phase 4) lands on a
+      // real route rather than a router-level 404 — mirrors the identical
+      // precedent `grattage-invoices-list-page.test.tsx` already uses.
+      { path: "/money/deposits/:id", element: <p>Deposit detail</p> },
     ],
     { initialEntries: [initialPath] },
   );
@@ -196,19 +200,66 @@ describe("rendering every field show() returns", () => {
   });
 });
 
-describe("the deposit-link cancellation guard", () => {
-  it("renders 'Deposit #N' as plain text, not a link", async () => {
+describe("the deposit link (M6 Phase 4)", () => {
+  it("navigates to the deposit's own detail route via a literal path, no cross-domain import", async () => {
+    server.use(
+      showHandler(1, showEnvelope({ id: 1, status: "settled", deposit_id: 42 })),
+      productsHandler(),
+    );
+    const { router } = renderPage("/grattage/invoices/1");
+
+    fireEvent.click(await screen.findByRole("button", { name: /deposit #42/i }));
+
+    await waitFor(() =>
+      expect(router.state.location.pathname).toBe("/money/deposits/42"),
+    );
+  });
+
+  it("labels it 'Settling deposit' once the invoice is settled", async () => {
     server.use(
       showHandler(1, showEnvelope({ id: 1, status: "settled", deposit_id: 42 })),
       productsHandler(),
     );
     renderPage("/grattage/invoices/1");
 
-    const label = await screen.findByText("Deposit #42");
-    expect(label.tagName).not.toBe("A");
-    expect(screen.queryByRole("link", { name: /deposit/i })).not.toBeInTheDocument();
+    expect(await screen.findByText("Settling deposit #42")).toBeInTheDocument();
+    expect(screen.queryByText("Reconciliation deposit #42")).not.toBeInTheDocument();
   });
 
+  it("labels it 'Reconciliation deposit' — NOT 'Settling' — while still pending, before validation", async () => {
+    server.use(
+      showHandler(1, showEnvelope({ id: 1, status: "pending", deposit_id: 42 })),
+      productsHandler(),
+    );
+    renderPage("/grattage/invoices/1");
+
+    expect(await screen.findByText("Reconciliation deposit #42")).toBeInTheDocument();
+    expect(screen.queryByText("Settling deposit #42")).not.toBeInTheDocument();
+  });
+
+  it("labels it 'Reconciliation deposit' while overdue too", async () => {
+    server.use(
+      showHandler(1, showEnvelope({ id: 1, status: "overdue", deposit_id: 42 })),
+      productsHandler(),
+    );
+    renderPage("/grattage/invoices/1");
+
+    expect(await screen.findByText("Reconciliation deposit #42")).toBeInTheDocument();
+  });
+
+  it("renders the absent dash, no link, when depositId is null", async () => {
+    server.use(
+      showHandler(1, showEnvelope({ id: 1, status: "pending", deposit_id: null })),
+      productsHandler(),
+    );
+    renderPage("/grattage/invoices/1");
+
+    await screen.findByRole("heading", { name: /Grattage Invoice #1/ });
+    expect(screen.queryByRole("button", { name: /deposit #/i })).not.toBeInTheDocument();
+  });
+});
+
+describe("the deposit-link cancellation guard", () => {
   it("hides Cancel and shows an explanatory note when deposit_id is set, even while still pending", async () => {
     server.use(
       showHandler(1, showEnvelope({ id: 1, status: "pending", deposit_id: 42 })),

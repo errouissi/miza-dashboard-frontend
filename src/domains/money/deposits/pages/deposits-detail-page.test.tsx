@@ -113,6 +113,11 @@ function renderPage(initialPath: string, queryClient: QueryClient = createQueryC
     [
       { path: DETAIL_PATTERN, element: <DepositDetailPage /> },
       { path: DEPOSITS_PATH, element: <p>Deposits list</p> },
+      // A stub so the linked-invoice navigation test (M6 Phase 4) lands on
+      // a real route rather than a router-level 404 — mirrors the
+      // identical precedent every other cross-page navigation test in
+      // this codebase already uses.
+      { path: "/grattage/invoices/:id", element: <p>Grattage invoice detail</p> },
     ],
     { initialEntries: [initialPath] },
   );
@@ -122,6 +127,43 @@ function renderPage(initialPath: string, queryClient: QueryClient = createQueryC
     </QueryClientProvider>,
   );
   return { router, queryClient };
+}
+
+/** `GrattageInvoiceController::index`'s own row shape — only the four fields the panel reads. */
+function linkedInvoiceRow(
+  overrides: Partial<{
+    id: number;
+    status: "pending" | "overdue" | "settled" | "cancelled";
+    total_amount: string;
+    sold_at: string;
+  }> = {},
+) {
+  return {
+    id: 101,
+    status: "settled" as const,
+    total_amount: "150.00",
+    sold_at: "2026-08-01T09:00:00.000000Z",
+    ...overrides,
+  };
+}
+
+function grattageInvoicesHandler(
+  rows: ReturnType<typeof linkedInvoiceRow>[],
+  onRequest?: (url: URL) => void,
+) {
+  return http.get(`${API}/admin/grattage-invoices`, ({ request }) => {
+    onRequest?.(new URL(request.url));
+    return HttpResponse.json({
+      success: true,
+      data: {
+        data: rows,
+        current_page: 1,
+        per_page: 100,
+        total: rows.length,
+        last_page: 1,
+      },
+    });
+  });
 }
 
 function validateHandler(id: number, onRequest?: (body: unknown) => void) {
@@ -934,3 +976,167 @@ describe("Reject — freshness rule (M4 · G4 closure)", () => {
 // array (`depositDetailPath(1)`), not duplicated here — this file renders
 // the page component directly, bypassing the route guard, the same
 // convention `cheque-detail-page.test.tsx` already uses.
+
+describe("Grattage invoices (M6 Phase 4)", () => {
+  it("shows linked invoices for a grattage deposit when access-dashboard is held", async () => {
+    signInWith([PERMISSIONS.VIEW_DEPOSITS, PERMISSIONS.ACCESS_DASHBOARD]);
+    server.use(
+      showHandler(1, showEnvelope({ id: 1, type: "grattage" })),
+      grattageInvoicesHandler([
+        linkedInvoiceRow({ id: 101, status: "settled", total_amount: "150.00" }),
+        linkedInvoiceRow({ id: 102, status: "pending", total_amount: "75.50" }),
+      ]),
+    );
+    renderPage("/money/deposits/1");
+
+    // The section heading renders unconditionally once eligible — it does
+    // NOT prove the query itself has settled. Wait on actual row content
+    // (async) before asserting the rest synchronously.
+    expect(await screen.findByText("#101")).toBeInTheDocument();
+    expect(screen.getByText("#102")).toBeInTheDocument();
+    expect(screen.getByText("150.00 DH")).toBeInTheDocument();
+    expect(screen.getByText("75.50 DH")).toBeInTheDocument();
+    // "Pending" also appears in the DEPOSIT's OWN status badge (the
+    // fixture's own default) — scope to the linked-invoices table so this
+    // doesn't collide with it.
+    const table = screen.getByRole("table");
+    expect(within(table).getByText("Settled")).toBeInTheDocument();
+    expect(within(table).getByText("Pending")).toBeInTheDocument();
+  });
+
+  it("shows an empty state for a grattage deposit with no linked invoices", async () => {
+    signInWith([PERMISSIONS.VIEW_DEPOSITS, PERMISSIONS.ACCESS_DASHBOARD]);
+    server.use(
+      showHandler(1, showEnvelope({ id: 1, type: "grattage" })),
+      grattageInvoicesHandler([]),
+    );
+    renderPage("/money/deposits/1");
+
+    expect(
+      await screen.findByText("No grattage invoices are linked to this deposit."),
+    ).toBeInTheDocument();
+  });
+
+  it("does not show the section at all for a rapped deposit, even with access-dashboard", async () => {
+    signInWith([PERMISSIONS.VIEW_DEPOSITS, PERMISSIONS.ACCESS_DASHBOARD]);
+    let requested = false;
+    server.use(
+      showHandler(1, showEnvelope({ id: 1, type: "rapped" })),
+      http.get(`${API}/admin/grattage-invoices`, () => {
+        requested = true;
+        return HttpResponse.json({ success: false }, { status: 500 });
+      }),
+    );
+    renderPage("/money/deposits/1");
+
+    await screen.findByRole("heading", { name: "Deposit #1" });
+    expect(
+      screen.queryByRole("heading", { name: "Grattage invoices" }),
+    ).not.toBeInTheDocument();
+    expect(requested).toBe(false);
+  });
+
+  it("does not show the section, and never issues the request, for a grattage deposit without access-dashboard", async () => {
+    // `view-depos` ALONE — the two permissions are genuinely independent.
+    signInWith([PERMISSIONS.VIEW_DEPOSITS]);
+    let requested = false;
+    server.use(
+      showHandler(1, showEnvelope({ id: 1, type: "grattage" })),
+      http.get(`${API}/admin/grattage-invoices`, () => {
+        requested = true;
+        return HttpResponse.json({ success: false }, { status: 500 });
+      }),
+    );
+    renderPage("/money/deposits/1");
+
+    await screen.findByRole("heading", { name: "Deposit #1" });
+    expect(
+      screen.queryByRole("heading", { name: "Grattage invoices" }),
+    ).not.toBeInTheDocument();
+    expect(requested).toBe(false);
+  });
+
+  it("sends exactly deposit_id and per_page — no other filter", async () => {
+    signInWith([PERMISSIONS.VIEW_DEPOSITS, PERMISSIONS.ACCESS_DASHBOARD]);
+    let url: URL | undefined;
+    server.use(
+      showHandler(1, showEnvelope({ id: 1, type: "grattage" })),
+      grattageInvoicesHandler([], (u) => (url = u)),
+    );
+    renderPage("/money/deposits/1");
+
+    await waitFor(() => expect(url).toBeDefined());
+    expect(url?.searchParams.get("deposit_id")).toBe("1");
+    expect(url?.searchParams.get("per_page")).toBe("100");
+    expect(url?.searchParams.get("status")).toBeNull();
+    expect(url?.searchParams.get("agent_id")).toBeNull();
+    expect(url?.searchParams.get("client_id")).toBeNull();
+  });
+
+  it("navigates to the invoice's own detail page on View", async () => {
+    signInWith([PERMISSIONS.VIEW_DEPOSITS, PERMISSIONS.ACCESS_DASHBOARD]);
+    server.use(
+      showHandler(1, showEnvelope({ id: 1, type: "grattage" })),
+      grattageInvoicesHandler([linkedInvoiceRow({ id: 101 })]),
+    );
+    const { router } = renderPage("/money/deposits/1");
+
+    fireEvent.click(await screen.findByRole("button", { name: "View" }));
+
+    await waitFor(() =>
+      expect(router.state.location.pathname).toBe("/grattage/invoices/101"),
+    );
+  });
+
+  it("refetches the linked-invoices panel after Validate succeeds — existing invalidation already covers it", async () => {
+    // A STATEFUL mock, not a static handler, NOR a bare `isInvalidated`
+    // flag check — this key has an ACTIVE OBSERVER (the panel is
+    // currently mounted and reading it), so `invalidateQueries` triggers
+    // an immediate refetch; by the time any assertion runs, a successful
+    // refetch has already cleared `isInvalidated` back to `false` again
+    // (correct TanStack Query behaviour, not a bug). Proving the SAME
+    // point meaningfully means observing a REAL state change instead —
+    // the same discipline this file's own "closes the dialog and
+    // refetches the deposit as Validated" test already established.
+    let invoiceStatus: "pending" | "settled" = "pending";
+    signInWith([
+      PERMISSIONS.VIEW_DEPOSITS,
+      PERMISSIONS.VALIDATE_DEPOSIT,
+      PERMISSIONS.ACCESS_DASHBOARD,
+    ]);
+    server.use(
+      showHandler(1, showEnvelope({ id: 1, type: "grattage", status: "pending" })),
+      http.get(`${API}/admin/grattage-invoices`, () =>
+        HttpResponse.json({
+          success: true,
+          data: {
+            data: [linkedInvoiceRow({ id: 101, status: invoiceStatus })],
+            current_page: 1,
+            per_page: 100,
+            total: 1,
+            last_page: 1,
+          },
+        }),
+      ),
+      http.post(`${API}/admin/depos/1/validate`, () => {
+        invoiceStatus = "settled";
+        return HttpResponse.json({ message: "Deposit validated and balance updated." });
+      }),
+    );
+    renderPage("/money/deposits/1");
+
+    await screen.findByText("#101");
+    expect(within(screen.getByRole("table")).getByText("Pending")).toBeInTheDocument();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Validate" }));
+    const dialog = await screen.findByRole("dialog");
+    const confirmButton = within(dialog).getByRole("button", { name: "Validate" });
+    await waitFor(() => expect(confirmButton).toBeEnabled());
+    fireEvent.click(confirmButton);
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await waitFor(() =>
+      expect(within(screen.getByRole("table")).getByText("Settled")).toBeInTheDocument(),
+    );
+  });
+});

@@ -6,6 +6,7 @@ import {
   fetchDeposits,
   fetchDepositById,
   fetchGrattageOutstanding,
+  fetchLinkedGrattageInvoices,
   validateDeposit,
   rejectDeposit,
 } from "../api/deposits-api";
@@ -169,6 +170,36 @@ export function useGrattageOutstandingQuery(
   return useQuery({
     queryKey: depositsKeys.grattageOutstanding(agentId),
     queryFn: () => fetchGrattageOutstanding(agentId),
+    staleTime: STALE_TIMES.LIVE,
+    refetchOnWindowFocus: true,
+    enabled: options.enabled ?? true,
+  });
+}
+
+/**
+ * `GET /admin/grattage-invoices?deposit_id={id}` (M6 Phase 4) — Deposit
+ * Detail's own "linked invoices" panel. `LIVE` tier, same reasoning every
+ * other Grattage-adjacent read in this file already carries.
+ *
+ * `enabled` is the CALLER'S responsibility, and it is NOT just "a deposit
+ * is loaded" — the page gates this on BOTH `deposit.type === "grattage"`
+ * (a `rapped` deposit can never have linked invoices) AND
+ * `has(PERMISSIONS.ACCESS_DASHBOARD)` INDEPENDENTLY of the `view-depos`
+ * permission this whole page already required to be reached — the two
+ * are genuinely separate grants (verified from source: `GrattageInvoice
+ * Controller::index` carries its own `permission:access-dashboard`
+ * middleware, distinct from `DepoController`'s own `view-depos`), so an
+ * operator holding one is not guaranteed to hold the other. Failing to
+ * gate here would fire an unauthorized request and surface a raw 403
+ * error for a section the operator was never meant to see at all.
+ */
+export function useLinkedGrattageInvoicesQuery(
+  depositId: number,
+  options: { enabled?: boolean } = {},
+) {
+  return useQuery({
+    queryKey: depositsKeys.linkedGrattageInvoices(depositId),
+    queryFn: () => fetchLinkedGrattageInvoices(depositId),
     staleTime: STALE_TIMES.LIVE,
     refetchOnWindowFocus: true,
     enabled: options.enabled ?? true,

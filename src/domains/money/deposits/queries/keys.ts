@@ -22,6 +22,18 @@ export const depositsKeys = {
   grattageOutstanding: (agentId: string) =>
     [...depositsKeys.all, "grattageOutstanding", agentId] as const,
   /**
+   * `fetchLinkedGrattageInvoices` (M6 Phase 4) — Deposit Detail's own
+   * "linked invoices" panel, keyed by deposit id. Kept under
+   * `depositsKeys`, NOT a Grattage-domain key, for the same reason
+   * `agentCash`/`grattageOutstanding` are (Option B — no cross-domain
+   * query-key coupling either). Sits under the `["deposits"]` prefix, so
+   * the EXISTING `deposit.created`/`deposit.validated`/`deposit.rejected`
+   * invalidation entries (extended at M6 Phase 2) already reach it — no
+   * new invalidation-map entry was needed for this read.
+   */
+  linkedGrattageInvoices: (depositId: number) =>
+    [...depositsKeys.all, "linkedGrattageInvoices", depositId] as const,
+  /**
    * The freshness-rule read (M4 · G4 closure) — its OWN key, deliberately
    * NOT the same key as `detail(id)`. See `chequesKeys.freshness`'s own
    * docblock for why: TanStack Query's error/success state is per query

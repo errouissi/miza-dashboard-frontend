@@ -321,3 +321,70 @@ export async function fetchGrattageOutstanding(
     invoiceCount: data.data.summary.invoice_count,
   };
 }
+
+/**
+ * `GET /admin/grattage-invoices?deposit_id={id}` (`access-dashboard`) —
+ * M6 Phase 4's own narrow, PRIVATE read (Deposit Detail's "linked
+ * invoices" panel). Re-verified fresh from source this phase
+ * (`GrattageInvoiceController::index`): `deposit_id` is a plain, optional
+ * `nullable|exists:deposits,id` filter added to the SAME `index()`
+ * endpoint Grattage's own list page already uses — same flat-paginator
+ * envelope (`{success, data: {data: [...], current_page, ...}}`), same
+ * `access-dashboard` gate, no shape change.
+ *
+ * A DELIBERATE, DOMAIN-LOCAL DUPLICATE OF A SLICE OF GRATTAGE'S OWN
+ * MAPPER — NOT an import of `domains/grattage/invoices`' own types or
+ * query (Option B, explicitly chosen over reusing Grattage's public
+ * surface): Stock←Grattage remains the one sanctioned domain→domain
+ * import in this app (FTA §4, mechanism 2); a second one (Money←Grattage)
+ * was explicitly rejected rather than added silently. Mirrors the exact
+ * precedent `fetchGrattageOutstanding` above already set at M4.3 — a
+ * private read of a Grattage-owned backend concept, duplicated rather
+ * than imported. Maps ONLY the four fields the panel displays (id,
+ * status, totalAmount, soldAt) — not the full `GrattageInvoice` shape
+ * Grattage's own domain models (no `agent`/`client`/`sales`/`declaredAt`/
+ * `dueAt`, none of which this panel reads).
+ *
+ * `per_page=100` IS SENT EXPLICITLY, not left to the backend's own
+ * default of 15 — `per_page`'s own validator caps at 100, the endpoint's
+ * hard ceiling, not an invented limit. A reconciliation deposit's linked
+ * set is bounded by one agent's outstanding invoices at one moment
+ * (`DepositService::createGrattageReconciliation` requires an EXACT
+ * amount match against that whole set), so 100 is a generous, not
+ * artificial, safety margin — no further client-side capping is applied
+ * (every row `index()` returns is rendered).
+ */
+export type LinkedGrattageInvoice = {
+  id: number;
+  status: "pending" | "overdue" | "settled" | "cancelled";
+  /** `decimal:2`-cast STRING — same verbatim discipline as every other Money/Grattage amount field. Render verbatim. */
+  totalAmount: string;
+  soldAt: string;
+};
+
+type LinkedGrattageInvoicesEnvelope = {
+  success: boolean;
+  data: {
+    data: {
+      id: number;
+      status: "pending" | "overdue" | "settled" | "cancelled";
+      total_amount: string;
+      sold_at: string;
+    }[];
+  };
+};
+
+export async function fetchLinkedGrattageInvoices(
+  depositId: number,
+): Promise<LinkedGrattageInvoice[]> {
+  const { data } = await httpClient.get<LinkedGrattageInvoicesEnvelope>(
+    "/admin/grattage-invoices",
+    { params: { deposit_id: depositId, per_page: 100 } },
+  );
+  return data.data.data.map((row) => ({
+    id: row.id,
+    status: row.status,
+    totalAmount: row.total_amount,
+    soldAt: row.sold_at,
+  }));
+}
