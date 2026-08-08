@@ -13,6 +13,7 @@ import { PanelBoundary } from "@/shared/components/patterns/panel-boundary";
 import { WorkspacePage } from "@/shared/components/patterns/workspace-page";
 import { AgentEditDrawer } from "../components/agent-edit-drawer";
 import { AgentMoneyPanel } from "../components/agent-money-panel";
+import { AgentOutstandingPanel } from "../components/agent-outstanding-panel";
 import { AgentStatusDialog } from "../components/agent-status-dialog";
 import { AgentStockPanel } from "../components/agent-stock-panel";
 import { useAgentQuery } from "../queries/agents-queries";
@@ -51,6 +52,13 @@ import { AGENT_STATUS_LABELS, AGENT_STATUS_TONES } from "../model/agent";
  * learns anything about this page beyond the `agentId`/`agent` it is
  * handed — mechanism 1 (composition at the page), the same as every prior
  * phase here.
+ *
+ * OUTSTANDING PANEL (M7 Phase 3) — `AgentOutstandingPanel`, wired in
+ * independently of Money and Stock, its own `PanelBoundary`. Composes
+ * Grattage Outstanding's own public surface (widened this phase); Network
+ * still does not import anything from Stock's own Grattage restock-gate
+ * integration (`AgentTransferDetailPage`) and vice versa — two separate,
+ * unrelated consumers of the same underlying Grattage Outstanding read.
  */
 export function AgentWorkspacePage() {
   const navigate = useNavigate();
@@ -258,6 +266,9 @@ export function AgentWorkspacePage() {
       </PanelBoundary>
       <PanelBoundary>
         <AgentStockPanel agent={agent} />
+      </PanelBoundary>
+      <PanelBoundary>
+        <AgentOutstandingPanel agent={agent} />
       </PanelBoundary>
 
       <AgentStatusDialog

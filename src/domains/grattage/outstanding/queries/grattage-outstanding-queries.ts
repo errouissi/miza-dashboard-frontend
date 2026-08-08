@@ -14,14 +14,11 @@ import { grattageOutstandingKeys } from "./keys";
  * `LIVE` TIER — `stale-times.ts`'s own docblock names "outstanding
  * grattage, restock-gate state" explicitly under this tier.
  *
- * `useGrattageOutstandingQuery` IS NOT EXPORTED FROM THIS MODULE'S
- * `index.ts` — deliberately private (M6 Phase 2 decision): no real caller
- * exists yet (both frozen documents place the actual "Outstanding &
- * Restock Gate" VIEW inside Agent 360, M7). Exporting it now would be
- * building a public surface ahead of the domain that uses it — the same
- * discipline `registry.ts`'s own "entries are added per resource, never
- * ahead of a caller" already applies elsewhere. Promote it to `index.ts`
- * when M7 has a real consumer, not before.
+ * PROMOTED TO PUBLIC (M7 Phase 3) — exported from this module's `index.ts`
+ * now that Agent 360's `AgentOutstandingPanel` is a real caller (ADR-0026's
+ * own anticipated consequence). Was private through M6 Phase 2, on the
+ * "entries are added per resource, never ahead of a caller" discipline
+ * `registry.ts` also applies.
  */
 export function useGrattageOutstandingQuery(
   agentId: number,

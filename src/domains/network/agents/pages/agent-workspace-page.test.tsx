@@ -601,3 +601,151 @@ describe("Money + Stock panels — wired into the real page (M7 Phase 2)", () =>
     expect(await screen.findByRole("alert")).toBeInTheDocument();
   });
 });
+
+describe("Outstanding panel — wired into the real page (M7 Phase 3)", () => {
+  function emptyPageEnvelope() {
+    return { data: [], meta: { current_page: 1, per_page: 15, total: 0, last_page: 1 } };
+  }
+
+  function clearOutstandingEnvelope(id: number, role: "manager" | "commercial") {
+    return {
+      success: true,
+      data: {
+        agent: {
+          id,
+          nom: role === "manager" ? "Idrissi" : "Alaoui",
+          prenom: role === "manager" ? "Youssef" : "Sara",
+          num_cin: role === "manager" ? "CIN005" : "CIN012",
+          num_compte: role === "manager" ? "MG0005" : "CM0012",
+          role,
+          status: "active",
+          manager:
+            role === "commercial" ? { id: 5, nom: "Idrissi", prenom: "Youssef" } : null,
+        },
+        summary: {
+          required_total: "0.00",
+          pending_total: "0.00",
+          overdue_total: "0.00",
+          invoice_count: 0,
+          oldest_due_at: null,
+        },
+        restock_gate: { blocked: false, reason: null },
+        invoices: [],
+      },
+    };
+  }
+
+  it("renders neither Money/Stock nor Outstanding with only view-agents", async () => {
+    signInWith([PERMISSIONS.VIEW_AGENTS]);
+    server.use(showHandler(5, "manager"));
+    renderPage("/network/agents/5");
+
+    await screen.findByRole("heading", { name: "Youssef Idrissi" });
+    expect(screen.queryByText("Money")).not.toBeInTheDocument();
+    expect(screen.queryByText("Stock")).not.toBeInTheDocument();
+    expect(screen.queryByText("Grattage Outstanding")).not.toBeInTheDocument();
+  });
+
+  it("renders the Outstanding panel once access-dashboard is held, independently of Money/Stock", async () => {
+    // A COMMERCIAL, not a manager — a manager's own Stock panel ALSO reads
+    // `access-dashboard` (Phase 2's `ManagerStockTable`), so this fixture
+    // is the only one where `access-dashboard` alone isolates Outstanding
+    // from every other panel.
+    signInWith([PERMISSIONS.VIEW_AGENTS, PERMISSIONS.ACCESS_DASHBOARD]);
+    server.use(
+      showHandler(12, "commercial", commercialRow),
+      http.get(`${API}/admin/agents/12/grattage-outstanding`, () =>
+        HttpResponse.json(clearOutstandingEnvelope(12, "commercial")),
+      ),
+    );
+    renderPage("/network/agents/12");
+
+    expect(await screen.findByText("Grattage Outstanding")).toBeInTheDocument();
+    expect(
+      await screen.findByText("No outstanding grattage obligation."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Money")).not.toBeInTheDocument();
+    expect(screen.queryByText("Stock")).not.toBeInTheDocument();
+  });
+
+  it("shows the Commercial's Transfer-scoped gate wording on the real page, alongside Money/Stock", async () => {
+    signInWith([
+      PERMISSIONS.VIEW_AGENTS,
+      PERMISSIONS.ACCESS_DASHBOARD,
+      PERMISSIONS.VIEW_AGENT_TRANSFERS,
+      PERMISSIONS.VIEW_AGENT_STOCK_RETURN,
+    ]);
+    server.use(
+      showHandler(12, "commercial", commercialRow),
+      http.get(`${API}/admin/agent-transfers`, () =>
+        HttpResponse.json(emptyPageEnvelope()),
+      ),
+      http.get(`${API}/admin/agent-stock-returns`, () =>
+        HttpResponse.json(emptyPageEnvelope()),
+      ),
+      http.get(`${API}/admin/agents/12/grattage-outstanding`, () =>
+        HttpResponse.json({
+          success: true,
+          data: {
+            ...clearOutstandingEnvelope(12, "commercial").data,
+            summary: {
+              required_total: "150.00",
+              pending_total: "150.00",
+              overdue_total: "0.00",
+              invoice_count: 1,
+              oldest_due_at: "2026-08-02T12:00:00.000000Z",
+            },
+            restock_gate: { blocked: true, reason: "OUTSTANDING_GRATTAGE" },
+            invoices: [
+              {
+                id: 1,
+                status: "pending",
+                total_amount: "150.00",
+                sold_at: "2026-08-01T09:00:00.000000Z",
+                due_at: "2026-08-02T12:00:00.000000Z",
+                declared_at: null,
+                days_overdue: null,
+              },
+            ],
+          },
+        }),
+      ),
+    );
+    renderPage("/network/agents/12");
+
+    expect(
+      await screen.findByText(
+        "New stock transfers to this Commercial are currently blocked until this outstanding Grattage obligation is settled.",
+      ),
+    ).toBeInTheDocument();
+    // Never worded as the Agent/Manager being globally blocked, or Allocation.
+    expect(screen.queryByText(/allocation/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/agent is blocked/i)).not.toBeInTheDocument();
+    // Money/Stock render alongside, unaffected.
+    expect(screen.getByText("Stock")).toBeInTheDocument();
+  });
+
+  it("an Outstanding panel query failure does not take down Money, Stock, or Agent identity", async () => {
+    signInWith([
+      PERMISSIONS.VIEW_AGENTS,
+      PERMISSIONS.ACCESS_DASHBOARD,
+      PERMISSIONS.VIEW_ALLOCATIONS,
+    ]);
+    server.use(
+      showHandler(5, "manager"),
+      http.get(`${API}/admin/managers/5/stock`, () => HttpResponse.json([])),
+      http.get(`${API}/admin/allocations`, () => HttpResponse.json(emptyPageEnvelope())),
+      http.get(`${API}/admin/agents/5/grattage-outstanding`, () =>
+        HttpResponse.json({ success: false, message: "boom" }, { status: 500 }),
+      ),
+    );
+    renderPage("/network/agents/5");
+
+    expect(
+      await screen.findByRole("heading", { name: "Youssef Idrissi" }),
+    ).toBeInTheDocument();
+    expect(await screen.findByText("Current stock")).toBeInTheDocument();
+    expect(await screen.findByText("Grattage Outstanding")).toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+  });
+});

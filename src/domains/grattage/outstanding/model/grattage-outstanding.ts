@@ -29,12 +29,14 @@
  *     manager never has invoices of their own; their gate is never
  *     derived from `summary`/`invoices` on their own agent id.
  *
- * NO UI CONSUMES THIS MODULE YET, BY DECISION (M6 Phase 2) — both frozen
+ * NO UI CONSUMED THIS MODULE THROUGH M6, BY DECISION — both frozen
  * documents place the actual "Outstanding & Restock Gate" VIEW inside
- * Agent 360 (M7), reached from Network, not a Grattage-owned screen. Only
- * `useGrattageRestockGateQuery` (see `queries/`) is exported publicly this
- * phase, for Stock to consume in Phase 3; the full type/query below stay
- * private to this module until M7 has a real caller.
+ * Agent 360 (M7), reached from Network, not a Grattage-owned screen.
+ * `useGrattageRestockGateQuery` (see `queries/`) was the only public export
+ * through M6 Phase 2/3, for Stock to consume. M7 Phase 3 is that real
+ * caller: `useGrattageOutstandingQuery` and the types this file's own
+ * `AgentOutstandingPanel` consumer reads are now also exported from
+ * `index.ts` (ADR-0026's own anticipated consequence).
  */
 
 export type GrattageOutstandingManager = {

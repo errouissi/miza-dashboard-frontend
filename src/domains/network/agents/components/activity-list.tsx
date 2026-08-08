@@ -23,6 +23,15 @@ import {
  * resource's own list page); asking for fewer would be inventing a
  * capability none of these five endpoints expose. This component takes
  * whatever page came back and shows only its first 5 rows.
+ *
+ * `viewAllHref` IS OPTIONAL (M7 Phase 3) — Grattage Outstanding's own
+ * `invoices` set is already the COMPLETE bounded set for one agent, not a
+ * page of a larger paginated list, and the Grattage Invoices list page's
+ * own UI does not read an `agent_id` URL filter (Phase 1 scope, verified —
+ * `grattage-invoices-list-page.tsx`'s own docblock). Linking there would
+ * silently show the unfiltered full list, which is worse than no link.
+ * `AgentOutstandingPanel` omits the prop; every Phase 2 caller keeps
+ * passing it unchanged.
  */
 export type ActivityListProps<T> = {
   title: string;
@@ -33,7 +42,7 @@ export type ActivityListProps<T> = {
   items: T[];
   renderRow: (item: T) => ReactNode;
   emptyMessage: string;
-  viewAllHref: string;
+  viewAllHref?: string;
 };
 
 export function ActivityList<T>({
@@ -51,12 +60,14 @@ export function ActivityList<T>({
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between gap-4">
         <h3 className="text-sm font-semibold">{title}</h3>
-        <Link
-          to={viewAllHref}
-          className="text-primary text-xs underline underline-offset-4"
-        >
-          View all
-        </Link>
+        {viewAllHref ? (
+          <Link
+            to={viewAllHref}
+            className="text-primary text-xs underline underline-offset-4"
+          >
+            View all
+          </Link>
+        ) : null}
       </div>
 
       {isPending ? (
