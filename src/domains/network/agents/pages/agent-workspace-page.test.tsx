@@ -478,3 +478,126 @@ describe("Edit — validation, submission and errors (M7 Phase 1.5)", () => {
     expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 });
+
+describe("Money + Stock panels — wired into the real page (M7 Phase 2)", () => {
+  function emptyPageEnvelope() {
+    return { data: [], meta: { current_page: 1, per_page: 15, total: 0, last_page: 1 } };
+  }
+
+  it("renders neither panel with only view-agents — VIEW_AGENTS grants the page, not Money/Stock", async () => {
+    signInWith([PERMISSIONS.VIEW_AGENTS]);
+    server.use(showHandler(5, "manager"));
+    renderPage("/network/agents/5");
+
+    await screen.findByRole("heading", { name: "Youssef Idrissi" });
+    expect(screen.queryByText("Money")).not.toBeInTheDocument();
+    expect(screen.queryByText("Stock")).not.toBeInTheDocument();
+  });
+
+  it("renders the Money panel once view-depos/view-cheques are held, alongside identity — one section's absence does not affect the other", async () => {
+    signInWith([
+      PERMISSIONS.VIEW_AGENTS,
+      PERMISSIONS.VIEW_DEPOSITS,
+      PERMISSIONS.VIEW_CHEQUES,
+    ]);
+    server.use(
+      showHandler(5, "manager"),
+      http.get(`${API}/admin/depos`, () => HttpResponse.json(emptyPageEnvelope())),
+      http.get(`${API}/admin/cheques`, () =>
+        HttpResponse.json({
+          success: true,
+          data: { data: [], current_page: 1, per_page: 15, total: 0, last_page: 1 },
+        }),
+      ),
+    );
+    renderPage("/network/agents/5");
+
+    expect(await screen.findByText("Money")).toBeInTheDocument();
+    // Identity/Profile still rendered — a Money panel mounting does not
+    // displace anything above it.
+    expect(screen.getByText("CIN005")).toBeInTheDocument();
+    expect(screen.queryByText("Stock")).not.toBeInTheDocument();
+  });
+
+  it("renders the Manager Stock panel once access-dashboard/view-allocations are held", async () => {
+    signInWith([
+      PERMISSIONS.VIEW_AGENTS,
+      PERMISSIONS.ACCESS_DASHBOARD,
+      PERMISSIONS.VIEW_ALLOCATIONS,
+    ]);
+    server.use(
+      showHandler(5, "manager"),
+      http.get(`${API}/admin/managers/5/stock`, () => HttpResponse.json([])),
+      http.get(`${API}/admin/allocations`, () => HttpResponse.json(emptyPageEnvelope())),
+    );
+    renderPage("/network/agents/5");
+
+    expect(await screen.findByText("Stock")).toBeInTheDocument();
+    expect(screen.getByText("Current stock")).toBeInTheDocument();
+    expect(screen.queryByText("Money")).not.toBeInTheDocument();
+  });
+
+  it("renders the Commercial Stock panel (Transfers/Returns, no balance table) once its permissions are held", async () => {
+    signInWith([
+      PERMISSIONS.VIEW_AGENTS,
+      PERMISSIONS.VIEW_AGENT_TRANSFERS,
+      PERMISSIONS.VIEW_AGENT_STOCK_RETURN,
+    ]);
+    server.use(
+      showHandler(12, "commercial", commercialRow),
+      http.get(`${API}/admin/agent-transfers`, () =>
+        HttpResponse.json(emptyPageEnvelope()),
+      ),
+      http.get(`${API}/admin/agent-stock-returns`, () =>
+        HttpResponse.json(emptyPageEnvelope()),
+      ),
+    );
+    renderPage("/network/agents/12");
+
+    expect(await screen.findByText("Stock")).toBeInTheDocument();
+    expect(screen.getByText("Recent transfers")).toBeInTheDocument();
+    expect(screen.getByText("Recent returns")).toBeInTheDocument();
+    expect(screen.queryByText("Current stock")).not.toBeInTheDocument();
+  });
+
+  it("a Stock panel query failure does not take down the Money panel or Agent identity — real, independent isolation, not just co-location", async () => {
+    // This proves QUERY-error isolation end to end (each panel's own
+    // useQuery renders its own branch, for free — the module docblocks of
+    // both panels explain why). `PanelBoundary`'s own RENDER-crash
+    // catching is proven separately, with a deliberate throw, in
+    // `panel-boundary.test.tsx` — a query error never reaches a render
+    // exception in the first place, so it cannot exercise that mechanism
+    // honestly here.
+    signInWith([
+      PERMISSIONS.VIEW_AGENTS,
+      PERMISSIONS.VIEW_DEPOSITS,
+      PERMISSIONS.VIEW_CHEQUES,
+      PERMISSIONS.ACCESS_DASHBOARD,
+      PERMISSIONS.VIEW_ALLOCATIONS,
+    ]);
+    server.use(
+      showHandler(5, "manager"),
+      http.get(`${API}/admin/depos`, () => HttpResponse.json(emptyPageEnvelope())),
+      http.get(`${API}/admin/cheques`, () =>
+        HttpResponse.json({
+          success: true,
+          data: { data: [], current_page: 1, per_page: 15, total: 0, last_page: 1 },
+        }),
+      ),
+      http.get(`${API}/admin/managers/5/stock`, () =>
+        HttpResponse.json({ success: false, message: "boom" }, { status: 500 }),
+      ),
+      http.get(`${API}/admin/allocations`, () => HttpResponse.json(emptyPageEnvelope())),
+    );
+    renderPage("/network/agents/5");
+
+    expect(
+      await screen.findByRole("heading", { name: "Youssef Idrissi" }),
+    ).toBeInTheDocument();
+    expect(await screen.findByText("Money")).toBeInTheDocument();
+    expect(await screen.findByText("Recent deposits")).toBeInTheDocument();
+    // The Stock panel's own current-stock sub-section fails independently
+    // — an alert scoped to that sub-section, everything else intact.
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+  });
+});

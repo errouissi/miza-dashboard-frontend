@@ -104,8 +104,11 @@ describe("invalidation map", () => {
     expect(queryKeyPrefixesFor("allocation.line-changed")).toEqual([["allocations"]]);
   });
 
-  it("registers allocation.validated — no cross-domain prefix (writes stocks/stock_movements/allocation_deposit_consumptions, not Agent balance or Deposit columns)", () => {
-    expect(queryKeyPrefixesFor("allocation.validated")).toEqual([["allocations"]]);
+  it("registers allocation.validated — Allocations' own key space plus agent-transfers (M7 Phase 2: Agent 360's Manager Stock panel reactively reads useManagerStockQuery, which lives under that prefix)", () => {
+    expect(queryKeyPrefixesFor("allocation.validated")).toEqual([
+      ["allocations"],
+      ["agent-transfers"],
+    ]);
   });
 
   it("registers bon.created — Bons' own key space only", () => {

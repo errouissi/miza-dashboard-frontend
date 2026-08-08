@@ -9,9 +9,12 @@ import { Button } from "@/shared/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/shared/components/ui/avatar";
 import { Skeleton } from "@/shared/components/ui/skeleton";
 import { ListErrorState } from "@/shared/components/patterns/list-states";
+import { PanelBoundary } from "@/shared/components/patterns/panel-boundary";
 import { WorkspacePage } from "@/shared/components/patterns/workspace-page";
 import { AgentEditDrawer } from "../components/agent-edit-drawer";
+import { AgentMoneyPanel } from "../components/agent-money-panel";
 import { AgentStatusDialog } from "../components/agent-status-dialog";
+import { AgentStockPanel } from "../components/agent-stock-panel";
 import { useAgentQuery } from "../queries/agents-queries";
 import { AGENT_STATUS_LABELS, AGENT_STATUS_TONES } from "../model/agent";
 
@@ -40,6 +43,14 @@ import { AGENT_STATUS_LABELS, AGENT_STATUS_TONES } from "../model/agent";
  * `update-agent`, exactly like Block/Activate each gate independently on
  * their own permission. Slots into the action row Phase 1 already reserved
  * for it — no restructuring of this page or `WorkspacePage` was needed.
+ *
+ * MONEY + STOCK PANELS (M7 Phase 2) — `AgentMoneyPanel`/`AgentStockPanel`,
+ * each wrapped in its own `PanelBoundary`: a render crash in one can never
+ * blank the identity header, the Profile/Documents sections above, or the
+ * OTHER panel. Neither panel imports the other's domain, and neither
+ * learns anything about this page beyond the `agentId`/`agent` it is
+ * handed — mechanism 1 (composition at the page), the same as every prior
+ * phase here.
  */
 export function AgentWorkspacePage() {
   const navigate = useNavigate();
@@ -241,6 +252,13 @@ export function AgentWorkspacePage() {
           </ul>
         </div>
       ) : null}
+
+      <PanelBoundary>
+        <AgentMoneyPanel agentId={agent.id} />
+      </PanelBoundary>
+      <PanelBoundary>
+        <AgentStockPanel agent={agent} />
+      </PanelBoundary>
 
       <AgentStatusDialog
         agent={blocking ? agent : undefined}

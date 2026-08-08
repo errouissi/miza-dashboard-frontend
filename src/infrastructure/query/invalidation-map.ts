@@ -201,10 +201,21 @@ const INVALIDATION_MAP: Readonly<Record<DomainEvent, readonly QueryKey[]>> =
      * WRITES `Agent.montant_avance_grattage`, and Deposits' own `amount`/
      * `status` columns are untouched (the ADC table is a separate audit
      * trail, append-only). No Network or Deposits list renders a column
-     * this mutation changes. `["allocations"]` only; revisit once a Stock
-     * ledger view or the Grattage restock-gate hook (both M6) exist.
+     * this mutation changes.
+     *
+     * M7 PHASE 2 UPDATE — `["agent-transfers"]` added. Validating an
+     * Allocation genuinely increases the recipient MANAGER's own stock
+     * (Company -> Manager), and `useManagerStockQuery` — the read Agent
+     * 360's own Manager Stock panel now reactively consumes — lives under
+     * the `agent-transfers` key prefix (ADR-0025: it stayed with its first
+     * real caller, Agent Transfer's own "add line" picker, rather than
+     * moving to a neutral module). This was a real, verified gap, not
+     * speculative: before Agent 360 existed, nothing read a manager's
+     * stock reactively outside Transfer's own create form, so there was no
+     * consumer for `allocation.validated` to keep fresh. Agent 360 is that
+     * consumer now.
      */
-    "allocation.validated": [["allocations"]],
+    "allocation.validated": [["allocations"], ["agent-transfers"]],
     /**
      * Bons (roadmap M5, Phase 5 — the fifth and final Stock resource). A
      * draft touches no stock row — materialization only happens at
