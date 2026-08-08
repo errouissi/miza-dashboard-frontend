@@ -1,4 +1,8 @@
-import { isAppError, resolveErrorDisplay } from "@/infrastructure/errors";
+import {
+  isAppError,
+  lookupErrorCode,
+  resolveErrorDisplay,
+} from "@/infrastructure/errors";
 import { useFreshConfirm } from "@/shared/hooks";
 import { ConfirmActionDialog } from "@/shared/components/patterns/confirm-action-dialog";
 import { Button } from "@/shared/components/ui/button";
@@ -32,16 +36,32 @@ import type { AgentTransfer } from "../model/agent-transfer";
  * would let a transient verification failure corrupt the host page's own
  * display). A failed verification BLOCKS confirm, per explicit product
  * decision.
+ *
+ * `restockGateBlocked` (M6 Phase 3) — the Grattage restock gate for the
+ * recipient COMMERCIAL's own obligation (`OUTSTANDING_GRATTAGE`), read by
+ * the DETAIL PAGE via `useGrattageRestockGateQuery(agentTransfer
+ * .commercialId)` and passed down as a plain boolean. Deliberately kept
+ * SEPARATE from `useFreshConfirm` above — this is a foreign-domain
+ * (Grattage) advisory read, not this transfer's own record staleness, and
+ * the backend's own `StockService::validateTransfer` remains the sole
+ * authority; a stale or missing gate read never blocks confirm on its
+ * own, only a confirmed-blocked one does. The registered copy
+ * (`TRANSFER_RECIPIENT_HAS_OUTSTANDING_OBLIGATION`) is reused verbatim via
+ * `lookupErrorCode` so the proactive and reactive expressions of the same
+ * fact can never drift apart.
  */
 type ValidateTransferDialogProps = {
   /** Absent = closed. Present = confirm validating this transfer. */
   agentTransfer?: AgentTransfer;
   onOpenChange: (open: boolean) => void;
+  /** Defaults to `false` — see the module docblock. */
+  restockGateBlocked?: boolean;
 };
 
 export function ValidateTransferDialog({
   agentTransfer,
   onOpenChange,
+  restockGateBlocked = false,
 }: ValidateTransferDialogProps) {
   const validateMutation = useValidateAgentTransferMutation();
 
@@ -54,7 +74,7 @@ export function ValidateTransferDialog({
   });
 
   const onConfirm = () => {
-    if (!agentTransfer || freshness.blocked) return;
+    if (!agentTransfer || freshness.blocked || restockGateBlocked) return;
     validateMutation.mutate(agentTransfer.id, {
       onSuccess: () => onOpenChange(false),
     });
@@ -66,6 +86,10 @@ export function ValidateTransferDialog({
       ? "This transfer's current status could not be verified."
       : undefined;
 
+  const restockGateMessage = restockGateBlocked
+    ? lookupErrorCode("TRANSFER_RECIPIENT_HAS_OUTSTANDING_OBLIGATION")?.message
+    : undefined;
+
   const mutationMessage = isAppError(validateMutation.error)
     ? validateMutation.error.kind === "permission"
       ? "You do not have permission to validate this transfer."
@@ -73,7 +97,7 @@ export function ValidateTransferDialog({
         "This transfer could not be validated. It may already have been processed.")
     : undefined;
 
-  const errorMessage = freshnessMessage ?? mutationMessage;
+  const errorMessage = freshnessMessage ?? restockGateMessage ?? mutationMessage;
 
   return (
     <ConfirmActionDialog
@@ -94,7 +118,7 @@ export function ValidateTransferDialog({
       isPending={validateMutation.isPending}
       errorMessage={errorMessage}
       variant="default"
-      confirmDisabled={freshness.blocked}
+      confirmDisabled={freshness.blocked || restockGateBlocked}
     >
       {freshness.isChecking ? (
         <p className="text-muted-foreground text-sm">Checking for changes…</p>

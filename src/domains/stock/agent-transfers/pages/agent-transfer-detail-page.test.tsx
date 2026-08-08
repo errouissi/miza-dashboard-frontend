@@ -168,6 +168,60 @@ function managerStockHandler() {
   );
 }
 
+/**
+ * `GET /admin/agents/{id}/grattage-outstanding` (M6 Phase 3) — the
+ * recipient COMMERCIAL's own restock gate. Scoped to agent id 10,
+ * matching every `showEnvelope`'s own default `commercial_id`. Registered
+ * as a CLEAR default in `beforeEach` below so every pre-existing test in
+ * this file (none of which override `commercial_id`) keeps working
+ * unmodified; the tests that specifically exercise the gate override it
+ * with their own `server.use(...)`.
+ */
+function grattageOutstandingEnvelope(
+  agentId: number,
+  gate: {
+    blocked: boolean;
+    reason: "OUTSTANDING_GRATTAGE" | "TEAM_OUTSTANDING_GRATTAGE" | null;
+  },
+) {
+  return {
+    success: true,
+    data: {
+      agent: {
+        id: agentId,
+        nom: "Alaoui",
+        prenom: "Sara",
+        num_cin: "CIN010",
+        num_compte: "CM0010",
+        role: "commercial",
+        status: "active",
+        manager: { id: 20, nom: "Bennani", prenom: "Youssef" },
+      },
+      summary: {
+        required_total: "0.00",
+        pending_total: "0.00",
+        overdue_total: "0.00",
+        invoice_count: 0,
+        oldest_due_at: null,
+      },
+      restock_gate: gate,
+      invoices: [],
+    },
+  };
+}
+
+function grattageOutstandingHandler(
+  agentId: number,
+  gate: {
+    blocked: boolean;
+    reason: "OUTSTANDING_GRATTAGE" | "TEAM_OUTSTANDING_GRATTAGE" | null;
+  } = { blocked: false, reason: null },
+) {
+  return http.get(`${API}/admin/agents/${agentId}/grattage-outstanding`, () =>
+    HttpResponse.json(grattageOutstandingEnvelope(agentId, gate)),
+  );
+}
+
 function renderPage(initialPath: string, queryClient: QueryClient = createQueryClient()) {
   const router = createMemoryRouter(
     [
@@ -187,6 +241,8 @@ function renderPage(initialPath: string, queryClient: QueryClient = createQueryC
 beforeEach(() => {
   window.localStorage.clear();
   signInWith(ALL_PERMISSIONS);
+  // Default: a clear gate for agent id 10 — see the handler's own docblock.
+  server.use(grattageOutstandingHandler(10));
 });
 
 describe("rendering every field show() returns", () => {
@@ -646,8 +702,11 @@ describe("Validate — freshness rule (M4 · G4 closure) and error codes", () =>
   });
 
   // TRANSFER-ONLY GATE #2 — this IS the Grattage restock gate (Phase 5.10
-  // §2.9), surfaced reactively; the proactive hook is a separate M6
-  // deliverable, not built here (this phase's explicit decision #3).
+  // §2.9). This test's own default gate read (from `beforeEach`) is
+  // CLEAR, so Validate stays enabled and this exercises the REACTIVE 409
+  // fallback specifically — the PROACTIVE path (M6 Phase 3, banner +
+  // disabled Validate) has its own dedicated tests below ("the Grattage
+  // restock gate").
   it("shows the registered copy for an outstanding-obligation 409 on validate", async () => {
     server.use(
       showHandler(1, showEnvelope({ id: 1, status: "draft", lines: [lineRow()] })),
@@ -704,5 +763,94 @@ describe("Validate — freshness rule (M4 · G4 closure) and error codes", () =>
         queryClient.getQueryState(["agent-transfers", "list", {}])?.isInvalidated,
       ).toBe(true),
     );
+  });
+});
+
+describe("the Grattage restock gate (M6 Phase 3, proactive)", () => {
+  it("shows no warning and enables Validate when the gate is clear", async () => {
+    server.use(
+      showHandler(1, showEnvelope({ id: 1, status: "draft", lines: [lineRow()] })),
+      managerStockHandler(),
+      grattageOutstandingHandler(10, { blocked: false, reason: null }),
+    );
+    renderPage("/stock/agent-transfers/1");
+
+    expect(await screen.findByRole("button", { name: "Validate" })).toBeEnabled();
+    expect(
+      screen.queryByText(/outstanding grattage obligation/i),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows the registered recipient-obligation copy and disables Validate when the gate is blocked", async () => {
+    server.use(
+      showHandler(1, showEnvelope({ id: 1, status: "draft", lines: [lineRow()] })),
+      managerStockHandler(),
+      grattageOutstandingHandler(10, { blocked: true, reason: "OUTSTANDING_GRATTAGE" }),
+    );
+    renderPage("/stock/agent-transfers/1");
+
+    expect(
+      await screen.findByText(
+        "The selected commercial has an outstanding grattage obligation and cannot receive new stock yet.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Validate" })).toBeDisabled();
+  });
+
+  it("queries the recipient COMMERCIAL's own commercialId, never the manager", async () => {
+    let requestedAgentId: string | undefined;
+    server.use(
+      showHandler(1, showEnvelope({ id: 1, status: "draft", lines: [lineRow()] })),
+      managerStockHandler(),
+      http.get(`${API}/admin/agents/:agentId/grattage-outstanding`, ({ params }) => {
+        requestedAgentId = params.agentId as string;
+        return HttpResponse.json(
+          grattageOutstandingEnvelope(10, { blocked: false, reason: null }),
+        );
+      }),
+    );
+    renderPage("/stock/agent-transfers/1");
+
+    await screen.findByRole("button", { name: "Validate" });
+    // showEnvelope's own default is `commercial_id: 10` — the recipient
+    // commercial — never `manager_id: 20`.
+    expect(requestedAgentId).toBe("10");
+  });
+
+  it("keeps Validate disabled even after Confirm is opened, blocking the mutation itself", async () => {
+    let validateCalled = false;
+    server.use(
+      showHandler(1, showEnvelope({ id: 1, status: "draft", lines: [lineRow()] })),
+      managerStockHandler(),
+      grattageOutstandingHandler(10, { blocked: true, reason: "OUTSTANDING_GRATTAGE" }),
+      http.post(`${API}/admin/agent-transfers/1/validate`, () => {
+        validateCalled = true;
+        return HttpResponse.json(showEnvelope({ id: 1, status: "validated" }));
+      }),
+    );
+    renderPage("/stock/agent-transfers/1");
+
+    // The button renders enabled first (the gate read is still in flight);
+    // wait for the warning to land, which is gated on the same
+    // `restockGateBlocked` value, before asserting the button's own state.
+    await screen.findByText(/outstanding grattage obligation/i);
+    const validateButton = screen.getByRole("button", { name: "Validate" });
+    await waitFor(() => expect(validateButton).toBeDisabled());
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(validateCalled).toBe(false);
+  });
+
+  it("hides the warning once the transfer is no longer a draft, even if the gate is still blocked", async () => {
+    server.use(
+      showHandler(1, showEnvelope({ id: 1, status: "validated" })),
+      managerStockHandler(),
+      grattageOutstandingHandler(10, { blocked: true, reason: "OUTSTANDING_GRATTAGE" }),
+    );
+    renderPage("/stock/agent-transfers/1");
+
+    await screen.findByRole("heading", { name: /TRF-001/ });
+    expect(
+      screen.queryByText(/outstanding grattage obligation/i),
+    ).not.toBeInTheDocument();
   });
 });

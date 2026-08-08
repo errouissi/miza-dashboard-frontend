@@ -1,6 +1,10 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { isAppError, resolveErrorDisplay } from "@/infrastructure/errors";
+import {
+  isAppError,
+  lookupErrorCode,
+  resolveErrorDisplay,
+} from "@/infrastructure/errors";
 import { PERMISSIONS } from "@/infrastructure/permissions";
 import { usePermission } from "@/shared/hooks";
 import { formatDate, formatDateTime, formatIdentifier } from "@/shared/formatters";
@@ -9,6 +13,7 @@ import { Button } from "@/shared/components/ui/button";
 import { Skeleton } from "@/shared/components/ui/skeleton";
 import { ListErrorState } from "@/shared/components/patterns/list-states";
 import { LineItemsEditor } from "@/shared/components/business/line-items-editor";
+import { useGrattageRestockGateQuery } from "@/domains/grattage/outstanding";
 import { ValidateAllocationDialog } from "../components/validate-allocation-dialog";
 import {
   useAddAllocationLineMutation,
@@ -52,11 +57,16 @@ import { ALLOCATION_STATUS_LABELS, ALLOCATION_STATUS_TONES } from "../model/allo
  * plus (per `ALLOCATION_HAS_NO_LINES`) at least one line — offering
  * Validate on an empty draft is a guaranteed 409, so the button is disabled
  * with an inline hint rather than left to round-trip. A failed validate may
- * ALSO surface `ALLOCATION_EXCEEDS_DEPOSIT_CAPACITY` or
- * `ALLOCATION_TEAM_HAS_OUTSTANDING_OBLIGATION` — both handled reactively by
- * `ValidateAllocationDialog`'s own error-code resolution; NEITHER gate is
- * about product-level stock, so BC-AA's own restraint (no proactive
- * capacity/obligation hint) is unchanged by the "add line" picker below.
+ * ALSO surface `ALLOCATION_EXCEEDS_DEPOSIT_CAPACITY` (still handled
+ * REACTIVELY ONLY — no proactive stock-quantity/capacity read exists,
+ * BC-AA remains partially open) or `ALLOCATION_TEAM_HAS_OUTSTANDING_
+ * OBLIGATION`, which is now ALSO SURFACED PROACTIVELY (M6 Phase 3): the
+ * recipient manager's own `useGrattageRestockGateQuery` (imported from
+ * Grattage's ONE sanctioned public surface, `@/domains/grattage/
+ * outstanding`) drives a persistent warning banner below AND disables
+ * Validate directly — the reactive 409 path (`ValidateAllocationDialog`'s
+ * own error-code resolution) stays wired unchanged as the authoritative
+ * fallback, since this proactive read is a UX hint, not a guarantee.
  *
  * THE "ADD LINE" PRODUCT PICKER IS NOW BACKED BY REAL AVAILABILITY —
  * `useCompanyStockQuery` (`GET /admin/companies/{company}/stock`), added
@@ -80,6 +90,13 @@ export function AllocationDetailPage() {
   const companyStockQuery = useCompanyStockQuery(allocationQuery.data?.companyId ?? -1, {
     enabled: allocationQuery.data !== undefined,
   });
+  /** M6 Phase 3 — the recipient MANAGER's own team gate (`allocation.agentId`, never the company). */
+  const restockGateQuery = useGrattageRestockGateQuery(
+    allocationQuery.data?.agentId ?? -1,
+    {
+      enabled: allocationQuery.data !== undefined,
+    },
+  );
 
   const addLineMutation = useAddAllocationLineMutation();
   const updateLineMutation = useUpdateAllocationLineMutation();
@@ -153,6 +170,15 @@ export function AllocationDetailPage() {
       has(PERMISSIONS.UPDATE_ALLOCATION_LINE) ||
       has(PERMISSIONS.DELETE_ALLOCATION_LINE));
 
+  /**
+   * M6 Phase 3 — a missing/loading read never blocks anything on its own
+   * (`?? false`): the backend's own `StockService::validateAllocation` is
+   * the authority, this is a UX hint. Shown only while `isDraft` — the
+   * warning is only actionable while Validate itself is still reachable.
+   */
+  const restockGateBlocked = restockGateQuery.data?.blocked ?? false;
+  const showRestockGateWarning = isDraft && restockGateBlocked;
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between gap-4">
@@ -168,7 +194,10 @@ export function AllocationDetailPage() {
         <div className="flex items-center gap-2">
           {canValidate ? (
             <div className="flex flex-col items-end gap-1">
-              <Button onClick={() => setValidateOpen(true)} disabled={lines.length === 0}>
+              <Button
+                onClick={() => setValidateOpen(true)}
+                disabled={lines.length === 0 || restockGateBlocked}
+              >
                 Validate
               </Button>
               {lines.length === 0 ? (
@@ -181,6 +210,12 @@ export function AllocationDetailPage() {
           </Button>
         </div>
       </div>
+
+      {showRestockGateWarning ? (
+        <div className="border-destructive/30 bg-destructive/10 text-destructive rounded-md border px-4 py-3 text-sm">
+          {lookupErrorCode("ALLOCATION_TEAM_HAS_OUTSTANDING_OBLIGATION")?.message}
+        </div>
+      ) : null}
 
       <dl className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
         <div>
@@ -284,6 +319,7 @@ export function AllocationDetailPage() {
       <ValidateAllocationDialog
         allocation={validateOpen ? allocation : undefined}
         onOpenChange={setValidateOpen}
+        restockGateBlocked={restockGateBlocked}
       />
     </div>
   );

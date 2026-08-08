@@ -723,3 +723,24 @@ describe("freshness query is shared between Validate and Cancel, independent has
     );
   });
 });
+
+describe("the Grattage restock gate (M6 Phase 3 — out of scope for Bons)", () => {
+  it("never requests it — the gate applies only to Allocation and Agent Transfer", async () => {
+    let requested = false;
+    server.use(
+      showHandler(1, showEnvelope({ id: 1, status: "draft", lines: [lineRow()] })),
+      productsHandler(),
+      http.get(`${API}/admin/agents/:agentId/grattage-outstanding`, () => {
+        requested = true;
+        return HttpResponse.json(
+          { success: false, message: "unexpected" },
+          { status: 500 },
+        );
+      }),
+    );
+    renderPage("/stock/bons/1");
+
+    await screen.findByRole("button", { name: "Validate" });
+    expect(requested).toBe(false);
+  });
+});

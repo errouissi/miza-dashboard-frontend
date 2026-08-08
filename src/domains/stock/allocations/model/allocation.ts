@@ -27,13 +27,17 @@ import type { StatusTone } from "@/shared/components/business/status-badge";
  * deposits). Still a `decimal:2`-cast STRING — rendered verbatim, never
  * parsed, same discipline as Return's/Transfer's own.
  *
- * A SECOND, ALLOCATION-ONLY REACTIVE GATE EXISTS —
+ * A SECOND, ALLOCATION-ONLY GATE EXISTS —
  * `ALLOCATION_TEAM_HAS_OUTSTANDING_OBLIGATION`: validation is refused if
  * ANY commercial under the recipient manager has an undischarged grattage
- * obligation. No equivalent in Return or Transfer. Both this gate and the
- * capacity gate are handled REACTIVELY only (no proactive hint anywhere —
- * BC-AA, no stock-quantity read endpoint exists), same restraint Transfer's
- * own `AGENT_TRANSFER_EXCEEDS_CAPACITY` already established.
+ * obligation. No equivalent in Return or Transfer. UPDATED M6 PHASE 3 —
+ * this gate is now ALSO surfaced PROACTIVELY: `AllocationDetailPage` reads
+ * `useGrattageRestockGateQuery(allocation.agentId)` (Grattage's ONE
+ * sanctioned public surface) and disables Validate directly, ahead of any
+ * submission. The deposit-capacity gate (`ALLOCATION_EXCEEDS_DEPOSIT_
+ * CAPACITY`) remains REACTIVE ONLY — no proactive capacity/stock-quantity
+ * read exists for it (BC-AA stays partially open), same restraint
+ * Transfer's own `AGENT_TRANSFER_EXCEEDS_CAPACITY` still has.
  *
  * NO DATE FIELD — unlike Transfer's own `transfer_date`, `StoreAllocationRequest`
  * has no date field at all (verified from source); not omitted by oversight.

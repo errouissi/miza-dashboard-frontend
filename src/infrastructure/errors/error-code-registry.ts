@@ -134,13 +134,16 @@ export const ERROR_CODES: Readonly<Record<string, ErrorCodeEntry>> = Object.free
    *     copied verbatim from source, not normalized.
    *   `TRANSFER_RECIPIENT_HAS_OUTSTANDING_OBLIGATION` — this IS the
    *     Grattage restock gate (Operational Restrictions, Phase 5.10 §2.9),
-   *     surfacing here REACTIVELY because `StockService::validateTransfer`
-   *     already enforces it server-side. The PROACTIVE version (a shared
-   *     hook Stock's own forms consult before submitting) is an explicit
-   *     M6 Grattage deliverable per the frozen roadmap, not built here —
-   *     no `recovery` path is registered for it yet for the same reason
-   *     `RETURN_RECIPIENT_*`'s own codes have none: the flow it would link
-   *     to (Grattage) does not exist as a frontend route yet.
+   *     registered here as the REACTIVE fallback `StockService
+   *     ::validateTransfer` still enforces server-side regardless. UPDATED
+   *     M6 PHASE 3 — a PROACTIVE version now also exists:
+   *     `AgentTransferDetailPage` reads `useGrattageRestockGateQuery
+   *     (agentTransfer.commercialId)` (Grattage's ONE sanctioned public
+   *     surface) and disables Validate directly; this entry's own
+   *     `message` is reused verbatim by that proactive banner via
+   *     `lookupErrorCode`, so the two expressions of the same fact can
+   *     never drift apart. Still no `recovery` path — a link into Grattage
+   *     itself is a separate, later decision, not implied by this pairing.
    */
   TRANSFER_NOT_DRAFT: {
     message: "This transfer has already been processed.",
@@ -223,10 +226,16 @@ export const ERROR_CODES: Readonly<Record<string, ErrorCodeEntry>> = Object.free
    *     FIFO-drawn) is less than the allocation's own `montant`.
    *   `ALLOCATION_TEAM_HAS_OUTSTANDING_OBLIGATION` — Phase 5.10 §2.9's
    *     restock gate: refuses if ANY commercial under the recipient manager
-   *     has an undischarged grattage obligation.
-   * Both handled reactively only, same restraint Transfer's own
-   * `AGENT_TRANSFER_EXCEEDS_CAPACITY`/`TRANSFER_RECIPIENT_HAS_OUTSTANDING_
-   * OBLIGATION` already established — no proactive hint (BC-AA).
+   *     has an undischarged grattage obligation. UPDATED M6 PHASE 3 — now
+   *     ALSO surfaced PROACTIVELY: `AllocationDetailPage` reads
+   *     `useGrattageRestockGateQuery(allocation.agentId)` (Grattage's ONE
+   *     sanctioned public surface) and disables Validate directly; this
+   *     entry's own `message` is reused verbatim by that proactive banner
+   *     via `lookupErrorCode`.
+   * `ALLOCATION_EXCEEDS_DEPOSIT_CAPACITY` remains REACTIVE ONLY, same
+   * restraint Transfer's own `AGENT_TRANSFER_EXCEEDS_CAPACITY` still has —
+   * no proactive capacity/stock-quantity read exists for either (BC-AA
+   * stays partially open).
    */
   ALLOCATION_NOT_DRAFT: {
     message: "This allocation has already been processed.",
