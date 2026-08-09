@@ -824,3 +824,133 @@ decisions made *during implementation*.
   must construct the 409's `context` directly rather than deriving it from
   simulated deposit/allocation totals, so the tests cannot drift into
   encoding the formula themselves.
+
+## ADR-0033 — M7 Agent 360's completion item: the zero-stock Manager reassignment guard, Commercial Available Grattage, and the Commercial product-level stock breakdown are each backend-authoritative, single-query, and never re-derived client-side
+
+- **Date:** 2026-08-09
+- **Status:** Accepted
+- **Context:** M7 Phase 1.5 (`21c6e05`) excluded `manager_id` from Agent
+  Edit — a temporary exclusion (informally tracked as "D2" during that
+  phase's own approval, never promoted to its own ADR), not a scope
+  decision: the frozen architecture (§6) names "Zero-stock reassignment
+  guard" as an explicit Stock→Network cross-domain workflow ("Reassigning a
+  commercial's manager is backend-blocked while they hold stock. The Agent
+  edit form shows the live Stock balance inline and disables the manager
+  field with an explanation"), and the exclusion existed only because no
+  authoritative Commercial stock read existed yet. A completion review
+  confirmed this was the milestone's one genuine gap against that frozen
+  requirement and it was built as the closing item rather than deferred
+  again. Two further backend widenings of the same endpoint
+  (`f9a6fe4` — `available_grattage`; `15aa704` — `stock`, the per-product
+  breakdown) landed during the same completion pass, each verified from
+  source before use, never assumed.
+- **Decision:**
+  - `GET /admin/agents/{agent}/stock-quantity` (backend commit `5302f99`,
+    Commercial-only, `access-dashboard`) is the ONE query
+    (`useCommercialStockQuantityQuery`, `LIVE` tier) behind all three
+    capabilities below — never three separate reads.
+  - The zero-stock reassignment guard depends ONLY on `stock_quantity === 0`
+    (`ManagerReassignmentField`, `agent-edit-drawer.tsx`) — fail-closed on
+    loading/error/no-`access-dashboard`. Verified twice not to have
+    regressed as the same endpoint grew two more fields.
+  - Available Grattage (`available_grattage`, a bcmath decimal string
+    produced by the newly extracted `StockService::commercialAvailableGrattage()`
+    — the SAME formula `validateTransfer()`'s own STEP 7b capacity gate now
+    calls) is rendered verbatim in the Commercial Stock panel — never
+    parsed to a number, never combined with `montant_avance_grattage`,
+    Transfers, Returns, Deposits, or Grattage Outstanding.
+  - The Commercial product-level stock breakdown (`stock`, identical row
+    shape to `GET /admin/managers/{manager}/stock`) is rendered through
+    `StockProductTable`, a small presentational component now shared
+    verbatim between Manager's and Commercial's own Current Stock — the
+    query/loading/error/empty-state logic around it stays separate per
+    caller (genuinely different copy and surrounding sections), not forced
+    into one component.
+  - `AgentOutstandingPanel` (inside `network/agents`) imports
+    `useGrattageOutstandingQuery` from `domains/grattage/outstanding` — the
+    THIRD sanctioned domain-to-domain import in the codebase (Network←Grattage,
+    mechanism 2, FTA §4), alongside the pre-existing Stock←Grattage
+    (ADR-0027) and Money↔Grattage-via-private-read (ADR-0030) patterns.
+    This fulfills ADR-0026's own carried-forward plan: `useGrattageOutstandingQuery`
+    is exported from its previously domain-private `index.ts` for the
+    first time, for this real caller.
+- **Rationale:** Every one of these three fields is genuinely backend-owned
+  business logic that has already changed shape twice in one milestone
+  (`5302f99` → `f9a6fe4` → `15aa704`) — the same restraint ADR-0032 already
+  established for Allocation's capacity gate applies identically here: a
+  client-side reimplementation would silently drift the next time the
+  backend changes the formula again, producing a UI that confidently shows
+  a wrong number instead of honestly deferring to the backend. Keeping all
+  three behind one query, one cache key, and one staleness lifecycle
+  reflects that they are one backend read, not three.
+- **Consequences:** The zero-stock guard's own test suite includes an
+  explicit adversarial case (`stock_quantity === 0` with
+  `available_grattage === "0.00"`) proving the guard never reads the
+  second field. No new invalidation-map entries were needed — all three
+  fields are derived from the identical `listOwnerStock()` call the
+  pre-existing `agent-transfer.validated`/`agent-stock-return.validated`/
+  `grattage-invoice.cancelled` events already bust. A future session adding
+  a fourth field to this same endpoint should extend the same snapshot
+  type and the same query, not create a new one.
+
+## ADR-0034 — `FormDrawer`'s scroll fix uses `overflow-clip`, not `overflow-hidden`; `FileUploadField`'s status/preview elements stay permanently mounted, never conditionally torn down
+
+- **Date:** 2026-08-09
+- **Status:** Accepted
+- **Context:** M7 Agent 360's manual QA found a real defect: a form taller
+  than `FormDrawer`'s own sheet viewport (Agent Edit, the first form in the
+  product long enough to trigger it) pushed the header and Save/Cancel
+  footer out of reach. A first fix (`min-h-0 flex-1` on the form and a
+  dedicated scrollable field region, plus `overflow-hidden` on the sheet
+  content as a defensive containment measure) genuinely fixed the
+  scrolling — this was the first modification to `FormDrawer` since its
+  M2c extraction. Manual QA then found a SECOND, real defect on top of the
+  first fix: selecting a replacement Photo inside the now-scrollable drawer
+  visually blanked the entire panel. This was reproduced live in Chrome
+  (jsdom cannot simulate the mechanism) before any fix was attempted, per
+  explicit instruction not to patch around an unverified cause.
+- **Decision:**
+  - `SheetContent`'s className uses `overflow-clip`, not `overflow-hidden`.
+    Root cause, confirmed by direct DevTools measurement before and after:
+    `overflow-hidden` is still a genuine CSS scroll container per spec (a
+    real `scrollTop`, no visible scrollbar, no user-driven wheel/drag
+    scroll, but still a valid target for the browser's native "scroll the
+    focused element into view" behavior). The hidden file `<input>`
+    regains focus the instant the native OS picker returns a selection;
+    since it sits inside both the intended `.overflow-y-auto` region and
+    the outer `overflow-hidden` container, the browser's focus-scroll walk
+    adjusted the OUTER container's own `scrollTop` too (measured: `0` →
+    `920`), clipping the whole visible panel into blank space.
+    `overflow: clip` clips identically for containment but is explicitly
+    NOT a scroll container by spec — confirmed live, `scrollTop` stayed
+    `0` after the fix, same repro steps.
+  - `FileUploadField`'s status text, "Remove" button, and preview
+    `<img>`/`<a>` are now permanently mounted, toggling the `hidden`
+    attribute instead of being conditionally rendered in and out across
+    `value`/`existingUrl` transitions.
+- **Rationale:** The second decision is independently justified, not merely
+  a belt-and-suspenders reaction to the first bug — it was NOT the cause of
+  the scrolling defect (confirmed empirically: replacing this component's
+  DOM-churn pattern alone did not fix the blank-panel bug; `overflow-clip`
+  did). It is kept because it closes a real, separately-verified defect
+  class: Radix `FocusScope`'s own `MutationObserver` watches a trapped
+  dialog's entire subtree and forcibly refocuses the dialog container the
+  instant it sees ANY removed node while `document.activeElement` is
+  transiently `document.body` — exactly what a native OS file-picker round
+  trip produces. Keeping the node count and types stable (attribute
+  patches only) never gives that observer a `removedNodes` event to react
+  to, independent of whether `FormDrawer` itself is ever affected again.
+- **Consequences:** Every existing `FormDrawer` caller (Villes, Secteurs,
+  Products, Managers, Commercials, Clients, Admins, the client bulk-assign
+  sheet) is visually unaffected — only a field list taller than the
+  viewport (Agent Edit today) newly scrolls instead of clipping. A
+  regression test (`form-drawer.test.tsx`) pins the structural invariant
+  jsdom CAN prove (the footer is a DOM sibling of the field region, never
+  a descendant) since jsdom cannot simulate the real scroll/focus
+  mechanism itself. `file-upload-field.test.tsx` gained a `MutationObserver`-based
+  test mirroring Radix's own detection logic, proving zero `removedNodes`
+  mutations across a replacement, a second replacement, and a full
+  select→Remove→select round trip. Any future shared-pattern component
+  rendered inside a trapped Radix `Dialog`/`Sheet` should default to the
+  same "stable node count, `hidden`-toggled" discipline for any element
+  that can gain/lose focus mid-interaction.

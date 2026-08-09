@@ -3,7 +3,7 @@
 **The current state of the project.** Overwrite this file after every completed
 milestone — it describes *now*, not history. History lives in `decisions.md` and git.
 
-_Last updated: 2026-08-08_
+_Last updated: 2026-08-09_
 
 ---
 
@@ -93,29 +93,35 @@ per-agent Outstanding-obligation UI view. The data layer exists
 route, or navigation entry — that UI is an M7 Agent 360 deliverable, not an
 M6 one (see `next-session.md`).
 
-**M7 — Overview & workspaces, Agent 360, Client 360 — is the next
-milestone.** Needs its own fresh discovery pass before any implementation,
-per the same discipline every prior milestone applied.
+**M7 — Overview & workspaces, Agent 360, Client 360 — is the current
+milestone. Agent 360, the first of its three composed surfaces, is now
+COMPLETE, manual QA passed.** Five phases plus a manual-QA finalization
+pass — workspace foundation, full role-aware Agent Edit, Money/Stock
+panels, Grattage Outstanding, and the zero-stock Manager reassignment
+guard, closing the milestone's one genuine gap against the frozen
+architecture rather than deferring it again. See "M7 — Agent 360" below
+for the full write-up. **Client 360 and the Overview widget grid are not
+yet started** — see `next-session.md` for which is next and why.
 
 M3.x (Admin/Manager/Commercial detail pages, ADR-0014) remains the only
 open M3 item, blocked by FE-2 — unaffected by M4, M5 or M6.
 
 ## Current branch
 
-`main`, level with `origin/main` (pushed after this documentation pass).
-Since the M4/M5 documentation-sync pass (`d8b1006`): Allocations
-(`16aad37`), the M5-Phase-4/Bons-dependency documentation pass
-(`651934c`), Bons (`a8239f9`), the stock-aware product selection +
-backend-generated document number refactor (`6dea118`), the M5-completion
-documentation-sync pass (`96bf302`), Grattage Invoices (`b1713af`), the
-Grattage Outstanding restock-gate domain (`8514662`), Stock → Grattage
-restock-gate integration (`0ce24e2`), Deposit ↔ Grattage Invoice linking
-(`8d5bf60`), an invalidation-map comment cleanup (`f843008`), and the
-Allocation capacity-validation correction for backend commit `9af5d00`
-(`59888a5`). No uncommitted files remain (this documentation pass is the
-only pending change). See `next-session.md` for verification commands.
+`main`, level with `origin/main` at `bc54e55` (pushed after this
+documentation pass). Since M6 shipped: Agent 360 workspace foundation
+(`c392a7e`), full Agent Edit (`21c6e05`), Money/Stock workspace panels
+(`2ff0d5a`), Grattage Outstanding panel (`69f50aa`), the zero-stock
+Manager reassignment guard (`1aa1d66`), and the manual-QA finalization
+pass — `FormDrawer`/`FileUploadField` fixes, Commercial Current Stock,
+the product breakdown, and Available Grattage (`bc54e55`). No uncommitted
+files remain besides this documentation pass. See `next-session.md` for
+verification commands.
 
 ## Last completed implementation
+
+**M7 — Agent 360 — COMPLETE, manual QA passed.** See its own section
+below for the full write-up. The previous entries, kept for continuity:
 
 **M6 — Grattage (the seam) — COMPLETE, manual QA passed.** See its own
 section below for the full write-up. The previous entries, kept for
@@ -1808,6 +1814,171 @@ sanctioned import is enforced by review discipline and this document, not
 tooling. Not fixed this milestone (out of scope, flagged as a follow-up —
 see `next-session.md`).
 
+## M7 — Agent 360 — COMPLETE, manual QA passed
+
+The first of M7's three composed surfaces (Agent 360, Client 360, the
+Overview widget grid — see "Next milestone" below). Five phases plus one
+manual-QA-driven finalization pass, each its own discovery → approval →
+implementation → commit cycle. Agent 360 is the frozen architecture's
+own named workflow (§6): "Agent detail becomes a WorkspacePage: profile
+(Network), cheque/deposit history (Money), current stock balance +
+transfer/return history (Stock), outstanding obligation + restock gate
+(Grattage) — one screen, reached from the Network module."
+
+**Phase 1 — Workspace foundation (`c392a7e`).** `AgentWorkspacePage`, a
+single flat route (`/network/agents/:id`) reached from both Managers' and
+Commercials' own list rows — the first `WorkspacePage`-pattern page in the
+product, and the pattern the frozen roadmap asked M7 to establish. Identity/
+profile fields, document links, Block/Activate (reusing the existing
+mutations unchanged), `view-agents` gated. `AgentController::show()`'s own
+`$agent->toArray()` (no transform, no Resource class) is modelled as a
+discriminated union tagged on `role`, per-role fields genuinely null for the
+other role (verified from source, not assumed).
+
+**Phase 1.5 — Full role-aware Agent Edit (`21c6e05`).** The complete
+backend-supported editable field set, verified field by field against
+`AgentController::update()` — not merely everything `show()` returns.
+Existing document/photo previews render via `existingUrl` (a new,
+additive, backward-compatible `FileUploadField` contract — every one of
+the ~11 onboarding-wizard callers unaffected); selecting a replacement
+switches the preview, "Remove" reverts to the existing file, never
+synthesizes a `File` from a remote URL. `manager_id` (Commercial-only
+reassignment) was **excluded at this phase** — the backend guard existed
+(`COMMERCIAL_HAS_STOCK_CANNOT_REASSIGN`) but no authoritative Commercial
+stock read did yet, and building a reassignment control with nothing live
+to gate it on would have been exactly the invented-capability ADR-0009
+forbids. Moto editing stays out of scope (a distinct conditional
+sub-entity, its own future item). This exclusion was **temporary, not a
+scope decision** — see the completion item below, which superseded it the
+moment its blocking dependency shipped.
+
+**Phase 2 — Money and Stock workspace panels (`2ff0d5a`).** Composed via
+mechanism 1 (page-level composition, FTA §4) — Money, Stock, Agent
+Transfers and Agent Stock Returns' own public surfaces are imported
+directly; none of the four domains has any idea Agent 360 exists. Money:
+recent cheques/deposits/debt-payments activity. Stock: role-branched — a
+Manager's own authoritative current-stock table (`ManagerStockItem`,
+reused unchanged) plus recent Allocations; a Commercial's recent Transfers
+and Returns (Current Stock came later — see the completion item). Every
+panel is independently `PanelBoundary`-wrapped: one panel's query failure
+or render crash cannot blank the other four, and each panel's own query
+fires in parallel with the others, not serially — the frozen roadmap's own
+M7 exit criteria, verified in the network panel and by dedicated
+independent-isolation tests, not assumed.
+
+**Phase 3 — Grattage Outstanding panel (`69f50aa`).** The per-agent
+Outstanding-obligation view M6 explicitly deferred to M7 (ADR-0026),
+fulfilled: `useGrattageOutstandingQuery` — previously domain-private — is
+now exported from `domains/grattage/outstanding/index.ts`, its first real
+caller. Role-branched, with a deliberate UX guardrail: a Commercial sees
+their own full financial state (required/pending/overdue totals, up to 5
+invoices) plus wording scoped **only** to "new stock transfers to this
+Commercial are currently blocked" — never implying the Agent, the Manager,
+Allocation, or Stock generally is blocked. A Manager sees only a coarse
+clear/team-outstanding sentence — zero amount, zero count, zero inferred
+per-commercial identity, and zero Allocation-blocking language (Allocation's
+own gate was already removed by the M6 correction — ADR-0029 — and this
+panel does not reintroduce it by implication).
+
+**Completion item — Zero-stock Commercial → Manager reassignment guard
+(`1aa1d66`).** The frozen architecture names this exact workflow (§6):
+"Reassigning a commercial's manager is backend-blocked while they hold
+stock. The Agent edit form shows the live Stock balance inline and
+disables the manager field with an explanation." A completion review found
+this was the one genuine gap against that frozen requirement — not a
+missed nice-to-have, a named cross-domain workflow — and it shipped as the
+milestone's closing item rather than being deferred again. Unblocked by a
+backend addition, `GET /admin/agents/{agent}/stock-quantity`
+(`access-dashboard`, Commercial-only): the Manager field on a Commercial's
+Edit form is now live, seeded with the current manager, sourced from
+`useManagerOptionsQuery` (Managers' own picker, reused verbatim), and
+**disabled whenever the authoritative live stock read has not confirmed
+`stock_quantity === 0`** — loading, error, and "permission absent" all
+fail closed (disabled), never open. The backend's own atomic, locked
+`update()` guard remains the sole authority regardless of what this
+proactive read shows; a backend-race 422
+(`COMMERCIAL_HAS_STOCK_CANNOT_REASSIGN`) keeps the drawer open, surfaces
+the message, and refreshes the stock read. No stock quantity is ever
+derived from Transfers/Returns/movement history — the endpoint reuses
+`StockService::listOwnerStock('agent', ...)` verbatim, the same definition
+`update()`'s own guard checks.
+
+**Manual QA finalization (`bc54e55`) — three real defects found in browser
+testing, each root-caused from source before being fixed, none patched
+around:**
+
+- **`FormDrawer` long-form scrolling.** A form taller than the sheet's own
+  viewport pushed the header and Save/Cancel footer out of reach entirely
+  — the first modification to `FormDrawer` since its M2c extraction (see
+  "Shared pattern layer" below). Root cause: a flexbox "min-height:auto"
+  trap (an unconstrained flex-column child never shrinks below its own
+  content's height). Fixed with `min-h-0 flex-1` on the form and its
+  scrollable field region, making that region the sole scroll container.
+  Short forms (Villes, Secteurs, …) are visually unaffected.
+- **`FileUploadField` replacing an existing file inside the now-scrollable
+  drawer.** Selecting a replacement photo visually blanked the whole
+  panel. Two candidate mechanisms were investigated; only reproducing live
+  in Chrome (jsdom cannot simulate this) found the real one: `overflow-hidden`
+  — added defensively in the scrolling fix above — is still a genuine CSS
+  scroll container per spec, and the browser's native "scroll the focused
+  element into view" behavior (firing when the file input regains focus
+  after the OS picker closes) was adjusting *that* container's own
+  `scrollTop`, on top of the intended inner region's. Fixed by using
+  `overflow-clip` instead, which clips identically but is explicitly not a
+  scroll container. Confirmed live, before and after: `scrollTop` moved
+  from `0` to `920` with `overflow-hidden`; stayed `0` with `overflow-clip`.
+  Separately, `FileUploadField`'s status text/Remove button and its preview
+  `<img>`/`<a>` now stay permanently mounted (`hidden` toggled, never
+  conditionally rendered) rather than being torn down and rebuilt on every
+  selection — a real, independently-verified defect (Radix `FocusScope`'s
+  own `MutationObserver` can yank focus on any DOM removal inside a
+  trapped dialog while focus is transiently on `document.body`, which the
+  native file-picker round trip produces) kept as a genuine improvement
+  even though it was not the cause of the scrolling defect itself.
+- **Commercial Current Stock, product breakdown, and Available Grattage.**
+  Backend commits `f9a6fe4` and `15aa704` widened the SAME
+  `stock-quantity` endpoint (no new request) to also carry
+  `available_grattage` (a decimal string, produced by the newly-extracted
+  `StockService::commercialAvailableGrattage()` — the SAME formula
+  `validateTransfer()`'s own capacity gate now calls, verified from
+  source, not a second implementation) and `stock` (a per-product
+  breakdown, identical row shape to `GET /admin/managers/{manager}/stock`,
+  already filtered to `quantity > 0` server-side). The Commercial Stock
+  panel now shows a "Total stock: N units" summary (read directly from
+  `stock_quantity`, never summed from the visible rows) over a product
+  table, and an "Available Grattage" line rendered **verbatim** as the
+  backend's own decimal string — no currency suffix invented, matching
+  this file's own established `montant` convention, never parsed to a
+  number, never combined with `montant_avance_grattage`, Transfers,
+  Returns, Deposits or Outstanding. `StockProductTable`, the actual
+  `<table>` markup, is now shared between Manager's and Commercial's
+  Current Stock — genuinely identical row contract and presentation — but
+  the surrounding query/loading/error/empty-state logic stays separate per
+  caller (different copy, different surrounding sections), not forced into
+  one component. The Zero-stock reassignment guard's own condition is
+  unchanged: `stock_quantity === 0` only, never derived from
+  `available_grattage` or the product rows.
+
+**No new invalidation entries were needed for any of the three widened
+fields** — `stock_quantity`, `available_grattage` and `stock` are all
+derived from the identical `listOwnerStock()` call the pre-existing
+`agent-transfer.validated`/`agent-stock-return.validated`/
+`grattage-invoice.cancelled` invalidation-map entries already bust.
+
+**No new permission constants.** Every Agent 360 panel reuses an existing
+permission (`view-agents`, `access-dashboard`, `view-allocations`,
+`view-agent-transfers`, `view-agent-stock-return`, `update-agent`,
+`block-agent`, `activate-agent`) — each panel independently gated, absent
+entirely (not a disabled placeholder) when its own permission is missing,
+and its query never fires without it (verified, not assumed, by dedicated
+no-request tests throughout).
+
+**Manual QA passed** — scrolling, file/photo replacement, existing file
+previews, Commercial Current Stock, the product breakdown, Available
+Grattage, Stock Return correctly refreshing the workspace, the zero-stock
+reassignment guard, and reassignment succeeding once stock reaches zero
+were all exercised against the real running backend.
+
 ## Overall progress
 
 | Milestone | Status |
@@ -1846,25 +2017,29 @@ see `next-session.md`).
 | **M5 Phase 5 — Bons** | ✅ **implementation complete** — manual validation still owed, no blocker |
 | **M5 — Stock, full milestone** | ✅ **COMPLETE at the implementation level** (all five phases); manual validation owed for Transfers, Allocations, Bons |
 | **M6 — Grattage (the seam)** | ✅ **COMPLETE, manual QA passed** — Invoices, restock-gate domain, Stock integration, Deposit↔Invoice linking |
-| M7 — Overview & workspaces, Agent 360, Client 360 | ⬜ next milestone, not started |
+| **M7 — Agent 360** | ✅ **COMPLETE, manual QA passed** — workspace foundation, full Agent Edit, Money/Stock panels, Grattage Outstanding, zero-stock Manager reassignment guard |
+| M7 — Client 360 | ⬜ not started — see `next-session.md` for the recommended next step |
+| M7 — Overview widget grid | ⬜ not started |
 
-**Tests: 1022/1022 across 52 files** (was 407/23 before M3.6; 431/24 at
+**Tests: 1159/1159 across 60 files** (was 407/23 before M3.6; 431/24 at
 M3.6's initial implementation; 442/24 after M3.6's three post-validation fix
 rounds; 447/25 after M4.1; 473/26 after M4.2 Phase 1+2; 489/27 after M4.2
 Phase 3A; 520/29 after M4.2 Phase 3B; 548/29 after M4.2 Phase 3C; growing
 across M4.3's four phases, M4.4, the freshness-rule retrofit, M5's own five
 phases (825/42 after Agent Transfers, 888/45 after Allocations, 951/48
 after Bons), 949/48 after the stock-aware product-selection refactor
-removed the allocation/transfer-number field tests it made moot, then M6's
-own four phases plus the Allocation capacity correction, net **1022/52**).
+removed the allocation/transfer-number field tests it made moot, M6's own
+four phases plus the Allocation capacity correction (1022/52), then M7
+Agent 360's five phases plus the manual-QA finalization pass, net
+**1159/60**).
 Lint ·
 typecheck · format · build all clean, re-verified fresh this session.
 
 ## Shared pattern layer
 
-Five `patterns/` components, **unmodified since extraction**:
+Four `patterns/` components, **unmodified since extraction**:
 
-- `ListPage` · `FormDrawer`
+- `ListPage`
 - `ListLoadingState` · `ListErrorState` · `ListEmptyState`
 
 **`ConfirmActionDialog` was MODIFIED at M4.2 Phase 3C** — the first change
@@ -1884,6 +2059,21 @@ or retested differently:
 
 See `project-status.md`'s own M4.2 Phase 3C section above for why each was
 added and in what order.
+
+**`FormDrawer` was MODIFIED during M7 Agent 360's manual-QA finalization
+pass** — the second change to any `patterns/` component since extraction,
+and the first that is a real bug fix rather than an additive prop. A form
+taller than the sheet's own viewport made the header and Save/Cancel
+footer unreachable (a flexbox min-height trap); fixed with `min-h-0
+flex-1` on the form and a dedicated scrollable field region, and
+`overflow-clip` (not `overflow-hidden` — see the M7 section above for why
+that distinction is load-bearing, root-caused live in Chrome, not
+guessed) on the sheet content itself. **Layout-only — no prop, no API
+surface, no caller's own code changed.** Every existing caller (Villes,
+Secteurs, Products, Managers, Commercials, Clients, Admins, the client
+bulk-assign sheet, Agent Edit) is visually unaffected for a form that
+already fit; only a field list taller than the viewport (Agent Edit is
+currently the only one) newly scrolls correctly instead of clipping.
 
 **`shared/components/ui/textarea.tsx`, new at M4.2 Phase 3C** — the
 missing shadcn primitive (mirrors `Input`'s own styling), needed for
@@ -2173,6 +2363,21 @@ than assumed from Stock's/Money's own patterns:**
 | — | **verified, positive** | `computeGrattageRestockGate()`'s manager-level `TEAM_OUTSTANDING_GRATTAGE` reason is explicitly documented (post `9af5d00`) as NOT AUTHORITATIVE for Allocation — informational only. `OUTSTANDING_GRATTAGE` (commercial-level) remains fully authoritative for Agent Transfer's own hard gate, unaffected | ✅ no action needed; Agent Transfer keeps consuming the gate, Allocation no longer does |
 | — | **verified, positive** | No backend read exposes a manager's numeric Allocation capacity proactively, before or after `9af5d00` — `available` is only ever known reactively, inside `AllocationExceedsDepositCapacity`'s own exception `context` | ✅ no action needed; confirms BC-AA stays only partially resolved (no capacity read exists) — do not build a proactive capacity hint without a fresh backend read to back it |
 
+**From the M7 Agent 360 contract verification, against `AgentController`
+and `StockService`, independently re-confirmed rather than assumed from
+Stock's own patterns — the milestone that finally closed the "no
+authoritative Commercial current-stock endpoint" and "no authoritative
+available-capacity read" gaps this file previously carried as open:**
+
+| ID | Class | Item | Status |
+| --- | --- | --- | --- |
+| — | **verified, positive, gap closed** | `GET /admin/agents/{agent}/stock-quantity` (backend commit `5302f99`), Commercial-only, `access-dashboard`-gated. Reuses `StockService::listOwnerStock('agent', ...)` verbatim, summed — the same definition `update()`'s own reassignment guard checks | ✅ resolved; powers the zero-stock Manager reassignment guard (Agent Edit) and, once widened below, the Commercial Current Stock panel. Superseded finding: earlier M7-Phase-2 discovery had recorded no such endpoint existed |
+| — | **verified, positive, gap closed** | Same endpoint widened (backend commit `f9a6fe4`) to also carry `available_grattage`, a bcmath decimal string produced by the newly extracted `StockService::commercialAvailableGrattage()` — the SAME formula `validateTransfer()`'s own STEP 7b capacity gate now calls on the locked commercial row, verified from source | ✅ resolved; the real formula (`avance − max(0, validated transfers − validated returns)`, floored at 0, deposits excluded per Phase-5-Cap-Inv-1) is now read-exposed for the first time. Informational only — `validateTransfer()`'s own locked gate remains sole authority for an actual Transfer |
+| — | **verified, positive, gap closed** | Same endpoint widened again (backend commit `15aa704`) to also carry `stock`, a per-product breakdown — identical row shape to `GET /admin/managers/{manager}/stock` (`product_id`/`name`/`operator`/`value`/`available_quantity`), already filtered to `quantity > 0`. `stock_quantity` and `stock` are both derived from ONE `listOwnerStock()` call, not two | ✅ resolved; powers the Commercial Stock panel's product table, sharing `StockProductTable` with Manager's own equivalent table |
+| — | **verified, positive** | `manager_id` reassignment validation (`update()`) requires the target to be an active `Agent` with `role=manager` (`Rule::exists('agents','id')->where('status','active')->where('role','manager')`) — the same "eligible manager" convention Allocation/Agent Transfer/Agent Stock Return FormRequests already use | ✅ no action needed; the Manager `<select>` sources from `useManagerOptionsQuery({status:"active"})`, so an ineligible target can never be selected in the first place |
+| — | **verified, positive** | The reassignment guard itself (`COMMERCIAL_HAS_STOCK_CANNOT_REASSIGN`, 422) is atomic — `update()` now locks the commercial row, re-checks stock, and writes the reassignment inside one transaction, closing a prior TOCTOU gap between the proactive read and the write | ✅ no action needed; the frontend's own stock-quantity read is explicitly a UX hint, never the authorization check — a backend race still surfaces correctly as a 422 that keeps the Edit drawer open and refreshes the read |
+| — | **verified, positive, gap closed** | `update()` now catches `ValidationException` before its generic handler (same backend commit as the guard) — a genuine field-level 422 (e.g. an ineligible `manager_id`) now maps onto its own field, no longer swallowed into a generic 500 | ✅ resolved; this was a disclosed BC-N-class defect specific to `update()`, now fixed. Every other BC-N instance elsewhere in the product (Managers/Commercials/Clients list validation, etc.) is unaffected and stays open |
+
 ## Domain inventory
 
 ```
@@ -2213,7 +2418,7 @@ src/domains/
                                    action bar, and a bulk-assign sheet against
                                    `PATCH .../assign-bulk`; NO single-client
                                    assign/reassign/unassign — still deferred)
-    └── agent-onboarding/   M3.6 — COMPLETE, manually validated
+    ├── agent-onboarding/   M3.6 — COMPLETE, manually validated
                                    (not a resource domain — a WORKFLOW domain,
                                    the first of its kind; creates a Manager OR
                                    a Commercial through one shared backend
@@ -2240,6 +2445,36 @@ src/domains/
                                    the sole, explicit submission path;
                                    dedicated success screen for one-time
                                    backend-generated credentials, ADR-0017)
+    └── agents/             M7 Agent 360 — COMPLETE, manual QA passed
+                                   (a second WORKFLOW-adjacent domain — the
+                                   first cross-domain COMPOSITION surface,
+                                   WorkspacePage pattern; a flat
+                                   /network/agents/:id route reached from
+                                   both Managers'/Commercials' own list rows;
+                                   models the discriminated-union raw
+                                   `$agent->toArray()` shape `show()` returns,
+                                   tagged on `role`; identity/profile,
+                                   Block/Activate, full role-aware Edit
+                                   (existingUrl file-preview contract,
+                                   Manager reassignment gated on a live
+                                   Commercial stock-quantity read); composes
+                                   Money/Stock/Agent Transfers/Agent Stock
+                                   Returns' own public surfaces at the page
+                                   level (mechanism 1, FTA §4) — none of the
+                                   four domains knows Agent 360 exists;
+                                   exports and consumes Grattage's own
+                                   previously-domain-private
+                                   useGrattageOutstandingQuery, its first
+                                   real caller (ADR-0026); every panel
+                                   independently PanelBoundary-wrapped and
+                                   permission-gated, firing in parallel, one
+                                   panel's failure never blanking another;
+                                   Commercial Current Stock/product
+                                   breakdown/Available Grattage all reuse the
+                                   SAME stock-quantity read the reassignment
+                                   guard already used, widened, not a new
+                                   query; StockProductTable shared with
+                                   Manager's own stock table)
 
 src/domains/money/
 └── cheques/               M4.2 — COMPLETE, all phases (1+2+3A+3B+3C),
