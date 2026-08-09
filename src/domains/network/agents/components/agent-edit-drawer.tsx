@@ -831,8 +831,13 @@ function ManagerReassignmentField({
   });
   const managersQuery = useManagerOptionsQuery({ status: "active" });
 
-  const stockConfirmedZero = canReadStock && stockQuery.data === 0;
-  const stockConfirmedPositive = canReadStock && (stockQuery.data ?? 0) > 0;
+  // stock_quantity ONLY — the M7 Agent 360 completion item's own guard
+  // condition, unchanged by the later Available Grattage addition
+  // (backend commit `f9a6fe4`). This field's disabled/enabled state must
+  // never be derived from `availableGrattage`.
+  const stockQuantity = stockQuery.data?.stockQuantity;
+  const stockConfirmedZero = canReadStock && stockQuantity === 0;
+  const stockConfirmedPositive = canReadStock && (stockQuantity ?? 0) > 0;
   // Fail closed: enabled only once the authoritative read has confirmed
   // zero. Loading, error, and unauthorized all leave it disabled.
   const fieldDisabled = !stockConfirmedZero;
@@ -847,7 +852,7 @@ function ManagerReassignmentField({
       ? "Checking current stock…"
       : stockQuery.isError
         ? "Current stock could not be verified."
-        : `Current stock: ${stockQuery.data}`;
+        : `Current stock: ${stockQuantity}`;
 
   return (
     <div className="flex flex-col gap-1.5">

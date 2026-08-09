@@ -6,7 +6,7 @@ import {
   activateAgent,
   blockAgent,
   fetchAgent,
-  fetchCommercialStockQuantity,
+  fetchCommercialStockSnapshot,
   updateAgent,
   type UpdateAgentInput,
 } from "./agents-api";
@@ -417,17 +417,50 @@ describe("updateAgent", () => {
   });
 });
 
-describe("fetchCommercialStockQuantity (M7 Agent 360 completion item)", () => {
-  it("maps the flat { stock_quantity } envelope verbatim", async () => {
+describe("fetchCommercialStockSnapshot (M7 Agent 360, widened by backend commits f9a6fe4 and 15aa704)", () => {
+  it("maps { stock_quantity, available_grattage, stock: [] } to { stockQuantity, availableGrattage, stock: [] }", async () => {
     server.use(
       http.get(`${API}/admin/agents/12/stock-quantity`, () =>
-        HttpResponse.json({ stock_quantity: 7 }),
+        HttpResponse.json({ stock_quantity: 7, available_grattage: "300.00", stock: [] }),
       ),
     );
 
-    const result = await fetchCommercialStockQuantity(12);
+    const result = await fetchCommercialStockSnapshot(12);
 
-    expect(result).toBe(7);
+    expect(result).toEqual({ stockQuantity: 7, availableGrattage: "300.00", stock: [] });
+  });
+
+  it("maps each stock row from snake_case to camelCase verbatim, including the native-integer value", async () => {
+    server.use(
+      http.get(`${API}/admin/agents/12/stock-quantity`, () =>
+        HttpResponse.json({
+          stock_quantity: 3,
+          available_grattage: "0.00",
+          stock: [
+            {
+              product_id: 9,
+              name: "IAM 10dh",
+              operator: "IAM",
+              value: 10,
+              available_quantity: 3,
+            },
+          ],
+        }),
+      ),
+    );
+
+    const result = await fetchCommercialStockSnapshot(12);
+
+    expect(result.stock).toEqual([
+      {
+        productId: 9,
+        name: "IAM 10dh",
+        operator: "IAM",
+        value: 10,
+        availableQuantity: 3,
+      },
+    ]);
+    expect(typeof result.stock[0]?.value).toBe("number");
   });
 
   it("requests the exact commercial id", async () => {
@@ -435,12 +468,67 @@ describe("fetchCommercialStockQuantity (M7 Agent 360 completion item)", () => {
     server.use(
       http.get(`${API}/admin/agents/12/stock-quantity`, ({ request }) => {
         url = new URL(request.url);
-        return HttpResponse.json({ stock_quantity: 0 });
+        return HttpResponse.json({
+          stock_quantity: 0,
+          available_grattage: "0.00",
+          stock: [],
+        });
       }),
     );
 
-    await fetchCommercialStockQuantity(12);
+    await fetchCommercialStockSnapshot(12);
 
     expect(url?.pathname).toBe("/api/v1/admin/agents/12/stock-quantity");
+  });
+
+  it("preserves available_grattage as a string verbatim — never parsed to a number", async () => {
+    server.use(
+      http.get(`${API}/admin/agents/12/stock-quantity`, () =>
+        HttpResponse.json({
+          stock_quantity: 2,
+          available_grattage: "4800.00",
+          stock: [],
+        }),
+      ),
+    );
+
+    const result = await fetchCommercialStockSnapshot(12);
+
+    expect(result.availableGrattage).toBe("4800.00");
+    expect(typeof result.availableGrattage).toBe("string");
+  });
+
+  it("preserves stockQuantity independently from the stock row count — never derived from stock.length or summed", async () => {
+    server.use(
+      http.get(`${API}/admin/agents/12/stock-quantity`, () =>
+        HttpResponse.json({
+          stock_quantity: 42,
+          available_grattage: "0.00",
+          stock: [
+            {
+              product_id: 1,
+              name: "A",
+              operator: "IAM",
+              value: 5,
+              available_quantity: 20,
+            },
+            {
+              product_id: 2,
+              name: "B",
+              operator: "Orange",
+              value: 10,
+              available_quantity: 22,
+            },
+          ],
+        }),
+      ),
+    );
+
+    const result = await fetchCommercialStockSnapshot(12);
+
+    // stockQuantity (42) happens to equal the sum here, but the mapper must
+    // read it verbatim from the response, never compute it from `stock`.
+    expect(result.stockQuantity).toBe(42);
+    expect(result.stock).toHaveLength(2);
   });
 });

@@ -24,6 +24,7 @@ import {
   useAgentTransfersQuery,
   useManagerStockQuery,
   type AgentTransfer,
+  type ManagerStockItem,
 } from "@/domains/stock/agent-transfers";
 import {
   AGENT_STOCK_RETURNS_PATH,
@@ -34,6 +35,7 @@ import {
   type AgentStockReturn,
 } from "@/domains/stock/agent-stock-returns";
 import type { Agent } from "../model/agent";
+import { useCommercialStockQuantityQuery } from "../queries/agents-queries";
 import { ActivityList } from "./activity-list";
 
 /**
@@ -52,6 +54,46 @@ import { ActivityList } from "./activity-list";
  * value" figure. Only `name`/`availableQuantity` are shown, matching the
  * M7 Phase 2 decision precisely ("display only backend-returned
  * product/quantity information").
+ *
+ * COMMERCIAL CURRENT STOCK (M7 Agent 360 discovery item, post-completion) —
+ * supersedes the earlier "no authoritative Commercial current-stock
+ * endpoint exists" finding. Backend commit `5302f99` added `GET
+ * /admin/agents/{agent}/stock-quantity`, already reused (unchanged, no new
+ * query/key) from `useCommercialStockQuantityQuery` — the exact same hook
+ * `ManagerReassignmentField` calls in `AgentEditDrawer`. Widened again by
+ * backend commit `15aa704`: a REAL per-product breakdown now exists
+ * (`stock[]`, identical shape to `GET /admin/managers/{manager}/stock`),
+ * superseding the earlier "total only, no breakdown" finding — rendered
+ * through the SAME `StockProductTable` presentation `ManagerStockTable`
+ * already uses below (genuinely identical row contract and markup;
+ * verified from source that both endpoints derive `product_id`/`name`/
+ * `operator`/`value`/`available_quantity` the same way, `quantity > 0`
+ * only). `stock_quantity` is shown too, as a small "Total stock" summary
+ * — read directly from the response, never summed from the visible rows.
+ * Gated on `ACCESS_DASHBOARD` — the endpoint's own real backend permission,
+ * re-verified from `routes/api.php` — NOT `VIEW_AGENT_TRANSFERS`/
+ * `VIEW_AGENT_STOCK_RETURN`, which gate unrelated endpoints and would let
+ * a request fire without the right permission.
+ *
+ * COMMERCIAL AVAILABLE GRATTAGE (M7 Agent 360, backend commit `f9a6fe4`) —
+ * supersedes the earlier "no authoritative available-capacity read exists"
+ * finding. The SAME `stock-quantity` response now also carries
+ * `available_grattage`, produced by `StockService::commercialAvailableGrattage()`
+ * — verified from source that `validateTransfer()`'s own STEP 7b capacity
+ * gate now calls this SAME extracted method on the locked commercial row,
+ * so this read and Transfer validation share one calculation, not two.
+ * Rendered VERBATIM as the decimal string the backend returns — the same
+ * "decimal-cast STRING, never through `MoneyAmount`, never parsed" discipline
+ * `AllocationsActivity`/`AgentTransfersActivity`/`AgentStockReturnsActivity`
+ * below already apply to `montant`, for the identical reason (a parse/
+ * reformat round trip risks float precision loss `formatMoney` is not
+ * built to avoid for a value that already arrives as an exact string). No
+ * currency suffix — this file's own established `montant` convention has
+ * none either, and inventing one here would be new, not reused, formatting.
+ * NEVER derived, recomputed, or reconstructed client-side from Transfers,
+ * Returns, Deposits, or `montant_avance_grattage` — the backend value is
+ * used as-is, informational only; `validateTransfer()`'s own locked STEP 7b
+ * remains the sole authority for an actual Transfer.
  */
 export function AgentStockPanel({ agent }: { agent: Agent }) {
   const { has } = usePermission();
@@ -66,7 +108,7 @@ export function AgentStockPanel({ agent }: { agent: Agent }) {
   const hasAnySection =
     agent.role === "manager"
       ? canViewStock || canViewAllocations
-      : canViewTransfers || canViewReturns;
+      : canViewStock || canViewTransfers || canViewReturns;
 
   if (!hasAnySection) return null;
 
@@ -79,16 +121,123 @@ export function AgentStockPanel({ agent }: { agent: Agent }) {
           {canViewAllocations ? <AllocationsActivity agentId={agent.id} /> : null}
         </>
       ) : (
-        // NO current-stock/balance sub-section here — no authoritative
-        // Commercial current-stock endpoint exists (M7 Phase 2 discovery,
-        // re-confirmed: `AgentController::stock()` still hard-404s any
-        // non-manager). Omitted entirely, not a disabled placeholder.
         <>
+          {canViewStock ? <CommercialStockTotal agentId={agent.id} /> : null}
           {canViewTransfers ? <AgentTransfersActivity agentId={agent.id} /> : null}
           {canViewReturns ? <AgentStockReturnsActivity agentId={agent.id} /> : null}
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * The product/quantity table itself — genuinely identical row contract and
+ * markup between Manager's own Current Stock (`ManagerStockItem`) and a
+ * Commercial's (`CommercialStockItem`, structurally identical, verified
+ * from source in `agents-api.ts`'s own docblock). Presentation only: takes
+ * already-resolved rows, owns no query/loading/error/empty state — those
+ * genuinely differ per caller (different empty-state copy, and Commercial
+ * additionally shows a "Total stock" summary and Available Grattage
+ * alongside it), so THIS is the part worth sharing, not the whole
+ * component (ADR-0012 — duplication over a forced shared abstraction).
+ */
+function StockProductTable({ items }: { items: ManagerStockItem[] }) {
+  return (
+    <table className="w-full text-sm">
+      <thead>
+        <tr className="border-b text-left">
+          <th scope="col" className="p-1 font-medium">
+            Product
+          </th>
+          <th scope="col" className="p-1 text-right font-medium">
+            Available quantity
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {items.map((item) => (
+          <tr key={item.productId} className="border-b">
+            <td className="p-1">{item.name}</td>
+            <td className="p-1 text-right tabular-nums">{item.availableQuantity}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+/**
+ * Current stock (product breakdown table, via `StockProductTable`, plus a
+ * "Total stock" summary read directly from `stockQuantity` — never summed
+ * from the visible rows) plus Available Grattage, rendered verbatim with no
+ * currency suffix (see the module docblock for why). ONE query, ONE
+ * loading/error state for all of it — everything comes from the same
+ * response, so a failed read shows one retry that recovers everything,
+ * never independent error UIs for one request. `enabled` is never set from
+ * this component's own render — `AgentStockPanel` only ever MOUNTS this
+ * component when `canViewStock` is true (the same zero-footprint
+ * conditional-mounting pattern `ManagerReassignmentField` already
+ * established), so the query never fires without the permission.
+ *
+ * EMPTY STATE is `stockQuantity === 0 && stock.length === 0` — both,
+ * deliberately, not either alone: the backend derives both from the same
+ * collection in the same call (verified from source, commit `15aa704`), so
+ * in practice they are always zero/empty together; checking both is a
+ * cheap, honest double-check rather than trusting only one field. Available
+ * Grattage still renders in the empty-stock case — it is not conditioned
+ * on stock at all, since a commercial with no held stock can still have
+ * (or lack) Transfer capacity.
+ */
+function CommercialStockTotal({ agentId }: { agentId: number }) {
+  const query = useCommercialStockQuantityQuery(agentId);
+  const errorMessage = isAppError(query.error)
+    ? (resolveErrorDisplay(query.error).message ?? "Stock could not be loaded.")
+    : "Stock could not be loaded.";
+
+  if (query.isPending) {
+    return (
+      <div className="flex flex-col gap-2">
+        <h3 className="text-sm font-semibold">Current stock</h3>
+        <ListLoadingState rows={2} />
+      </div>
+    );
+  }
+
+  if (query.isError) {
+    return (
+      <div className="flex flex-col gap-2">
+        <h3 className="text-sm font-semibold">Current stock</h3>
+        <ListErrorState message={errorMessage} onRetry={() => void query.refetch()} />
+      </div>
+    );
+  }
+
+  const { stockQuantity, availableGrattage, stock } = query.data;
+  const isEmpty = stockQuantity === 0 && stock.length === 0;
+
+  return (
+    <>
+      <div className="flex flex-col gap-2">
+        <h3 className="text-sm font-semibold">Current stock</h3>
+        {isEmpty ? (
+          <ListEmptyState>No stock currently held.</ListEmptyState>
+        ) : (
+          <>
+            <p className="text-muted-foreground text-xs">
+              Total stock: {stockQuantity} units
+            </p>
+            <StockProductTable items={stock} />
+          </>
+        )}
+      </div>
+      <div className="flex flex-col gap-2">
+        <h3 className="text-sm font-semibold">Available Grattage</h3>
+        {/* A decimal-cast STRING — rendered verbatim, never through
+            MoneyAmount, matching this file's own montant convention below. */}
+        <p className="text-sm tabular-nums">{availableGrattage}</p>
+      </div>
+    </>
   );
 }
 
@@ -108,26 +257,7 @@ function ManagerStockTable({ managerId }: { managerId: number }) {
       ) : (query.data ?? []).length === 0 ? (
         <ListEmptyState>No stock allocated to this manager.</ListEmptyState>
       ) : (
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b text-left">
-              <th scope="col" className="p-1 font-medium">
-                Product
-              </th>
-              <th scope="col" className="p-1 text-right font-medium">
-                Available quantity
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {(query.data ?? []).map((item) => (
-              <tr key={item.productId} className="border-b">
-                <td className="p-1">{item.name}</td>
-                <td className="p-1 text-right tabular-nums">{item.availableQuantity}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <StockProductTable items={query.data ?? []} />
       )}
     </div>
   );

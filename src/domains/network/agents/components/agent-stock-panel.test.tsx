@@ -97,6 +97,43 @@ function agentStockReturnsHandler(rows: unknown[] = [], onRequest?: (url: URL) =
   });
 }
 
+function stockRow(productId: number, name: string, quantity: number) {
+  return {
+    product_id: productId,
+    name,
+    operator: "IAM",
+    value: 10,
+    available_quantity: quantity,
+  };
+}
+
+/**
+ * `GET /admin/agents/{agent}/stock-quantity` (reused verbatim here). Widened
+ * by backend commit `f9a6fe4` — `available_grattage` is ALWAYS present
+ * alongside `stock_quantity` on a real response — and by commit `15aa704`
+ * — `stock` (the product breakdown) is ALWAYS present too — so this
+ * fixture defaults to a fixed decimal string and a single row consistent
+ * with `quantity`, rather than omitting either. Callers that need a
+ * SPECIFIC breakdown (multiple products, or a deliberately inconsistent
+ * total for the "never aggregated client-side" tests) pass `stock`
+ * explicitly.
+ */
+function stockQuantityHandler(
+  quantity: number,
+  onRequest?: (url: URL) => void,
+  availableGrattage = "300.00",
+  stock: unknown[] = quantity > 0 ? [stockRow(1, "IAM 10dh", quantity)] : [],
+) {
+  return http.get(`${API}/admin/agents/12/stock-quantity`, ({ request }) => {
+    onRequest?.(new URL(request.url));
+    return HttpResponse.json({
+      stock_quantity: quantity,
+      available_grattage: availableGrattage,
+      stock,
+    });
+  });
+}
+
 function allocationRow(id: number) {
   return {
     id,
@@ -179,6 +216,27 @@ describe("Manager stock panel", () => {
   beforeEach(() => {
     window.localStorage.clear();
     signInWith([PERMISSIONS.ACCESS_DASHBOARD, PERMISSIONS.VIEW_ALLOCATIONS]);
+  });
+
+  it("never requests the Commercial-only stock-quantity/available_grattage read, even with access-dashboard held", async () => {
+    let commercialReadRequested = false;
+    server.use(
+      managerStockHandler([]),
+      allocationsHandler([]),
+      http.get(`${API}/admin/agents/5/stock-quantity`, () => {
+        commercialReadRequested = true;
+        return HttpResponse.json({
+          stock_quantity: 0,
+          available_grattage: "0.00",
+          stock: [],
+        });
+      }),
+    );
+    renderPanel(managerAgent);
+
+    await screen.findByText(/no stock allocated to this manager/i);
+    expect(screen.queryByText("Available Grattage")).not.toBeInTheDocument();
+    expect(commercialReadRequested).toBe(false);
   });
 
   it("shows the authoritative current-stock table — product/quantity only, no derived total", async () => {
@@ -310,13 +368,193 @@ describe("Commercial stock panel", () => {
     signInWith([PERMISSIONS.VIEW_AGENT_TRANSFERS, PERMISSIONS.VIEW_AGENT_STOCK_RETURN]);
   });
 
-  it("never renders a current-stock subsection — no authoritative endpoint exists", async () => {
-    server.use(agentTransfersHandler([transferRow(1)]), agentStockReturnsHandler([]));
+  it("hides Current stock AND Available Grattage without access-dashboard, independent of Transfers/Returns", async () => {
+    let stockRequested = false;
+    server.use(
+      stockQuantityHandler(3, () => (stockRequested = true), "300.00"),
+      agentTransfersHandler([transferRow(1)]),
+      agentStockReturnsHandler([]),
+    );
     renderPanel(commercialAgent);
 
     await screen.findByText("Recent transfers");
     expect(screen.queryByText("Current stock")).not.toBeInTheDocument();
+    expect(screen.queryByText("Available Grattage")).not.toBeInTheDocument();
+    expect(stockRequested).toBe(false);
+  });
+
+  it("shows a loading state, then the empty-stock state AND Available Grattage together (zero stock, positive capacity)", async () => {
+    signInWith([PERMISSIONS.ACCESS_DASHBOARD]);
+    server.use(
+      stockQuantityHandler(0, undefined, "4800.00"),
+      agentTransfersHandler([]),
+      agentStockReturnsHandler([]),
+    );
+    renderPanel(commercialAgent);
+
+    expect(await screen.findByText("Current stock")).toBeInTheDocument();
+    expect(await screen.findByText("No stock currently held.")).toBeInTheDocument();
+    expect(screen.getByText("Available Grattage")).toBeInTheDocument();
+    expect(screen.getByText("4800.00")).toBeInTheDocument();
+  });
+
+  it("shows positive stock's Total stock summary alongside its own remaining Available Grattage — independent numbers, not derived from each other", async () => {
+    signInWith([PERMISSIONS.ACCESS_DASHBOARD]);
+    server.use(
+      stockQuantityHandler(7, undefined, "300.00"),
+      agentTransfersHandler([]),
+      agentStockReturnsHandler([]),
+    );
+    renderPanel(commercialAgent);
+
+    expect(await screen.findByText("Total stock: 7 units")).toBeInTheDocument();
+    expect(screen.getByText("300.00")).toBeInTheDocument();
+  });
+
+  it("displays zero Available Grattage as '0.00', not an empty/omitted state", async () => {
+    signInWith([PERMISSIONS.ACCESS_DASHBOARD]);
+    server.use(
+      stockQuantityHandler(2, undefined, "0.00"),
+      agentTransfersHandler([]),
+      agentStockReturnsHandler([]),
+    );
+    renderPanel(commercialAgent);
+
+    await screen.findByText("Total stock: 2 units");
+    expect(screen.getByText("Available Grattage")).toBeInTheDocument();
+    expect(screen.getByText("0.00")).toBeInTheDocument();
+  });
+
+  it("renders the backend's decimal string verbatim — no rounding, no reformatting, no currency suffix invented", async () => {
+    signInWith([PERMISSIONS.ACCESS_DASHBOARD]);
+    server.use(
+      stockQuantityHandler(1, undefined, "1234.56"),
+      agentTransfersHandler([]),
+      agentStockReturnsHandler([]),
+    );
+    renderPanel(commercialAgent);
+
+    // Exact string, unmangled: not "1 234,56", not "1234.56 DH", not "1,234.56".
+    expect(await screen.findByText("1234.56")).toBeInTheDocument();
+    expect(screen.queryByText(/DH/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/1[\s ]234/)).not.toBeInTheDocument();
+  });
+
+  it("shows a retryable error affecting Current stock AND Available Grattage together, and recovers both from one retry", async () => {
+    signInWith([PERMISSIONS.ACCESS_DASHBOARD]);
+    let shouldFail = true;
+    server.use(
+      http.get(`${API}/admin/agents/12/stock-quantity`, () =>
+        shouldFail
+          ? HttpResponse.json({ success: false, message: "boom" }, { status: 500 })
+          : HttpResponse.json({
+              stock_quantity: 4,
+              available_grattage: "150.00",
+              stock: [stockRow(1, "IAM 10dh", 4)],
+            }),
+      ),
+      agentTransfersHandler([]),
+      agentStockReturnsHandler([]),
+    );
+    renderPanel(commercialAgent);
+
+    await screen.findByRole("alert", {}, { timeout: 3000 });
+    shouldFail = false;
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+
+    expect(await screen.findByText("Total stock: 4 units")).toBeInTheDocument();
+    expect(await screen.findByText("IAM 10dh")).toBeInTheDocument();
+    expect(screen.getByText("150.00")).toBeInTheDocument();
+  });
+
+  it("requests stock-quantity by this exact commercial's id, gated on access-dashboard alone", async () => {
+    signInWith([PERMISSIONS.ACCESS_DASHBOARD]);
+    let requested = false;
+    server.use(
+      stockQuantityHandler(1, () => (requested = true)),
+      agentTransfersHandler([]),
+      agentStockReturnsHandler([]),
+    );
+    renderPanel(commercialAgent);
+
+    await waitFor(() => expect(requested).toBe(true));
+  });
+
+  it("renders exactly one product row with the exact Product / Available quantity values", async () => {
+    signInWith([PERMISSIONS.ACCESS_DASHBOARD]);
+    server.use(
+      stockQuantityHandler(1, undefined, "0.00", [stockRow(9, "IAM 10dh", 1)]),
+      agentTransfersHandler([]),
+      agentStockReturnsHandler([]),
+    );
+    renderPanel(commercialAgent);
+
+    expect(
+      await screen.findByRole("columnheader", { name: "Product" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("columnheader", { name: "Available quantity" }),
+    ).toBeInTheDocument();
+    const row = screen.getByText("IAM 10dh").closest("tr")!;
+    expect(within(row).getByText("1")).toBeInTheDocument();
+    expect(screen.getAllByRole("row")).toHaveLength(2); // header + 1 data row
+  });
+
+  it("renders multiple product rows, each with its own name and quantity", async () => {
+    signInWith([PERMISSIONS.ACCESS_DASHBOARD]);
+    server.use(
+      stockQuantityHandler(3, undefined, "0.00", [
+        stockRow(1, "IAM 10dh", 1),
+        stockRow(2, "Orange 5dh", 2),
+      ]),
+      agentTransfersHandler([]),
+      agentStockReturnsHandler([]),
+    );
+    renderPanel(commercialAgent);
+
+    const iamRow = (await screen.findByText("IAM 10dh")).closest("tr")!;
+    const orangeRow = screen.getByText("Orange 5dh").closest("tr")!;
+    expect(within(iamRow).getByText("1")).toBeInTheDocument();
+    expect(within(orangeRow).getByText("2")).toBeInTheDocument();
+    expect(screen.getAllByRole("row")).toHaveLength(3); // header + 2 data rows
+  });
+
+  it("shows 'No stock currently held.' — a real empty state, not a headerless/rowless table — when stock is empty", async () => {
+    signInWith([PERMISSIONS.ACCESS_DASHBOARD]);
+    server.use(
+      stockQuantityHandler(0, undefined, "500.00", []),
+      agentTransfersHandler([]),
+      agentStockReturnsHandler([]),
+    );
+    renderPanel(commercialAgent);
+
+    expect(await screen.findByText("No stock currently held.")).toBeInTheDocument();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("columnheader", { name: "Product" }),
+    ).not.toBeInTheDocument();
+    // Available Grattage renders independently of the empty stock state.
+    expect(screen.getByText("Available Grattage")).toBeInTheDocument();
+    expect(screen.getByText("500.00")).toBeInTheDocument();
+  });
+
+  it("reads Total stock from stock_quantity verbatim — never sums the visible rows to recreate it", async () => {
+    // Deliberately inconsistent fixture (sum of rows = 3, stock_quantity = 99):
+    // a real backend response never does this, but it proves the displayed
+    // total is read directly from `stock_quantity`, not computed from `stock`.
+    signInWith([PERMISSIONS.ACCESS_DASHBOARD]);
+    server.use(
+      stockQuantityHandler(99, undefined, "0.00", [
+        stockRow(1, "IAM 10dh", 1),
+        stockRow(2, "Orange 5dh", 2),
+      ]),
+      agentTransfersHandler([]),
+      agentStockReturnsHandler([]),
+    );
+    renderPanel(commercialAgent);
+
+    expect(await screen.findByText("Total stock: 99 units")).toBeInTheDocument();
+    expect(screen.queryByText("Total stock: 3 units")).not.toBeInTheDocument();
   });
 
   it("filters transfers by the exact commercial_id", async () => {
@@ -388,16 +626,19 @@ describe("Commercial stock panel", () => {
     expect(returnsRequested).toBe(false);
   });
 
-  it("mounts neither query without either permission", () => {
+  it("mounts no query — stock, transfers, or returns — without any permission", () => {
     signInWith([]);
+    let stockRequested = false;
     let transfersRequested = false;
     let returnsRequested = false;
     server.use(
+      stockQuantityHandler(0, () => (stockRequested = true)),
       agentTransfersHandler([], () => (transfersRequested = true)),
       agentStockReturnsHandler([], () => (returnsRequested = true)),
     );
     renderPanel(commercialAgent);
 
+    expect(stockRequested).toBe(false);
     expect(transfersRequested).toBe(false);
     expect(returnsRequested).toBe(false);
   });

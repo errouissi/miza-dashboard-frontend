@@ -126,6 +126,17 @@ export function FileUploadField({
   const isLocalImage = !!value && value.type.startsWith("image/");
   const isExistingImage = !!existingUrl && looksLikeImageUrl(existingUrl);
 
+  // Local-selection precedence, computed once (module docblock's own rule):
+  // a real File always wins over existingUrl.
+  const previewUrl = value ? localPreviewUrl : (existingUrl ?? undefined);
+  const previewIsImage = value ? isLocalImage : isExistingImage;
+  const statusText = value
+    ? value.name
+    : existingUrl
+      ? "Current file on record"
+      : "No file chosen";
+  const previewLinkLabel = value ? "Preview selected file" : "View current file";
+
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex flex-wrap items-center gap-2">
@@ -147,58 +158,59 @@ export function FileUploadField({
           {label}
           {required ? null : " (optional)"}
         </label>
-        {value ? (
-          <>
-            <span className="text-muted-foreground max-w-56 truncate text-sm">
-              {value.name}
-            </span>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => onChange(null)}
-            >
-              Remove
-            </Button>
-          </>
-        ) : existingUrl ? (
-          <span className="text-muted-foreground text-sm">Current file on record</span>
-        ) : (
-          <span className="text-muted-foreground text-sm">No file chosen</span>
-        )}
+        {/*
+         * Both the status text and the Remove button are ALWAYS mounted —
+         * only their text/`hidden` state changes across `value`/`existingUrl`
+         * transitions. Swapping between a bare `<span>` and a `<>` fragment
+         * containing `<span>+<Button>` (the previous shape) removes and
+         * re-inserts DOM nodes on every file selection. Inside a Radix
+         * `Dialog`, that removal — landing while focus is transiently on
+         * `document.body` during the native OS file-picker round trip —
+         * trips `FocusScope`'s own recovery heuristic (it watches the
+         * dialog's subtree via `MutationObserver` and forcibly refocuses the
+         * dialog container the instant it sees a removed node while focus
+         * looks "lost"), yanking focus away from wherever the operator was
+         * scrolled to. Keeping the node count and types stable — attribute
+         * patches only — never gives that observer a `removedNodes` event to
+         * react to.
+         */}
+        <span className="text-muted-foreground max-w-56 truncate text-sm">
+          {statusText}
+        </span>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          hidden={!value}
+          onClick={() => onChange(null)}
+        >
+          Remove
+        </Button>
       </div>
 
-      {value && isLocalImage && localPreviewUrl ? (
-        <img
-          src={localPreviewUrl}
-          alt={`${label} preview`}
-          className="h-24 w-24 rounded-md border object-cover"
-        />
-      ) : value ? (
-        <a
-          href={localPreviewUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="text-primary text-sm underline underline-offset-4"
-        >
-          Preview selected file
-        </a>
-      ) : existingUrl && isExistingImage ? (
-        <img
-          src={existingUrl}
-          alt={`${label} — current file`}
-          className="h-24 w-24 rounded-md border object-cover"
-        />
-      ) : existingUrl ? (
-        <a
-          href={existingUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="text-primary text-sm underline underline-offset-4"
-        >
-          View current file
-        </a>
-      ) : null}
+      {/*
+       * Same reasoning as the row above: one `<img>` and one `<a>`, always
+       * mounted, `hidden` toggled rather than swapped in and out — an
+       * existing-image preview replaced by a newly selected image now
+       * reuses the same `<img>` node (a plain `src` update) instead of
+       * tearing down and rebuilding across an `<img>`/`<a>`/nothing
+       * three-way conditional.
+       */}
+      <img
+        src={previewIsImage ? previewUrl : undefined}
+        alt={previewUrl ? (value ? `${label} preview` : `${label} — current file`) : ""}
+        hidden={!previewUrl || !previewIsImage}
+        className="h-24 w-24 rounded-md border object-cover"
+      />
+      <a
+        href={!previewIsImage ? previewUrl : undefined}
+        target="_blank"
+        rel="noreferrer"
+        hidden={!previewUrl || previewIsImage}
+        className="text-primary text-sm underline underline-offset-4"
+      >
+        {previewLinkLabel}
+      </a>
 
       {helperText && !error ? (
         <p className="text-muted-foreground text-xs">{helperText}</p>

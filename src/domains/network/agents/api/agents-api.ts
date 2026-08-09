@@ -148,24 +148,109 @@ export async function activateAgent(id: number): Promise<void> {
 /**
  * `GET /admin/agents/{agent}/stock-quantity` (`access-dashboard`) — added in
  * backend commit `5302f99` specifically to power the Agent Edit Zero-stock
- * reassignment guard (M7 Agent 360 completion item). Commercial-only:
- * verified from source (`AgentController::stockQuantity`) that a manager id
- * 404s, matching the `stock()` endpoint's own convention.
+ * reassignment guard (M7 Agent 360 completion item), widened in backend
+ * commit `f9a6fe4` to also carry `available_grattage`, widened again in
+ * backend commit `15aa704` to also carry `stock`, the product-level
+ * breakdown. Commercial-only: verified from source
+ * (`AgentController::stockQuantity`) that a manager id 404s, matching the
+ * `stock()` endpoint's own convention.
  *
- * `{ stock_quantity: <int> }` — no `success`/`data` envelope, no pagination,
- * a single bounded number. Reuses `StockService::listOwnerStock('agent',
- * ...)->sum('quantity')` verbatim — the EXACT same definition the backend's
- * own `update()` reassignment guard re-checks atomically at save time. This
- * read is informational only, per the backend's own docblock: a proactive
- * UI hint, never the authorization check itself.
+ * `{ stock_quantity: <int>, available_grattage: <decimal string>, stock:
+ * <array> }` — no `success`/`data` envelope, no pagination. `stock_quantity`
+ * and `stock` are both derived from ONE `listOwnerStock('agent', ...)` call
+ * (verified from source, commit `15aa704`) — the backend does not query
+ * twice, and this client does not either. `stock_quantity` reuses
+ * `StockService::listOwnerStock('agent', ...)->sum('quantity')` verbatim —
+ * the EXACT same definition the backend's own `update()` reassignment guard
+ * re-checks atomically at save time. `stock` uses the IDENTICAL row shape
+ * as `GET /admin/managers/{manager}/stock` (`product_id`, `name`,
+ * `operator`, `value`, `available_quantity`) — already filtered server-side
+ * to `quantity > 0`, so a zero-quantity product never appears here, exactly
+ * matching that endpoint's own established contract (see
+ * `manager-stock-api.ts`'s `ManagerStockItem`, whose row shape this
+ * structurally matches — reused at the presentation layer via
+ * `StockProductTable` in `agent-stock-panel.tsx`, not re-imported here, to
+ * keep this domain's own api/model layer self-contained). `available_grattage`
+ * reuses `StockService::commercialAvailableGrattage()` verbatim — verified
+ * from source (backend commit `f9a6fe4`) that `validateTransfer()`'s own
+ * STEP 7b capacity gate now calls this SAME extracted method on the locked
+ * commercial row; this read calls it on an unlocked instance. All three
+ * fields are ALWAYS present together (the controller method has no
+ * conditional branch producing one without another) — never optional here.
+ * `available_grattage` is a bcmath decimal string, scale 2, NEVER a float,
+ * and NEVER negative (floored at 0 server-side) — kept as a string end to
+ * end, never parsed to a number, matching every other money-shaped field
+ * in this codebase. `stock[].value` stays the Product model's native
+ * INTEGER cast (verified from source, commit `15aa704`) — never a decimal
+ * string, matching `ManagerStockItem.value`'s own type exactly.
+ *
+ * ALL THREE FIELDS ARE INFORMATIONAL ONLY, per the backend's own docblock: a
+ * proactive UI hint, never the authorization/capacity check itself. The
+ * zero-stock reassignment guard's own authority remains `update()`'s
+ * locked transaction; a Transfer's capacity authority remains
+ * `validateTransfer()`'s own locked STEP 7b — this read must never be
+ * used to derive, recompute, or substitute for either. `stock` is never
+ * summed client-side to reconstruct `stock_quantity` — the two are read
+ * as the backend returns them, independently.
  */
-type StockQuantityEnvelope = { stock_quantity: number };
+type StockRow = {
+  product_id: number;
+  name: string;
+  operator: string;
+  value: number;
+  available_quantity: number;
+};
 
-export async function fetchCommercialStockQuantity(agentId: number): Promise<number> {
+type StockQuantityEnvelope = {
+  stock_quantity: number;
+  available_grattage: string;
+  stock: StockRow[];
+};
+
+/**
+ * Structurally identical to `ManagerStockItem`
+ * (`stock/agent-transfers/api/manager-stock-api.ts`) — a real,
+ * source-verified, shared wire contract, not a coincidence (backend commit
+ * `15aa704`'s own docblock: "IDENTICAL representation as Manager/Company
+ * stock"). Declared locally rather than importing that domain's type here
+ * so this domain's api/model layer stays self-contained; TypeScript's
+ * structural typing lets a `CommercialStockItem[]` satisfy a
+ * `ManagerStockItem[]`-typed prop without any runtime coupling — see
+ * `StockProductTable` in `agent-stock-panel.tsx`, the actual reuse point.
+ */
+export type CommercialStockItem = {
+  productId: number;
+  name: string;
+  operator: string;
+  value: number;
+  availableQuantity: number;
+};
+
+export type CommercialStockSnapshot = {
+  stockQuantity: number;
+  /** Decimal string, scale 2 — never parsed to a number. See module docblock. */
+  availableGrattage: string;
+  /** Already filtered to quantity > 0 server-side — never re-filtered here. */
+  stock: CommercialStockItem[];
+};
+
+export async function fetchCommercialStockSnapshot(
+  agentId: number,
+): Promise<CommercialStockSnapshot> {
   const { data } = await httpClient.get<StockQuantityEnvelope>(
     `/admin/agents/${agentId}/stock-quantity`,
   );
-  return data.stock_quantity;
+  return {
+    stockQuantity: data.stock_quantity,
+    availableGrattage: data.available_grattage,
+    stock: data.stock.map((row) => ({
+      productId: row.product_id,
+      name: row.name,
+      operator: row.operator,
+      value: row.value,
+      availableQuantity: row.available_quantity,
+    })),
+  };
 }
 
 /**

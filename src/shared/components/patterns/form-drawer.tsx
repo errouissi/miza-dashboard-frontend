@@ -67,22 +67,54 @@ export function FormDrawer({
 }: FormDrawerProps) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right">
-        <SheetHeader>
+      {/*
+       * `overflow-clip` here, plus `min-h-0 flex-1` on the form below and
+       * on the scrollable field region, breaks the flexbox "min-height:auto"
+       * trap: without it, a flex-column child never shrinks below its own
+       * content's intrinsic height, so a field list taller than the sheet
+       * simply pushes the sheet's fixed `h-full` bounds instead of scrolling
+       * — the header and footer scroll away with it and become unreachable.
+       * Short forms (Villes, Secteurs, …) are visually unaffected: when
+       * content fits, `overflow-y-auto` shows no scrollbar and the footer
+       * still sits at the bottom of the sheet exactly as before.
+       *
+       * `overflow-clip`, NOT `overflow-hidden` — a real runtime bug (M7,
+       * manual QA), reproduced live in Chrome, not caught by any jsdom
+       * test: `overflow: hidden` still makes an element a genuine SCROLL
+       * CONTAINER per spec (real `scrollTop`, no scrollbar shown, no
+       * user-driven wheel/drag scroll, but still a valid target for the
+       * browser's native "scroll the focused element into view" behavior).
+       * A file field's native `<input type="file">` regains focus the
+       * instant the OS file picker returns a selection. That input sits
+       * inside BOTH the intended `.overflow-y-auto` region below AND this
+       * outer container — with `overflow-hidden` here, the browser's
+       * focus-scroll walk adjusted THIS element's own `scrollTop` too
+       * (confirmed live: 0 -> 920), on top of the inner region's already-
+       * correct scroll, clipping the entire visible panel into blank space.
+       * `overflow: clip` clips identically for containment but is
+       * explicitly NOT a scroll container by spec — no `scrollTop` for
+       * anything to hijack. Confirmed live in Chrome: selecting a
+       * replacement Photo no longer moves this element's `scrollTop` from
+       * 0, and the drawer stays fully visible and populated.
+       */}
+      <SheetContent side="right" className="overflow-clip">
+        <SheetHeader className="shrink-0">
           <SheetTitle>{title}</SheetTitle>
           <SheetDescription>{description}</SheetDescription>
         </SheetHeader>
 
-        <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4 px-4">
-          {children}
+        <form onSubmit={onSubmit} noValidate className="flex min-h-0 flex-1 flex-col">
+          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 pb-4">
+            {children}
 
-          {errorMessage ? (
-            <p role="alert" className="text-destructive text-sm">
-              {errorMessage}
-            </p>
-          ) : null}
+            {errorMessage ? (
+              <p role="alert" className="text-destructive text-sm">
+                {errorMessage}
+              </p>
+            ) : null}
+          </div>
 
-          <SheetFooter className="px-0">
+          <SheetFooter className="shrink-0 border-t px-4">
             <Button type="submit" disabled={isPending}>
               {isPending ? pendingLabel : submitLabel}
             </Button>

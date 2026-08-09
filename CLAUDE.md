@@ -40,21 +40,6 @@ duplicate that here.** Two rules are restated because they are the ones broken b
 - End every session by updating `project-status.md` and `next-session.md`, appending to
   `decisions.md` only if a real architectural decision was made.
 
-## Commands
-
-Package manager is **pnpm** (`pnpm-lock.yaml`).
-
-| Command                             | Does                                              |
-| ----------------------------------- | ------------------------------------------------- |
-| `pnpm dev`                          | Vite dev server                                   |
-| `pnpm build`                        | typecheck (`tsc -b`) then production build        |
-| `pnpm preview`                      | preview the production build                      |
-| `pnpm lint`                         | ESLint — **enforces the architecture boundaries** |
-| `pnpm typecheck`                    | `tsc -b`                                          |
-| `pnpm test`                         | Vitest (watch)                                    |
-| `pnpm test:ci`                      | Vitest (single run)                               |
-| `pnpm format` / `pnpm format:check` | Prettier                                          |
-
 ## Architecture rules (non-negotiable)
 
 Dependencies point **downward only**: `app → domains → shared → infrastructure`.

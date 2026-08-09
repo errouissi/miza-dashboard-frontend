@@ -5,7 +5,7 @@ import {
   activateAgent,
   blockAgent,
   fetchAgent,
-  fetchCommercialStockQuantity,
+  fetchCommercialStockSnapshot,
   updateAgent,
   type UpdateAgentFiles,
   type UpdateAgentInput,
@@ -34,17 +34,28 @@ export function useAgentQuery(id: number, options: { enabled?: boolean } = {}) {
 /**
  * The Zero-stock reassignment guard's own read (M7 Agent 360 completion
  * item) — `GET /admin/agents/{agent}/stock-quantity`, `access-dashboard`.
+ * Widened twice since (SAME endpoint, SAME cache identity — NOT a new
+ * query/key each time): backend commit `f9a6fe4` added `available_grattage`,
+ * backend commit `15aa704` added `stock` (the product-level breakdown).
+ * All three fields — `stockQuantity`/`availableGrattage`/`stock` — now
+ * read by `AgentStockPanel`'s Commercial Current Stock/Available Grattage
+ * sections, and come from ONE request/one cache entry — there is no reason
+ * to split them, they share one query key and one staleness lifecycle
+ * already (verified from source: the backend itself computes all three
+ * from a single `listOwnerStock()` call, never a second query).
  *
- * `LIVE` TIER, NOT `SLOW` — this is a proactive UI hint gating an
- * irreversible business action (manager reassignment), the same category
- * `stale-times.ts`'s own docblock describes under `LIVE` ("the gate state a
- * form depends on"), and the exact tier `useGrattageRestockGateQuery`/
- * `useManagerStockQuery` already use for the identical kind of read
- * (a live capacity/gate check feeding a form, not a browsable list).
- * Re-verified against the backend's own posture: this read is explicitly
- * "informational only... not, and must not become, an authorization check"
- * (`AgentController::stockQuantity`'s own docblock) — `update()`'s atomic
- * guard remains the sole authority regardless of this cache's freshness.
+ * `LIVE` TIER, NOT `SLOW` — this is a proactive UI hint (gating an
+ * irreversible business action for the reassignment guard; a passive
+ * display for the Stock panel), the same category `stale-times.ts`'s own
+ * docblock describes under `LIVE` ("the gate state a form depends on"),
+ * and the exact tier `useGrattageRestockGateQuery`/`useManagerStockQuery`
+ * already use for the identical kind of read (a live capacity/gate check,
+ * not a browsable list). Re-verified against the backend's own posture:
+ * this read is explicitly "informational only... not, and must not
+ * become, an authorization check" (`AgentController::stockQuantity`'s own
+ * docblock, unchanged by `f9a6fe4`) — `update()`'s and `validateTransfer()`'s
+ * own locked transactions remain the sole authorities regardless of this
+ * cache's freshness.
  */
 export function useCommercialStockQuantityQuery(
   agentId: number,
@@ -52,7 +63,7 @@ export function useCommercialStockQuantityQuery(
 ) {
   return useQuery({
     queryKey: commercialStockQuantityKeys.detail(agentId),
-    queryFn: () => fetchCommercialStockQuantity(agentId),
+    queryFn: () => fetchCommercialStockSnapshot(agentId),
     staleTime: STALE_TIMES.LIVE,
     enabled: options.enabled ?? true,
   });

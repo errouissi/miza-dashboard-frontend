@@ -84,15 +84,28 @@ function showHandler(
   );
 }
 
-/** `GET /admin/agents/{agent}/stock-quantity` (M7 Agent 360 completion item). */
+/**
+ * `GET /admin/agents/{agent}/stock-quantity` (M7 Agent 360 completion item).
+ * `available_grattage`/`stock` default to a fixed decimal string and an
+ * empty array — both present on every real response (backend commits
+ * `f9a6fe4`/`15aa704`) but irrelevant to the Manager reassignment guard
+ * tests below, which depend only on `stock_quantity`. Callers that DO care
+ * pass them explicitly.
+ */
 function stockQuantityHandler(
   agentId: number,
   quantity: number,
   onRequest?: (url: URL) => void,
+  availableGrattage = "999.00",
+  stock: unknown[] = [],
 ) {
   return http.get(`${API}/admin/agents/${agentId}/stock-quantity`, ({ request }) => {
     onRequest?.(new URL(request.url));
-    return HttpResponse.json({ stock_quantity: quantity });
+    return HttpResponse.json({
+      stock_quantity: quantity,
+      available_grattage: availableGrattage,
+      stock,
+    });
   });
 }
 
@@ -600,6 +613,30 @@ describe("Edit — Manager reassignment guard (M7 Agent 360 completion item)", (
     expect(body?.get("manager_id")).toBe("20");
   });
 
+  it("depends only on stock_quantity, never on available_grattage — enabled at stock 0 even with zero available capacity", async () => {
+    // Adversarial: physical stock is 0 (must enable per the guard's own
+    // rule) but the commercial has NO remaining Transfer capacity —
+    // proves the reassignment guard never reads this value. The reverse
+    // (stock > 0 stays disabled even with ample available capacity) is
+    // already covered by "shows the authoritative quantity and disables
+    // reassignment when stock > 0" above, whose fixture now carries a
+    // non-zero available_grattage by default (this file's own
+    // `stockQuantityHandler` default) without changing that outcome.
+    signInWith(PERMISSIONS_WITH_ACCESS_DASHBOARD);
+    server.use(
+      showHandler(12, "commercial", commercialRow),
+      stockQuantityHandler(12, 0, undefined, "0.00"),
+      managerOptionsHandler(),
+    );
+    renderPage("/network/agents/12");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    const dialog = await screen.findByRole("dialog");
+
+    await within(dialog).findByText("Current stock: 0");
+    expect(within(dialog).getByLabelText("Manager")).toBeEnabled();
+  });
+
   it("fails closed — without access-dashboard, the field stays disabled and no stock-quantity request fires", async () => {
     // ALL_AGENT_PERMISSIONS has no access-dashboard — update-agent alone
     // reaches the drawer, but must not be enough to reassign blind.
@@ -870,16 +907,25 @@ describe("Outstanding panel — wired into the real page (M7 Phase 3)", () => {
     expect(screen.queryByText("Grattage Outstanding")).not.toBeInTheDocument();
   });
 
-  it("renders the Outstanding panel once access-dashboard is held, independently of Money/Stock", async () => {
+  it("renders the Outstanding panel once access-dashboard is held, independently of Money and of Stock's Transfers/Returns", async () => {
     // A COMMERCIAL, not a manager — a manager's own Stock panel ALSO reads
-    // `access-dashboard` (Phase 2's `ManagerStockTable`), so this fixture
-    // is the only one where `access-dashboard` alone isolates Outstanding
-    // from every other panel.
+    // `access-dashboard` (Phase 2's `ManagerStockTable`).
+    //
+    // `access-dashboard` now ALSO gates a Commercial's own Current Stock
+    // total (M7 Agent 360 discovery item, `agent-stock-panel.tsx`) — the
+    // same real backend permission `GET .../stock-quantity` requires — so
+    // the Stock heading legitimately appears here too now. This test still
+    // isolates Outstanding from MONEY (a genuinely different permission
+    // set) and from Stock's Transfers/Returns sub-sections (each still
+    // gated on its own separate permission, absent here).
     signInWith([PERMISSIONS.VIEW_AGENTS, PERMISSIONS.ACCESS_DASHBOARD]);
     server.use(
       showHandler(12, "commercial", commercialRow),
       http.get(`${API}/admin/agents/12/grattage-outstanding`, () =>
         HttpResponse.json(clearOutstandingEnvelope(12, "commercial")),
+      ),
+      http.get(`${API}/admin/agents/12/stock-quantity`, () =>
+        HttpResponse.json({ stock_quantity: 0, available_grattage: "0.00", stock: [] }),
       ),
     );
     renderPage("/network/agents/12");
@@ -889,7 +935,12 @@ describe("Outstanding panel — wired into the real page (M7 Phase 3)", () => {
       await screen.findByText("No outstanding grattage obligation."),
     ).toBeInTheDocument();
     expect(screen.queryByText("Money")).not.toBeInTheDocument();
-    expect(screen.queryByText("Stock")).not.toBeInTheDocument();
+    expect(await screen.findByText("Current stock")).toBeInTheDocument();
+    expect(await screen.findByText("No stock currently held.")).toBeInTheDocument();
+    expect(screen.getByText("Available Grattage")).toBeInTheDocument();
+    expect(screen.getByText("0.00")).toBeInTheDocument();
+    expect(screen.queryByText("Recent transfers")).not.toBeInTheDocument();
+    expect(screen.queryByText("Recent returns")).not.toBeInTheDocument();
   });
 
   it("shows the Commercial's Transfer-scoped gate wording on the real page, alongside Money/Stock", async () => {
@@ -906,6 +957,9 @@ describe("Outstanding panel — wired into the real page (M7 Phase 3)", () => {
       ),
       http.get(`${API}/admin/agent-stock-returns`, () =>
         HttpResponse.json(emptyPageEnvelope()),
+      ),
+      http.get(`${API}/admin/agents/12/stock-quantity`, () =>
+        HttpResponse.json({ stock_quantity: 0, available_grattage: "0.00", stock: [] }),
       ),
       http.get(`${API}/admin/agents/12/grattage-outstanding`, () =>
         HttpResponse.json({
