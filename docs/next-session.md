@@ -3,7 +3,7 @@
 **Read this file first.** It is written so a session with no prior context can resume
 immediately. Overwrite it at the end of every session.
 
-_Last updated: 2026-08-09_
+_Last updated: 2026-08-10_
 
 ---
 
@@ -13,7 +13,10 @@ _Last updated: 2026-08-09_
 M6 (Grattage — the seam) is COMPLETE, manual QA passed. M7 (Overview &
 workspaces, Agent 360, Client 360) is the current milestone — Agent 360, its
 first of three composed surfaces, is now COMPLETE, manual QA passed. Client
-360 is next — see "Next task" below for why, over the Overview widget grid.**
+360's initial discovery pass is now COMPLETE — see "Next task" below. **A
+focused follow-up discovery (6 specific unresolved questions) must be
+resolved before implementation starts; no Client 360 implementation has
+begun.**
 
 - **Code**: everything through the M7 Agent 360 manual-QA finalization pass is
   committed (`bc54e55`) and, after this documentation pass, pushed. Working
@@ -54,13 +57,21 @@ first of three composed surfaces, is now COMPLETE, manual QA passed. Client
 - **M6's own carry-forward is now delivered**: the per-agent
   Outstanding-obligation UI view (`useGrattageOutstandingQuery`, previously
   domain-private) shipped as Agent 360's Phase 3.
+- **M7 Client 360 initial discovery is COMPLETE (this session, docs-only
+  checkpoint).** Full source-verified findings across the frozen requirement,
+  identity/edit fields, Commercial relationship, financial fields, Grattage
+  purchase history, permissions, query/invalidation, panel design,
+  architecture, backend gaps and Agent-360-reuse questions — presented and
+  not yet implemented. **6 focused questions remain unresolved and must be
+  closed before implementation starts** — see "Next task" below for the
+  exact list. No Client 360 code has been written.
 
 ## Before anything else
 
 ```bash
 cd C:\Miza\frontend-v2
 git status                 # expect: clean
-git log --oneline -3        # expect this doc-sync commit at HEAD, bc54e55 below it
+git log --oneline -3        # expect this checkpoint commit at HEAD, 14effa8 below it
 pnpm test:ci               # expect: 1159/1159 across 60 files
 pnpm lint && pnpm typecheck && pnpm format:check && pnpm build
 ```
@@ -184,20 +195,49 @@ pnpm lint && pnpm typecheck && pnpm format:check && pnpm build
   breakdown, and Available Grattage — all three reusing the SAME
   stock-quantity read, widened by backend commits `f9a6fe4`/`15aa704`, no new
   query. See `decisions.md` ADR-0033/ADR-0034.
-- **M7 documentation-sync** — this session's own doc-sync commit. M7 Agent
-  360 is now fully complete, manual QA passed.
+- **M7 documentation-sync** — `14effa8`. M7 Agent 360 is now fully complete,
+  manual QA passed.
+- **M7 Client 360 — initial discovery pass** — this session's own checkpoint
+  commit (docs-only, no source changes). Discovery-only, not implementation:
+  see "Next task" below for the 6 unresolved follow-up questions that must be
+  closed before any Client 360 code is written.
 
 Full write-ups for every item above: `project-status.md`'s own dedicated sections.
 
 ## Next task: M7 — Client 360
 
-**Do a fresh discovery pass first — do not begin implementation.** Per the same
-discipline every M4/M5/M6/M7-Agent-360 phase applied (ADR-0022): re-read the
-relevant controllers, resources, models and permission registrations directly
-from source before proposing any scope — do not assume anything from the
-frozen roadmap's own prose, and do not assume Agent 360's own panel/permission
-shape transfers unchanged (Client 360's own workflow is genuinely narrower —
-see below).
+**Initial discovery is COMPLETE (this session). Do not begin implementation.**
+A focused discovery follow-up — 6 specific unresolved questions — must be
+resolved FIRST, next session, before any Client 360 code is written:
+
+1. **Assignment history.** Frozen scope says "profile/assignment history."
+   Verify whether an authoritative Client↔Commercial assignment *history*
+   actually exists (an audit trail), or whether only current
+   assignment/reassignment state exists. Do not silently treat the latter as
+   satisfying the former.
+2. **Financial fields.** `solde`/`debt`/`dept_to_commercial` must NOT be
+   planned for display unless authoritative business semantics are proven —
+   this session's discovery found no meaningful write/workflow backing them,
+   but treat that as a lead to close, not a final answer to build against.
+3. **Frontend model scope.** The Client frontend model must stay minimal — do
+   not model the entire `show()` response. OTP/system fields, legacy aliases,
+   and unrelated raw fields stay excluded unless a genuine consumer is found.
+4. **Client status actions.** Still need exact source verification: endpoint,
+   permission, allowed transitions, `pending` semantics, error handling, and
+   current frontend behavior (`ClientStatusDialog`).
+5. **Edit field matrix.** Produce the final exact editable-field matrix for
+   Client Edit. In particular, confirm `agent_id` stays exclusively inside
+   the dedicated assignment/reassignment workflow, never inside Edit.
+6. **Grattage permission.** Verify the exact permission gating Client-scoped
+   Grattage purchase-history reads, from both frontend and backend source —
+   not assumed from Agent 360's own Outstanding permission.
+
+Per the same discipline every M4/M5/M6/M7-Agent-360 phase applied (ADR-0022):
+re-read the relevant controllers, resources, models and permission
+registrations directly from source — do not assume anything from the frozen
+roadmap's own prose, and do not assume Agent 360's own panel/permission shape
+transfers unchanged (Client 360's own workflow is genuinely narrower — see
+below).
 
 **Why Client 360, not the Overview widget grid, is next — reasoned from the
 frozen documents, not assumed:**
@@ -390,11 +430,12 @@ scope, per the roadmap's own disclosed risk above.
       the product breakdown, Available Grattage). Includes the per-agent
       Outstanding-obligation UI view explicitly carried forward from M6.
       See `project-status.md`'s own M7 section, ADR-0033/ADR-0034.
-- [ ] **M7 Client 360 — NEXT.** Fresh discovery pass required before any
-      implementation (see "Next task" above) — Network + Grattage only, per
-      the frozen architecture; do not assume Agent 360's own panel/permission
-      shape or Outstanding hooks transfer unchanged without re-verifying
-      Client 360's own backend contract from source.
+- [ ] **M7 Client 360 — NEXT. Initial discovery COMPLETE; a focused 6-question
+      follow-up discovery is required before any implementation** (see "Next
+      task" above) — Network + Grattage only, per the frozen architecture; do
+      not assume Agent 360's own panel/permission shape or Outstanding hooks
+      transfer unchanged without re-verifying Client 360's own backend
+      contract from source. No implementation has started.
 - [ ] **M7 Overview widget grid — not started.** Carries a disclosed,
       still-unverified backend-readiness risk (chart/activity endpoints
       possibly still unrouted) — re-verify from source before scoping if this
