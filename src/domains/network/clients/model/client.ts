@@ -230,3 +230,81 @@ export type ClientDetail = {
    */
   commercial: ClientDetailCommercial | null;
 };
+
+/**
+ * Client 360 Phase 2 — the reassignment action's own input.
+ *
+ * `PATCH /admin/clients/{id}/assign` (`ClientController::reassign`), NOT
+ * `POST /admin/clients/{id}/assign` (`assignToAgent`) — the two share a
+ * path but are genuinely different endpoints, verified independently from
+ * source during the Phase 2 discovery pass: `reassign` touches `agent_id`
+ * ONLY (never rewrites `ville`/`secteur`, unlike `assignToAgent`), works
+ * identically whether the Client starts assigned or unassigned (no
+ * branching on the prior value), and returns a real, field-informative 422
+ * on an ineligible target instead of `assignToAgent`'s bare 400. One
+ * endpoint serves both the "Assign" and "Reassign" UI labels — see
+ * `client-reassign-drawer.tsx`'s own docblock.
+ */
+export type ReassignClientInput = {
+  agentId: number;
+};
+
+/**
+ * Client 360 Phase 2 — the minimal frontend model for one
+ * `GET /admin/clients/{id}/assignment-history` row (backend commit
+ * `7066ffa`). Deliberately narrower than the wire resource
+ * (`ClientAssignmentHistoryResource`): raw `from_agent_id`/`to_agent_id`/
+ * `changed_by_user_id`/`changed_by_agent_id` are NOT carried past the
+ * mapper boundary — only the loaded identities a row actually renders
+ * (ADR-0008's discipline, applied here the same way `agentName`/
+ * `ClientDetailCommercial` already reduce a relation to what a screen
+ * reads, not what the wire carries).
+ */
+export type ClientAssignmentHistoryCommercial = {
+  id: number;
+  nom: string;
+  prenom: string;
+};
+
+/**
+ * At most one of `user`/`agent` is ever populated (verified from
+ * `ClientAssignmentHistory`'s own docblock — every Admin-initiated
+ * mutation records a `User` actor; the one exception, a Commercial
+ * self-creating a Client, records an `Agent` actor instead). `null` is the
+ * defensive fallback for a transition with no distinguishable actor — no
+ * live backend path produces it today, but the Resource's own shape
+ * allows it (both columns nullable), so the frontend must render it safely
+ * rather than assume one is always present.
+ */
+export type ClientAssignmentHistoryActor =
+  | { kind: "user"; id: number; name: string }
+  | { kind: "agent"; id: number; nom: string; prenom: string }
+  | null;
+
+/**
+ * The workspace panel's own page size — a compact "recent activity" read,
+ * not a full history browser (no "Load more"/dedicated full-history page
+ * exists yet — Phase 2 discovery decision). The endpoint accepts any
+ * `1-100` value; `5` is chosen here, not by the backend.
+ */
+export const CLIENT_ASSIGNMENT_HISTORY_PAGE_SIZE = 5;
+
+export const CLIENT_ASSIGNMENT_HISTORY_TYPES = [
+  "assigned",
+  "reassigned",
+  "unassigned",
+] as const;
+export type ClientAssignmentHistoryType =
+  (typeof CLIENT_ASSIGNMENT_HISTORY_TYPES)[number];
+
+export type ClientAssignmentHistoryEntry = {
+  id: number;
+  type: ClientAssignmentHistoryType;
+  /** `null` for `type === "assigned"` (no prior Commercial) OR when the referenced Agent row was hard-deleted (`nullOnDelete` — the raw id and the relation go null together). */
+  fromCommercial: ClientAssignmentHistoryCommercial | null;
+  /** `null` for `type === "unassigned"` OR a hard-deleted referenced Agent row (same reasoning as `fromCommercial`). */
+  toCommercial: ClientAssignmentHistoryCommercial | null;
+  actor: ClientAssignmentHistoryActor;
+  /** Full ISO-8601 (`created_at?.toIso8601String()`), never null — every row has one by construction (`created_at` is `useCurrent()`, no nullable column). */
+  changedAt: string;
+};

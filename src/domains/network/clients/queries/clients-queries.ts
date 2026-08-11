@@ -2,15 +2,21 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { STALE_TIMES } from "@/infrastructure/query";
 import {
   assignClientsBulk,
+  fetchClientAssignmentHistory,
   fetchClientById,
   fetchClients,
+  reassignClient,
   toggleClientStatus,
   updateClient,
   type AssignClientsBulkInput,
   type UpdateClientInput,
 } from "../api/clients-api";
-import type { ClientListParams } from "../model/client";
-import { clientsKeys } from "./keys";
+import {
+  CLIENT_ASSIGNMENT_HISTORY_PAGE_SIZE,
+  type ClientListParams,
+  type ReassignClientInput,
+} from "../model/client";
+import { clientAssignmentHistoryKeys, clientsKeys } from "./keys";
 
 /**
  * Clients data hooks (FTA §8).
@@ -67,6 +73,21 @@ function useInvalidateClientDetail() {
 }
 
 /**
+ * Client 360 Phase 2 — a THIRD, independently-targeted invalidation
+ * (separate key space, see `clientAssignmentHistoryKeys`'s own docblock).
+ * Invalidates every page cached for this client (`details(clientId)`, the
+ * whole prefix), not only the first page this app currently fetches — a
+ * future page-2 caller must not read stale data either.
+ */
+function useInvalidateClientAssignmentHistory() {
+  const queryClient = useQueryClient();
+  return (clientId: number) =>
+    queryClient.invalidateQueries({
+      queryKey: clientAssignmentHistoryKeys.details(clientId),
+    });
+}
+
+/**
  * `phone`/`ville`/`secteur` are all represented on `ClientDetail` — every
  * successful edit invalidates both the list AND this client's own detail.
  */
@@ -112,20 +133,85 @@ export function useToggleClientStatusMutation() {
  *
  * ALSO INVALIDATES EACH TARGETED CLIENT'S OWN DETAIL (M7 Phase 1): the
  * current Commercial reference (`ClientDetail.commercial`) changes for every
- * id in `clientIds`, even though Client 360's own relationship panel isn't
- * built until Phase 2 — an operator who bulk-assigns and then opens Client
- * 360 for one of those clients must see the new relationship, not a stale
- * cache from before the assignment. Targeted per id, not a broad
- * `clientsKeys.all` invalidation.
+ * id in `clientIds`. Targeted per id, not a broad `clientsKeys.all`
+ * invalidation.
+ *
+ * ALSO INVALIDATES EACH TARGETED CLIENT'S OWN ASSIGNMENT HISTORY (M7 Phase
+ * 2) — re-verified fresh from source this phase, not assumed: backend
+ * commit `7066ffa` routed `ClientController::assignBulk` through
+ * `ClientAssignmentService::assignBulk()`, which now writes one history row
+ * per Client whose `agent_id` actually changed. This mutation existed
+ * BEFORE `7066ffa` and did not previously affect any frontend-visible
+ * read of history (the panel did not exist); it now does, so the
+ * invalidation is added here, not left stale.
  */
 export function useAssignClientsBulkMutation() {
   const invalidateList = useInvalidateClients();
   const invalidateDetail = useInvalidateClientDetail();
+  const invalidateHistory = useInvalidateClientAssignmentHistory();
   return useMutation({
     mutationFn: (input: AssignClientsBulkInput) => assignClientsBulk(input),
     onSuccess: (_data, variables) => {
       invalidateList();
-      variables.clientIds.forEach(invalidateDetail);
+      variables.clientIds.forEach((id) => {
+        invalidateDetail(id);
+        invalidateHistory(id);
+      });
     },
+  });
+}
+
+/**
+ * Client 360 Phase 2's own single-Client ownership action —
+ * `PATCH /admin/clients/{id}/assign` (`reassignClient`, NOT the legacy
+ * `POST` endpoint; see `api/clients-api.ts`'s own docblock). Invalidates
+ * ALL THREE spaces the Phase 2 discovery plan named: the list (the row's
+ * own "Agent" column, and `assigned`-filter membership), this Client's own
+ * detail (the new current Commercial, read by the workspace's relationship
+ * section), and this Client's own assignment history (the new row the
+ * mutation just caused the backend to write, transactionally, alongside
+ * the `agent_id` update).
+ *
+ * The SAME-TARGET no-op check (skip the request entirely when the
+ * selection is unchanged) is the CALLER's responsibility, not this hook's
+ * — see `client-reassign-drawer.tsx`'s own docblock for why that belongs
+ * at the UI layer, where the CURRENT Commercial is already in hand.
+ */
+export function useReassignClientMutation() {
+  const invalidateList = useInvalidateClients();
+  const invalidateDetail = useInvalidateClientDetail();
+  const invalidateHistory = useInvalidateClientAssignmentHistory();
+  return useMutation({
+    mutationFn: ({ id, ...input }: ReassignClientInput & { id: number }) =>
+      reassignClient(id, input),
+    onSuccess: (_data, variables) => {
+      invalidateList();
+      invalidateDetail(variables.id);
+      invalidateHistory(variables.id);
+    },
+  });
+}
+
+/**
+ * Client 360 Phase 2 — the assignment-history panel's own read. SLOW tier,
+ * the same as the detail query it sits beside (append-only audit data,
+ * still identity-adjacent — no established "audit log" tier exists
+ * elsewhere in this codebase to diverge toward). `enabled` guards a
+ * malformed `:id`, mirroring `useClientQuery`'s own gate — the panel's OWN
+ * `VIEW_CLIENTS` permission check is the caller's job (composed into
+ * `enabled` at the call site), the identical discipline every other
+ * permission-gated query in this domain already follows
+ * (`useVilleOptionsQuery({ enabled })` inside `ClientFormSheet`, etc.).
+ */
+export function useClientAssignmentHistoryQuery(
+  clientId: number,
+  options: { enabled?: boolean } = {},
+) {
+  return useQuery({
+    queryKey: clientAssignmentHistoryKeys.detail(clientId, 1),
+    queryFn: () =>
+      fetchClientAssignmentHistory(clientId, 1, CLIENT_ASSIGNMENT_HISTORY_PAGE_SIZE),
+    staleTime: STALE_TIMES.SLOW,
+    enabled: options.enabled ?? true,
   });
 }

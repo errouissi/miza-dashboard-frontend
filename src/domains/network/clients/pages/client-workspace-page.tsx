@@ -8,8 +8,12 @@ import { StatusBadge } from "@/shared/components/business/status-badge";
 import { Button } from "@/shared/components/ui/button";
 import { Skeleton } from "@/shared/components/ui/skeleton";
 import { ListErrorState } from "@/shared/components/patterns/list-states";
+import { PanelBoundary } from "@/shared/components/patterns/panel-boundary";
 import { WorkspacePage } from "@/shared/components/patterns/workspace-page";
+import { ClientAssignmentHistoryPanel } from "../components/client-assignment-history-panel";
+import { ClientCommercialSection } from "../components/client-commercial-section";
 import { ClientFormSheet } from "../components/client-form-sheet";
+import { ClientReassignDrawer } from "../components/client-reassign-drawer";
 import { ClientStatusDialog } from "../components/client-status-dialog";
 import { useClientQuery } from "../queries/clients-queries";
 import { CLIENT_STATUS_LABELS, CLIENT_STATUS_TONES } from "../model/client";
@@ -30,29 +34,34 @@ import { CLIENT_STATUS_LABELS, CLIENT_STATUS_TONES } from "../model/client";
  * explicit Client 360 Phase 1 decision; see each component's own docblock
  * for the structural-prop-typing that makes the reuse work).
  *
- * PHASE 1 IS IDENTITY/PROFILE/EDIT/STATUS ONLY. No Commercial-relationship
- * panel, no reassignment UI, no assignment-history UI (even though the
- * backend now records it — `client_assignment_histories`, backend commit
- * `7066ffa`), and no Grattage purchase-history panel — each is its own
- * later Client 360 phase. `ClientDetail.commercial` is already on the
- * model (needed for Phase 2's deep link), but nothing on THIS page reads it
- * yet — do not add a relationship section here as a side effect of another
- * change; that is Phase 2's own scope.
+ * PHASE 1 WAS IDENTITY/PROFILE/EDIT/STATUS ONLY. PHASE 2 (this update) adds
+ * the Commercial relationship section, the Assign/Reassign action, and the
+ * Assignment History panel — still NO Grattage purchase-history panel,
+ * which stays a later Client 360 phase.
  *
- * NO PANEL / PanelBoundary YET — Phase 1 has exactly one query (this page's
- * own `useClientQuery`) and zero domain-composed panels, so there is
- * nothing yet for a per-panel error boundary to isolate FROM (the identical
- * reasoning `WorkspacePage`'s own docblock already gives for deferring it
- * on Agent 360 until a second real panel arrives). Add one at the phase
- * that brings Client 360's own second panel.
+ * `ClientCommercialSection` READS `ClientDetail.commercial` DIRECTLY, NEVER
+ * FROM HISTORY — the current-Commercial and assignment-history reads are
+ * two independent queries/components; neither imports the other, and
+ * `ClientCommercialSection`'s own prop type has no history field to
+ * accidentally read (see its own docblock, and
+ * `client-workspace-page.test.tsx`'s own regression test constructing a
+ * detail/history mismatch on purpose to prove this).
  *
- * STATUS ACTION FIX (M7 Phase 1) — a pending Client gets NO status button
- * here, mirroring the identical fix on the list's own row action:
- * `toggleStatus()` 400s a pending client outright (see
+ * `PanelBoundary` NOW WRAPS `ClientAssignmentHistoryPanel` — Phase 2 is the
+ * phase that brings Client 360's own SECOND real panel (the first being
+ * this one), the point `WorkspacePage`'s own docblock names as when a
+ * per-panel crash boundary stops being "an abstraction fitted to an
+ * imagined caller" and starts being a testable property. The Commercial
+ * relationship section is identity-adjacent (reads the SAME `clientQuery`
+ * this page's own Profile section already does, not a second query), so it
+ * is not itself panel-wrapped — only genuinely independent, separately-
+ * queried sections are.
+ *
+ * STATUS ACTION FIX (M7 Phase 1, unchanged) — a pending Client gets NO
+ * status button here, mirroring the identical fix on the list's own row
+ * action: `toggleStatus()` 400s a pending client outright (see
  * `client-status-dialog.tsx`'s own docblock for the full source
- * verification). This was a real, pre-existing defect in the shipped M3.4
- * `ClientStatusDialog` (it claimed "Activate" was valid for a pending
- * client), found and fixed as part of this phase, not introduced by it.
+ * verification).
  */
 export function ClientWorkspacePage() {
   const navigate = useNavigate();
@@ -65,9 +74,12 @@ export function ClientWorkspacePage() {
 
   const [editing, setEditing] = useState(false);
   const [togglingStatus, setTogglingStatus] = useState(false);
+  const [reassigning, setReassigning] = useState(false);
 
   const canUpdate = has(PERMISSIONS.UPDATE_CLIENT);
   const canToggleStatus = has(PERMISSIONS.MANAGE_CLIENT_STATUS);
+  const canAssign = has(PERMISSIONS.ASSIGN_CLIENT);
+  const canViewAgents = has(PERMISSIONS.VIEW_AGENTS);
 
   const errorReference = isAppError(clientQuery.error)
     ? resolveErrorDisplay(clientQuery.error).requestId
@@ -167,10 +179,26 @@ export function ClientWorkspacePage() {
         </dl>
       </div>
 
+      <ClientCommercialSection
+        commercial={client.commercial}
+        canViewAgents={canViewAgents}
+        canAssign={canAssign}
+        onReassign={() => setReassigning(true)}
+      />
+
+      <PanelBoundary>
+        <ClientAssignmentHistoryPanel clientId={client.id} />
+      </PanelBoundary>
+
       <ClientFormSheet open={editing} onOpenChange={setEditing} client={client} />
       <ClientStatusDialog
         client={togglingStatus ? client : undefined}
         onOpenChange={setTogglingStatus}
+      />
+      <ClientReassignDrawer
+        open={reassigning}
+        onOpenChange={setReassigning}
+        client={reassigning ? client : undefined}
       />
     </WorkspacePage>
   );

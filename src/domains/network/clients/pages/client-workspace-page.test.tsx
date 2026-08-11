@@ -1,7 +1,7 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { http, HttpResponse } from "msw";
 import { RouterProvider, createMemoryRouter } from "react-router-dom";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { server } from "@/test/msw/server";
 import { sessionManager } from "@/infrastructure/auth";
@@ -9,6 +9,7 @@ import { createQueryClient } from "@/infrastructure/query";
 import { PERMISSIONS } from "@/infrastructure/permissions";
 import { ClientWorkspacePage } from "./client-workspace-page";
 import { clientDetailPath, CLIENT_DETAIL_PATH } from "../routes";
+import { clientAssignmentHistoryKeys, clientsKeys } from "../queries/keys";
 
 const API = "http://localhost/api/v1";
 const PATH = "/network/clients/:id";
@@ -25,6 +26,8 @@ const ALL_CLIENT_PERMISSIONS = [
   PERMISSIONS.UPDATE_CLIENT,
   PERMISSIONS.MANAGE_CLIENT_STATUS,
   PERMISSIONS.ACCESS_DASHBOARD, // Villes/Secteurs pickers inside the shared Edit drawer.
+  PERMISSIONS.ASSIGN_CLIENT, // M7 Phase 2 — the Assign/Reassign action itself.
+  PERMISSIONS.VIEW_AGENTS, // M7 Phase 2 — Commercial deep-links and the Commercial-options picker.
 ];
 
 function signInWith(permissions: string[]) {
@@ -96,16 +99,126 @@ function secteursHandler() {
   });
 }
 
+/**
+ * `GET /admin/agents/commercials` (`useCommercialOptionsQuery`, Commercials'
+ * own public surface) — backs the Reassign drawer's picker. Fires
+ * unconditionally once the workspace mounts and `view-agents` is held
+ * (`ClientReassignDrawer` is always mounted, same "always mounted, `enabled`
+ * gates permission only" pattern as `ClientFormSheet`'s own Villes query) —
+ * every test holding `VIEW_AGENTS` needs this handler, not only the ones
+ * that open the drawer.
+ */
+function commercialOptionsHandler(
+  rows: { id: number; nom: string; prenom: string; status?: string }[] = [
+    { id: 636, nom: "Alaoui", prenom: "Salma", status: "active" },
+    { id: 700, nom: "Bennani", prenom: "Youssef", status: "active" },
+  ],
+  onRequest?: (url: URL) => void,
+) {
+  return http.get(`${API}/admin/agents/commercials`, ({ request }) => {
+    onRequest?.(new URL(request.url));
+    return HttpResponse.json({
+      success: true,
+      data: {
+        data: rows,
+        current_page: 1,
+        per_page: 100,
+        total: rows.length,
+        last_page: 1,
+      },
+    });
+  });
+}
+
+/**
+ * One raw `assignment-history` row, exactly as
+ * `ClientAssignmentHistoryResource` emits it — all four relation keys are
+ * ALWAYS present (the controller unconditionally eager-loads all four),
+ * `null` only when the underlying FK itself is null or hard-deleted.
+ */
+function historyRow(
+  id: number,
+  type: "assigned" | "reassigned" | "unassigned",
+  overrides: Partial<{
+    from_agent: { id: number; nom: string; prenom: string } | null;
+    to_agent: { id: number; nom: string; prenom: string } | null;
+    changed_by: { id: number; name: string } | null;
+    changed_by_agent: { id: number; nom: string; prenom: string } | null;
+    changed_at: string;
+  }> = {},
+) {
+  const fromAgent = overrides.from_agent ?? null;
+  const toAgent = overrides.to_agent ?? null;
+  const changedBy = overrides.changed_by ?? null;
+  const changedByAgent = overrides.changed_by_agent ?? null;
+  return {
+    id,
+    type,
+    from_agent_id: fromAgent?.id ?? null,
+    from_agent: fromAgent,
+    to_agent_id: toAgent?.id ?? null,
+    to_agent: toAgent,
+    changed_by_user_id: changedBy?.id ?? null,
+    changed_by: changedBy,
+    changed_by_agent_id: changedByAgent?.id ?? null,
+    changed_by_agent: changedByAgent,
+    changed_at: overrides.changed_at ?? "2026-03-01T09:00:00.000000Z",
+  };
+}
+
+/**
+ * `GET /admin/clients/:id/assignment-history` — a wildcard `:id` so ONE
+ * handler covers every client id this file renders, matching how
+ * `showHandler` is the only one that needs a specific id per test. Default
+ * (`items = []`) registered globally in `beforeEach` — every test in this
+ * file holds `VIEW_CLIENTS`, so `ClientAssignmentHistoryPanel` always fires
+ * this request, whether or not a given test cares about its content.
+ */
+function historyHandler(
+  items: ReturnType<typeof historyRow>[] = [],
+  meta: Partial<{
+    total: number;
+    per_page: number;
+    current_page: number;
+    last_page: number;
+  }> = {},
+) {
+  return http.get(`${API}/admin/clients/:id/assignment-history`, () =>
+    HttpResponse.json({
+      success: true,
+      data: {
+        data: items,
+        current_page: meta.current_page ?? 1,
+        per_page: meta.per_page ?? 5,
+        total: meta.total ?? items.length,
+        last_page: meta.last_page ?? 1,
+      },
+    }),
+  );
+}
+
+/**
+ * Returns the `QueryClient` too — the invalidation tests below assert
+ * `invalidateQueries` was called with the right keys directly (via
+ * `vi.spyOn`), rather than only inferring it from a re-fetched network
+ * request. This page never renders the Clients LIST itself, so there is no
+ * behavioral observer for `clientsKeys.lists()`'s own invalidation the way
+ * there is for `clientsKeys.detail`/`clientAssignmentHistoryKeys` (both
+ * ARE observed behaviorally below, via a stateful mock reflecting the
+ * change) — the spy is the only way to verify the list space is touched at
+ * all from this page.
+ */
 function renderPage(initialPath: string) {
+  const queryClient = createQueryClient();
   const router = createMemoryRouter([{ path: PATH, element: <ClientWorkspacePage /> }], {
     initialEntries: [initialPath],
   });
   render(
-    <QueryClientProvider client={createQueryClient()}>
+    <QueryClientProvider client={queryClient}>
       <RouterProvider router={router} />
     </QueryClientProvider>,
   );
-  return router;
+  return { router, queryClient };
 }
 
 beforeEach(() => {
@@ -117,6 +230,14 @@ beforeEach(() => {
   // is held (granted by `ALL_CLIENT_PERMISSIONS` above), so every test in
   // this file needs a Villes handler, not only the ones that open Edit.
   server.use(villesHandler());
+  // M7 Phase 2 — `ClientReassignDrawer` is always mounted (same pattern),
+  // so `useCommercialOptionsQuery` fires unconditionally once `view-agents`
+  // is held. `ClientAssignmentHistoryPanel` fires unconditionally once
+  // `view-clients` is held (always true — it gates the whole route). Both
+  // get an empty/default response here; tests that care override with
+  // `server.use(...)` again.
+  server.use(commercialOptionsHandler());
+  server.use(historyHandler());
 });
 
 describe("route helper", () => {
@@ -188,7 +309,11 @@ describe("detail query", () => {
     // A generous timeout: `queryRetryDelay` backs off 300/600/1200ms across
     // the three automatic attempts before the query settles into the error
     // state (FTA §11) — well past the default 1000ms window.
-    const retry = await screen.findByRole("button", { name: /retry/i }, { timeout: 5000 });
+    const retry = await screen.findByRole(
+      "button",
+      { name: /retry/i },
+      { timeout: 5000 },
+    );
     fireEvent.click(retry);
 
     expect(
@@ -364,6 +489,628 @@ describe("edit — reuses the shared ClientFormSheet", () => {
     // the title reflects the new phone once the refetch resolves.
     expect(
       await screen.findByRole("heading", { name: "06 98 76 54 32" }),
+    ).toBeInTheDocument();
+  });
+});
+
+describe("current relationship", () => {
+  it("an assigned Client shows the Commercial's name and account number", async () => {
+    server.use(showHandler(7, detailRow(7, "0612345678")));
+    renderPage("/network/clients/7");
+
+    await screen.findByRole("heading", { name: "06 12 34 56 78" });
+    expect(screen.getByRole("link", { name: "Salma Alaoui" })).toBeInTheDocument();
+    expect(screen.getByText("DEV-CPT-COMMERCIAL-001")).toBeInTheDocument();
+  });
+
+  it("an unassigned Client shows the absent dash and offers Assign Commercial, not Reassign", async () => {
+    server.use(showHandler(7, detailRow(7, "0612345678", { agent: null })));
+    renderPage("/network/clients/7");
+
+    await screen.findByRole("heading", { name: "06 12 34 56 78" });
+    const assignedToRow = screen.getByText("Assigned to").closest("div");
+    expect(within(assignedToRow!).getByText("—")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Assign Commercial" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Reassign Commercial" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("an assigned Client offers Reassign Commercial, not Assign", async () => {
+    server.use(showHandler(7, detailRow(7, "0612345678")));
+    renderPage("/network/clients/7");
+
+    await screen.findByRole("heading", { name: "06 12 34 56 78" });
+    expect(
+      screen.getByRole("button", { name: "Reassign Commercial" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Assign Commercial" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("VIEW_AGENTS grants a deep link to Agent 360, reusing agentDetailPath", async () => {
+    server.use(showHandler(7, detailRow(7, "0612345678")));
+    renderPage("/network/clients/7");
+
+    await screen.findByRole("heading", { name: "06 12 34 56 78" });
+    expect(screen.getByRole("link", { name: "Salma Alaoui" })).toHaveAttribute(
+      "href",
+      "/network/agents/636",
+    );
+  });
+
+  it("without VIEW_AGENTS, the Commercial identity renders as plain text, never a link", async () => {
+    signInWith([
+      PERMISSIONS.VIEW_CLIENTS,
+      PERMISSIONS.UPDATE_CLIENT,
+      PERMISSIONS.MANAGE_CLIENT_STATUS,
+      PERMISSIONS.ASSIGN_CLIENT,
+    ]);
+    server.use(showHandler(7, detailRow(7, "0612345678")));
+    renderPage("/network/clients/7");
+
+    await screen.findByRole("heading", { name: "06 12 34 56 78" });
+    expect(screen.getByText("Salma Alaoui")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Salma Alaoui" })).not.toBeInTheDocument();
+  });
+
+  it("current relationship comes from ClientDetail.commercial, never from the latest history row", async () => {
+    // ClientDetail.commercial = Salma Alaoui (id 636, detailRow's default).
+    // The newest — and only — history row points somewhere else entirely
+    // (Youssef Bennani, id 700), a deliberately constructed mismatch. The
+    // Current Commercial section must still show Salma Alaoui; the
+    // (independently-queried) history row still correctly shows the
+    // reassignment to Youssef Bennani.
+    server.use(
+      showHandler(7, detailRow(7, "0612345678")),
+      historyHandler([
+        historyRow(1, "reassigned", {
+          from_agent: { id: 636, nom: "Alaoui", prenom: "Salma" },
+          to_agent: { id: 700, nom: "Bennani", prenom: "Youssef" },
+        }),
+      ]),
+    );
+    renderPage("/network/clients/7");
+
+    await screen.findByRole("heading", { name: "06 12 34 56 78" });
+    const assignedToRow = screen.getByText("Assigned to").closest("div");
+    expect(within(assignedToRow!).getByText("Salma Alaoui")).toBeInTheDocument();
+
+    const historyItem = (await screen.findByText(/Reassigned from/)).closest("li");
+    expect(within(historyItem!).getByText("Youssef Bennani")).toBeInTheDocument();
+  });
+});
+
+describe("action permissions", () => {
+  it("no Assign/Reassign action without ASSIGN_CLIENT", async () => {
+    signInWith([PERMISSIONS.VIEW_CLIENTS, PERMISSIONS.VIEW_AGENTS]);
+    server.use(showHandler(7, detailRow(7, "0612345678")));
+    renderPage("/network/clients/7");
+
+    await screen.findByRole("heading", { name: "06 12 34 56 78" });
+    expect(
+      screen.queryByRole("button", { name: "Reassign Commercial" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Assign Commercial" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("ASSIGN_CLIENT without VIEW_AGENTS never requests Commercial options, and fails closed with a disabled, explained picker", async () => {
+    let requested = false;
+    signInWith([PERMISSIONS.VIEW_CLIENTS, PERMISSIONS.ASSIGN_CLIENT]);
+    server.use(
+      showHandler(7, detailRow(7, "0612345678")),
+      commercialOptionsHandler(undefined, () => {
+        requested = true;
+      }),
+    );
+    renderPage("/network/clients/7");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Reassign Commercial" }));
+    const dialog = await screen.findByRole("dialog");
+
+    expect(within(dialog).getByLabelText(/commercial/i)).toBeDisabled();
+    expect(
+      within(dialog).getByText(/you do not have permission to view the commercial list/i),
+    ).toBeInTheDocument();
+    expect(requested).toBe(false);
+  });
+
+  it("ASSIGN_CLIENT + VIEW_AGENTS populates the picker with the active Commercial options", async () => {
+    server.use(showHandler(7, detailRow(7, "0612345678")));
+    renderPage("/network/clients/7");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Reassign Commercial" }));
+    const dialog = await screen.findByRole("dialog");
+
+    expect(
+      await within(dialog).findByRole("option", { name: "Youssef Bennani" }),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole("option", { name: "Salma Alaoui" }),
+    ).toBeInTheDocument();
+  });
+});
+
+describe("assignment", () => {
+  it("unassigned Client: drawer titled Assign Commercial, picker seeded empty", async () => {
+    server.use(showHandler(7, detailRow(7, "0612345678", { agent: null })));
+    renderPage("/network/clients/7");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Assign Commercial" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(
+      within(dialog).getByRole("heading", { name: "Assign Commercial" }),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByLabelText(/commercial/i)).toHaveValue("");
+  });
+
+  it("assigned Client: drawer titled Reassign Commercial, picker seeded to the current Commercial", async () => {
+    server.use(showHandler(7, detailRow(7, "0612345678")));
+    renderPage("/network/clients/7");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Reassign Commercial" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(
+      within(dialog).getByRole("heading", { name: "Reassign Commercial" }),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByLabelText(/commercial/i)).toHaveValue("636");
+  });
+
+  it("states plainly that only the Commercial changes — city and sector are unaffected", async () => {
+    server.use(showHandler(7, detailRow(7, "0612345678")));
+    renderPage("/network/clients/7");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Reassign Commercial" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(
+      within(dialog).getByText(/city and sector are left exactly as they are/i),
+    ).toBeInTheDocument();
+  });
+
+  it("same target: Save closes the drawer WITHOUT issuing a PATCH request", async () => {
+    let patched = false;
+    server.use(
+      showHandler(7, detailRow(7, "0612345678")),
+      http.patch(`${API}/admin/clients/7/assign`, () => {
+        patched = true;
+        return HttpResponse.json({
+          success: true,
+          message: "ok",
+          data: { id: 7, agent_id: 636 },
+        });
+      }),
+    );
+    renderPage("/network/clients/7");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Reassign Commercial" }));
+    const dialog = await screen.findByRole("dialog");
+    // Seeded to the current Commercial (636) already — Save without changing it.
+    fireEvent.click(within(dialog).getByRole("button", { name: /^reassign$/i }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(patched).toBe(false);
+  });
+
+  it("a genuine target change PATCHes /assign with agent_id ONLY (never ville/secteur)", async () => {
+    let body: Record<string, unknown> | undefined;
+    server.use(
+      showHandler(7, detailRow(7, "0612345678")),
+      http.patch(`${API}/admin/clients/7/assign`, async ({ request }) => {
+        body = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({
+          success: true,
+          message: "ok",
+          data: { id: 7, agent_id: 700 },
+        });
+      }),
+    );
+    renderPage("/network/clients/7");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Reassign Commercial" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText(/commercial/i), {
+      target: { value: "700" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: /^reassign$/i }));
+
+    await waitFor(() => expect(body).toEqual({ agent_id: 700 }));
+  });
+
+  it("success refreshes the Commercial section (detail) and the history panel", async () => {
+    let agentRow: { id: number; nom: string; prenom: string; num_compte: string } | null =
+      {
+        id: 636,
+        nom: "Alaoui",
+        prenom: "Salma",
+        num_compte: "DEV-CPT-COMMERCIAL-001",
+      };
+    let historyItems: ReturnType<typeof historyRow>[] = [];
+    server.use(
+      http.get(`${API}/admin/clients/7`, () =>
+        HttpResponse.json({
+          success: true,
+          data: detailRow(7, "0612345678", { agent: agentRow }),
+        }),
+      ),
+      http.get(`${API}/admin/clients/7/assignment-history`, () =>
+        HttpResponse.json({
+          success: true,
+          data: {
+            data: historyItems,
+            current_page: 1,
+            per_page: 5,
+            total: historyItems.length,
+            last_page: 1,
+          },
+        }),
+      ),
+      http.patch(`${API}/admin/clients/7/assign`, () => {
+        agentRow = {
+          id: 700,
+          nom: "Bennani",
+          prenom: "Youssef",
+          num_compte: "DEV-CPT-002",
+        };
+        historyItems = [
+          historyRow(9, "reassigned", {
+            from_agent: { id: 636, nom: "Alaoui", prenom: "Salma" },
+            to_agent: { id: 700, nom: "Bennani", prenom: "Youssef" },
+          }),
+        ];
+        return HttpResponse.json({
+          success: true,
+          message: "ok",
+          data: { id: 7, agent_id: 700 },
+        });
+      }),
+    );
+    renderPage("/network/clients/7");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Reassign Commercial" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText(/commercial/i), {
+      target: { value: "700" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: /^reassign$/i }));
+
+    const assignedToRow = screen.getByText("Assigned to").closest("div");
+    await waitFor(() =>
+      expect(within(assignedToRow!).getByText("Youssef Bennani")).toBeInTheDocument(),
+    );
+    expect(await screen.findByText(/Reassigned from/)).toBeInTheDocument();
+  });
+
+  it("a backend failure keeps the drawer open", async () => {
+    server.use(
+      showHandler(7, detailRow(7, "0612345678")),
+      http.patch(`${API}/admin/clients/7/assign`, () =>
+        HttpResponse.json(
+          { success: false, message: "agent_id must reference an active commercial" },
+          { status: 422 },
+        ),
+      ),
+    );
+    renderPage("/network/clients/7");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Reassign Commercial" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText(/commercial/i), {
+      target: { value: "700" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: /^reassign$/i }));
+
+    // Not message-matched — the generic mutation-error copy, never the
+    // backend's own "agent_id must reference an active commercial" string.
+    expect(
+      await within(dialog).findByText(/could not be completed/i),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).queryByText(/agent_id must reference/i),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("invalidates the Client list space too (spied — this page renders no list observer)", async () => {
+    server.use(
+      showHandler(7, detailRow(7, "0612345678")),
+      http.patch(`${API}/admin/clients/7/assign`, () =>
+        HttpResponse.json({
+          success: true,
+          message: "ok",
+          data: { id: 7, agent_id: 700 },
+        }),
+      ),
+    );
+    const { queryClient } = renderPage("/network/clients/7");
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Reassign Commercial" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText(/commercial/i), {
+      target: { value: "700" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: /^reassign$/i }));
+
+    await waitFor(() =>
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: clientsKeys.lists() }),
+    );
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: clientsKeys.detail(7) });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: clientAssignmentHistoryKeys.details(7),
+    });
+  });
+});
+
+/**
+ * The Commercial names in a history row's summary sentence are permission-
+ * aware LINKS (`CommercialName`), so the sentence's text is genuinely split
+ * across element boundaries (`<p>Assigned to <a>Salma Alaoui</a></p>`) —
+ * RTL's `getByText`/`findByText` deliberately does NOT match text broken up
+ * by multiple elements by default (a documented RTL behavior, confirmed
+ * empirically here too). `toHaveTextContent` has no such restriction (it
+ * reads the element's own `.textContent`, which naturally concatenates
+ * nested elements' text), so history-row assertions scope to the one
+ * `<li>` and use it instead.
+ */
+async function findHistoryItem() {
+  return screen.findByRole("listitem");
+}
+
+describe("assignment history", () => {
+  it("renders an 'assigned' row with its actor", async () => {
+    server.use(
+      showHandler(7, detailRow(7, "0612345678")),
+      historyHandler([
+        historyRow(1, "assigned", {
+          to_agent: { id: 636, nom: "Alaoui", prenom: "Salma" },
+          changed_by: { id: 1, name: "Ahmed Errouissi" },
+        }),
+      ]),
+    );
+    renderPage("/network/clients/7");
+
+    const item = await findHistoryItem();
+    expect(item).toHaveTextContent("Assigned to Salma Alaoui");
+    expect(item).toHaveTextContent(/Ahmed Errouissi/);
+  });
+
+  it("renders a 'reassigned' row (from -> to)", async () => {
+    server.use(
+      showHandler(7, detailRow(7, "0612345678")),
+      historyHandler([
+        historyRow(1, "reassigned", {
+          from_agent: { id: 636, nom: "Alaoui", prenom: "Salma" },
+          to_agent: { id: 700, nom: "Bennani", prenom: "Youssef" },
+        }),
+      ]),
+    );
+    renderPage("/network/clients/7");
+
+    const item = await findHistoryItem();
+    expect(item).toHaveTextContent("Reassigned from Salma Alaoui to Youssef Bennani");
+  });
+
+  it("renders an 'unassigned' row", async () => {
+    server.use(
+      showHandler(7, detailRow(7, "0612345678", { agent: null })),
+      historyHandler([
+        historyRow(1, "unassigned", {
+          from_agent: { id: 636, nom: "Alaoui", prenom: "Salma" },
+        }),
+      ]),
+    );
+    renderPage("/network/clients/7");
+
+    const item = await findHistoryItem();
+    expect(item).toHaveTextContent("Unassigned from Salma Alaoui");
+  });
+
+  it("renders a user actor by name", async () => {
+    server.use(
+      showHandler(7, detailRow(7, "0612345678")),
+      historyHandler([
+        historyRow(1, "assigned", {
+          to_agent: { id: 636, nom: "Alaoui", prenom: "Salma" },
+          changed_by: { id: 1, name: "Ahmed Errouissi" },
+        }),
+      ]),
+    );
+    renderPage("/network/clients/7");
+
+    expect(await screen.findByText(/Ahmed Errouissi ·/)).toBeInTheDocument();
+  });
+
+  it("renders an agent actor as prenom + nom", async () => {
+    server.use(
+      showHandler(7, detailRow(7, "0612345678")),
+      historyHandler([
+        historyRow(1, "assigned", {
+          to_agent: { id: 636, nom: "Alaoui", prenom: "Salma" },
+          changed_by_agent: { id: 636, nom: "Alaoui", prenom: "Salma" },
+        }),
+      ]),
+    );
+    renderPage("/network/clients/7");
+
+    expect(await screen.findByText(/Salma Alaoui ·/)).toBeInTheDocument();
+  });
+
+  it("renders 'System' for a null actor", async () => {
+    server.use(
+      showHandler(7, detailRow(7, "0612345678")),
+      historyHandler([
+        historyRow(1, "assigned", {
+          to_agent: { id: 636, nom: "Alaoui", prenom: "Salma" },
+        }),
+      ]),
+    );
+    renderPage("/network/clients/7");
+
+    expect(await screen.findByText(/System ·/)).toBeInTheDocument();
+  });
+
+  it("renders safely when a referenced Commercial relation is null (e.g. hard-deleted)", async () => {
+    server.use(
+      showHandler(7, detailRow(7, "0612345678", { agent: null })),
+      historyHandler([historyRow(1, "unassigned", { from_agent: null })]),
+    );
+    renderPage("/network/clients/7");
+
+    expect(await screen.findByText(/Unassigned from/)).toBeInTheDocument();
+  });
+
+  it("no recorded history renders the honest empty state, never a fabricated legacy row", async () => {
+    server.use(showHandler(7, detailRow(7, "0612345678")), historyHandler([]));
+    renderPage("/network/clients/7");
+
+    expect(await screen.findByText("No recorded history yet.")).toBeInTheDocument();
+  });
+
+  it("shows a loading state before the read resolves", async () => {
+    server.use(
+      showHandler(7, detailRow(7, "0612345678")),
+      http.get(`${API}/admin/clients/7/assignment-history`, () => new Promise(() => {})),
+    );
+    renderPage("/network/clients/7");
+
+    // The outer page's own client-detail load must resolve first — the
+    // History panel only mounts once the workspace itself is done loading.
+    await screen.findByRole("heading", { name: "06 12 34 56 78" });
+    expect(screen.getByText("Assignment history")).toBeInTheDocument();
+    expect(screen.queryByText("No recorded history yet.")).not.toBeInTheDocument();
+  });
+
+  it("shows a retryable error state and recovers", async () => {
+    // Same THREE-attempt retry-policy reasoning as the detail query's own
+    // equivalent test above.
+    let attempts = 0;
+    server.use(
+      showHandler(7, detailRow(7, "0612345678")),
+      http.get(`${API}/admin/clients/7/assignment-history`, () => {
+        attempts += 1;
+        if (attempts <= 3) {
+          return HttpResponse.json({ success: false, error: null }, { status: 500 });
+        }
+        return HttpResponse.json({
+          success: true,
+          data: { data: [], current_page: 1, per_page: 5, total: 0, last_page: 1 },
+        });
+      }),
+    );
+    renderPage("/network/clients/7");
+
+    const retry = await screen.findByRole(
+      "button",
+      { name: /retry/i },
+      { timeout: 5000 },
+    );
+    fireEvent.click(retry);
+
+    expect(await screen.findByText("No recorded history yet.")).toBeInTheDocument();
+  });
+
+  it("discloses truncation truthfully: 'Showing latest N of TOTAL'", async () => {
+    server.use(
+      showHandler(7, detailRow(7, "0612345678")),
+      historyHandler(
+        [
+          historyRow(1, "assigned", {
+            to_agent: { id: 636, nom: "Alaoui", prenom: "Salma" },
+          }),
+        ],
+        { total: 17 },
+      ),
+    );
+    renderPage("/network/clients/7");
+
+    expect(await screen.findByText("Showing latest 1 of 17")).toBeInTheDocument();
+  });
+
+  it("hides the truncation indicator when total equals the rendered count", async () => {
+    server.use(
+      showHandler(7, detailRow(7, "0612345678")),
+      historyHandler([
+        historyRow(1, "assigned", {
+          to_agent: { id: 636, nom: "Alaoui", prenom: "Salma" },
+        }),
+      ]),
+    );
+    renderPage("/network/clients/7");
+
+    const item = await findHistoryItem();
+    expect(item).toHaveTextContent("Assigned to Salma Alaoui");
+    expect(screen.queryByText(/Showing latest/)).not.toBeInTheDocument();
+  });
+
+  it("Commercial names in history rows are permission-aware links (VIEW_AGENTS)", async () => {
+    // A Commercial distinct from the Client's own current one, to avoid any
+    // ambiguity with the Commercial section's own link.
+    server.use(
+      showHandler(7, detailRow(7, "0612345678")),
+      historyHandler([
+        historyRow(1, "assigned", {
+          to_agent: { id: 700, nom: "Bennani", prenom: "Youssef" },
+        }),
+      ]),
+    );
+    renderPage("/network/clients/7");
+
+    expect(await screen.findByRole("link", { name: "Youssef Bennani" })).toHaveAttribute(
+      "href",
+      "/network/agents/700",
+    );
+  });
+
+  it("without VIEW_AGENTS, history Commercial names render as plain text, no link", async () => {
+    signInWith([
+      PERMISSIONS.VIEW_CLIENTS,
+      PERMISSIONS.UPDATE_CLIENT,
+      PERMISSIONS.MANAGE_CLIENT_STATUS,
+      PERMISSIONS.ASSIGN_CLIENT,
+    ]);
+    server.use(
+      showHandler(7, detailRow(7, "0612345678")),
+      historyHandler([
+        historyRow(1, "assigned", {
+          to_agent: { id: 700, nom: "Bennani", prenom: "Youssef" },
+        }),
+      ]),
+    );
+    renderPage("/network/clients/7");
+
+    expect(await screen.findByText("Assigned to Youssef Bennani")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Youssef Bennani" }),
+    ).not.toBeInTheDocument();
+  });
+});
+
+describe("panel isolation", () => {
+  it("a history query failure does not break Profile/Edit/current Commercial", async () => {
+    server.use(
+      showHandler(7, detailRow(7, "0612345678")),
+      http.get(`${API}/admin/clients/7/assignment-history`, () =>
+        HttpResponse.json({ success: false, error: null }, { status: 500 }),
+      ),
+    );
+    renderPage("/network/clients/7");
+
+    // Profile, Edit and the Commercial section all render normally —
+    // History's own failure (visible below) never propagates upward.
+    await screen.findByRole("heading", { name: "06 12 34 56 78" });
+    expect(screen.getByText("Phone")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Edit" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Salma Alaoui" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Reassign Commercial" }),
+    ).toBeInTheDocument();
+
+    // The failure itself surfaces, scoped to the History panel only.
+    expect(
+      await screen.findByText("Assignment history could not be loaded."),
     ).toBeInTheDocument();
   });
 });

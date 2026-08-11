@@ -18,3 +18,21 @@ export const clientsKeys = {
   details: () => [...clientsKeys.all, "detail"] as const,
   detail: (id: number) => [...clientsKeys.details(), id] as const,
 };
+
+/**
+ * Client 360 Phase 2 — a SEPARATE, FLAT top-level key space, not nested
+ * under `clientsKeys.all`. Mirrors `commercialStockQuantityKeys`'s own
+ * reasoning (`domains/network/agents/queries/keys.ts`): assignment history
+ * is a genuinely different resource (an append-only audit log, paginated by
+ * its own `page`) from the identity read `clientsKeys.detail` serves — a
+ * broad `clientsKeys.all` invalidation (e.g. from `"agent.updated"`-class
+ * events elsewhere in the product) must not be assumed to bust this cache
+ * too, and vice versa. Every ownership-changing mutation invalidates BOTH
+ * key spaces explicitly, never one implying the other.
+ */
+export const clientAssignmentHistoryKeys = {
+  all: ["client-assignment-history"] as const,
+  details: (clientId: number) => [...clientAssignmentHistoryKeys.all, clientId] as const,
+  detail: (clientId: number, page: number) =>
+    [...clientAssignmentHistoryKeys.details(clientId), page] as const,
+};
