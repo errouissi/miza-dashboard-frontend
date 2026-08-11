@@ -83,6 +83,15 @@ export type Client = {
    * miss established.
    */
   dateDebut: string | null;
+  /**
+   * NULLABLE, same reasoning as `ville` — added for Client 360's Edit reuse
+   * (M7 Phase 1): `ClientFormSheet` is shared between this list and the new
+   * workspace, and the workspace's Profile/Edit both need it. Wire key is
+   * `secteur_comercial` (`Client::$hidden`/`$appends`, same pattern as
+   * `ville`/`ville_comercial`) — NOT rendered as a list column; only Edit
+   * (and Client 360's own profile) reads it.
+   */
+  secteur: string | null;
 };
 
 /**
@@ -172,3 +181,52 @@ export const CLIENT_LIST_DEFAULTS: ClientListParams = {
 
 /** `per_page` is capped server-side (`integer|min:1|max:100`). */
 export const MAX_PER_PAGE = 100;
+
+/**
+ * Client 360 (M7 Phase 1) — the minimal detail model for `GET
+ * /admin/clients/{id}` (`ClientController::show`, `Client::with(['agent'])
+ * ->findOrFail($id)`).
+ *
+ * DELIBERATELY MINIMAL (ADR-0008), NOT THE FULL `show()` RESPONSE — the raw
+ * serialization also carries `solde`, `debt`/`dept_to_commercial`,
+ * `latitude`/`longitude`/`location_updated_at`, `last_login_at`,
+ * `otp_expires_at`/`otp_verified_at`/`otp_code` (hidden), `updated_at`, and
+ * `password`/`remember_token` (hidden) — none of them modelled here. Per the
+ * Client 360 follow-up discovery: `solde`/`debt` have no authoritative
+ * write workflow (Grattage is the Commercial's obligation to the company,
+ * never a Client receivable — verified from `SalesService`'s own docblock),
+ * location is a deferred map feature, and the OTP/system fields are
+ * backend-internal. This is a DISTINCT type from the list's own `Client`
+ * (different wire shape: `show()` eager-loads a full, unrestricted `agent`
+ * relation, not the list's restricted `id,nom,prenom,num_compte` projection,
+ * and a nested `commercial` reference — needed for Phase 2's deep link — is
+ * a genuine widening the list row never carried).
+ */
+export type ClientDetailCommercial = {
+  id: number;
+  nom: string;
+  prenom: string;
+  numCompte: string;
+};
+
+export type ClientDetail = {
+  id: number;
+  phone: string;
+  status: ClientStatus;
+  /** Nullable — see `Client.ville`'s own docblock above; identical column. */
+  ville: string | null;
+  /** Nullable — see `Client.secteur`'s own docblock above; identical column. */
+  secteur: string | null;
+  /** Full ISO-8601, or null — identical column to `Client.dateDebut`, renamed per the Client 360 spec. */
+  createdAt: string | null;
+  /**
+   * The CURRENT Commercial relationship only — `Client.agent_id` is the
+   * sole source of truth for current ownership (verified from
+   * `ClientAssignmentHistory`'s own model docblock: "this table is NEVER
+   * read to derive current ownership"). Present here because Phase 2's deep
+   * link needs `id`, not because Phase 2's relationship panel is being
+   * built now — see `ClientWorkspacePage`'s own docblock for the Phase
+   * boundary.
+   */
+  commercial: ClientDetailCommercial | null;
+};

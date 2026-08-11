@@ -11,4 +11,10 @@ export const clientsKeys = {
   all: ["clients"] as const,
   lists: () => [...clientsKeys.all, "list"] as const,
   list: (params: ClientListParams) => [...clientsKeys.lists(), params] as const,
+  /**
+   * Client 360 (M7 Phase 1) — mirrors `agentsKeys.details()`/`.detail(id)`'s
+   * own shape exactly (`domains/network/agents/queries/keys.ts`).
+   */
+  details: () => [...clientsKeys.all, "detail"] as const,
+  detail: (id: number) => [...clientsKeys.details(), id] as const,
 };

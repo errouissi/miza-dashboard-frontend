@@ -56,6 +56,7 @@ function row(
   overrides: Partial<{
     status: "active" | "blocked" | "pending";
     ville_comercial: string | null;
+    secteur_comercial: string | null;
     solde: string;
     agent: { id: number; nom: string; prenom: string; num_compte: string } | null;
     created_at: string | null;
@@ -66,6 +67,7 @@ function row(
     phone,
     status: "active" as const,
     ville_comercial: "Casablanca",
+    secteur_comercial: "Maarif",
     solde: "1500.00",
     agent: {
       id: 636,
@@ -126,6 +128,29 @@ function villesHandler() {
       meta: { current_page: 1, per_page: 100, total: 2, last_page: 1 },
     }),
   );
+}
+
+/**
+ * The Secteurs options endpoint, scoped by `ville_id` — backs the edit
+ * drawer's city-scoped Sector select (M7 Phase 1). Casablanca (villesHandler's
+ * id 1) has "Maarif" (`row()`'s own default secteur, so the seeded value
+ * round-trips through a real option) plus a second sector; Rabat (id 2) has
+ * none — enough to exercise "sector options depend on the selected city"
+ * honestly, mirroring the identical fixture the agent-onboarding wizard's
+ * own tests already use.
+ */
+function secteursHandler() {
+  return http.get(`${API}/admin/secteurs`, ({ request }) => {
+    const villeId = new URL(request.url).searchParams.get("ville_id");
+    const rows =
+      villeId === "1"
+        ? [
+            { id: 10, nom_secteur: "Maarif", ville_id: 1 },
+            { id: 11, nom_secteur: "Sidi Belyout", ville_id: 1 },
+          ]
+        : [];
+    return HttpResponse.json(rows);
+  });
 }
 
 /**
@@ -568,10 +593,11 @@ describe("permission gating — each action on its own permission", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("labels the status action Activate for a pending client too", async () => {
-    // toggleStatus() sends anything other than "active" to "active" — a
-    // pending client's only possible transition is approval, so the button
-    // must say Activate, not something implying a toggle.
+  it("offers NO status action for a pending client (M7 Phase 1 fix)", async () => {
+    // toggleStatus() 400s a pending client outright
+    // (`if ($client->isPending()) return 400`, verified fresh from source
+    // this phase) — it never reaches the "anything but active -> active"
+    // flip. Fixed from the prior (incorrect) "labels it Activate" behavior.
     server.use(
       clientsHandler([row(1, "0612345678", { status: "pending" })]),
       villesHandler(),
@@ -580,8 +606,14 @@ describe("permission gating — each action on its own permission", () => {
 
     await screen.findByText("06 12 34 56 78");
     expect(
-      screen.getByRole("button", { name: /activate 0612345678/i }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: /activate 0612345678/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /block 0612345678/i }),
+    ).not.toBeInTheDocument();
+    // View/Edit remain unaffected by the status gap.
+    expect(screen.getByRole("button", { name: /view 0612345678/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /edit 0612345678/i })).toBeInTheDocument();
   });
 
   it("hides EDIT without update-client", async () => {
@@ -670,8 +702,8 @@ describe("permission gating — each action on its own permission", () => {
 describe("edit", () => {
   const rows = [row(1, "0612345678", { ville_comercial: "Casablanca" })];
 
-  it("seeds the drawer from the row", async () => {
-    server.use(clientsHandler(rows), villesHandler());
+  it("seeds the drawer from the row, including secteur", async () => {
+    server.use(clientsHandler(rows), villesHandler(), secteursHandler());
     renderPage();
 
     fireEvent.click(await screen.findByRole("button", { name: /edit 0612345678/i }));
@@ -679,6 +711,48 @@ describe("edit", () => {
 
     expect(within(dialog).getByLabelText(/phone/i)).toHaveValue("0612345678");
     expect(within(dialog).getByLabelText(/^city$/i)).toHaveValue("Casablanca");
+    expect(await within(dialog).findByLabelText(/sector/i)).toHaveValue("Maarif");
+  });
+
+  it("scopes Secteur options to the selected Ville", async () => {
+    server.use(clientsHandler(rows), villesHandler(), secteursHandler());
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: /edit 0612345678/i }));
+    const dialog = await screen.findByRole("dialog");
+
+    const secteurSelect = await within(dialog).findByLabelText(/sector/i);
+    expect(
+      within(secteurSelect).getByRole("option", { name: "Maarif" }),
+    ).toBeInTheDocument();
+    expect(
+      within(secteurSelect).getByRole("option", { name: "Sidi Belyout" }),
+    ).toBeInTheDocument();
+  });
+
+  it("changing the City clears the previously-selected Secteur and re-scopes the options", async () => {
+    server.use(clientsHandler(rows), villesHandler(), secteursHandler());
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: /edit 0612345678/i }));
+    const dialog = await screen.findByRole("dialog");
+
+    const secteurSelect = await within(dialog).findByLabelText(/sector/i);
+    expect(secteurSelect).toHaveValue("Maarif");
+
+    // Rabat (villesHandler's id 2) has no seeded secteurs — the secteur
+    // options must re-scope to it, and the previously-selected Casablanca
+    // sector must never silently carry over.
+    fireEvent.change(within(dialog).getByLabelText(/^city$/i), {
+      target: { value: "Rabat" },
+    });
+
+    await waitFor(() => expect(secteurSelect).toHaveValue(""));
+    expect(
+      within(secteurSelect).queryByRole("option", { name: "Maarif" }),
+    ).not.toBeInTheDocument();
+    // Rabat has no seeded secteurs — only the placeholder option remains.
+    expect(within(secteurSelect).getAllByRole("option")).toHaveLength(1);
   });
 
   it("shows the placeholder for a null city", async () => {
@@ -730,6 +804,7 @@ describe("edit", () => {
     server.use(
       clientsHandler(rows),
       villesHandler(),
+      secteursHandler(),
       http.put(`${API}/admin/clients/1`, async ({ request }) => {
         method = request.method;
         body = (await request.json()) as Record<string, unknown>;
@@ -751,6 +826,7 @@ describe("edit", () => {
     expect(body).toEqual({
       phone: "0698765432",
       ville_comercial: "Casablanca",
+      secteur_comercial: "Maarif",
     });
   });
 
@@ -759,6 +835,7 @@ describe("edit", () => {
     server.use(
       clientsHandler(rows),
       villesHandler(),
+      secteursHandler(),
       http.put(`${API}/admin/clients/1`, () => {
         posted = true;
         return HttpResponse.json({ success: true, data: {} });
@@ -782,6 +859,7 @@ describe("edit", () => {
     server.use(
       clientsHandler(rows),
       villesHandler(),
+      secteursHandler(),
       http.put(`${API}/admin/clients/1`, () => {
         posted = true;
         return HttpResponse.json({ success: true, data: {} });
@@ -806,6 +884,7 @@ describe("edit", () => {
     server.use(
       clientsHandler(rows),
       villesHandler(),
+      secteursHandler(),
       http.put(`${API}/admin/clients/1`, () =>
         HttpResponse.json(
           {

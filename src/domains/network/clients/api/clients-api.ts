@@ -1,6 +1,12 @@
 import { httpClient } from "@/infrastructure/http";
 import type { Paginated } from "@/infrastructure/http";
-import type { Client, ClientListParams, ClientStatus } from "../model/client";
+import type {
+  Client,
+  ClientDetail,
+  ClientDetailCommercial,
+  ClientListParams,
+  ClientStatus,
+} from "../model/client";
 
 /**
  * The Clients endpoints and their mappers (FTA §7, D-6).
@@ -40,13 +46,21 @@ type ClientRow = {
   status: ClientStatus;
   /** Nullable (`clients.ville` is `nullable()`) — aliases the hidden `ville` column. */
   ville_comercial: string | null;
+  /**
+   * Nullable, identical shape to `ville_comercial` — added for Client 360's
+   * Edit reuse (M7 Phase 1). Present on the wire since M3.4 (no
+   * `select()`/`transform()` restricts `index()`'s row); newly mapped here
+   * because `ClientFormSheet` (shared by this list and the Client 360
+   * workspace) now reads it.
+   */
+  secteur_comercial: string | null;
   /** `decimal:2` cast, serialized as a string. Has a DB default (`0`) — never null. */
   solde: string;
   agent: ClientAgentRow | null;
   /** Full ISO-8601, or null. */
   created_at: string | null;
-  // `agent_id`, `secteur_comercial`, `dept_to_commercial`, `latitude`,
-  // `longitude`, `location_updated_at`, `last_login_at`, `otp_expires_at`,
+  // `agent_id`, `dept_to_commercial`, `latitude`, `longitude`,
+  // `location_updated_at`, `last_login_at`, `otp_expires_at`,
   // `otp_verified_at`, `updated_at` are present on the wire and intentionally
   // unmapped (ADR-0008) — see the module docblock.
 };
@@ -69,6 +83,7 @@ function toClient(row: ClientRow): Client {
     phone: row.phone,
     status: row.status,
     ville: row.ville_comercial,
+    secteur: row.secteur_comercial,
     // Carried across verbatim — see model/client.ts for why.
     solde: row.solde,
     // Reduced to a display string here, at the mapper boundary — this
@@ -107,27 +122,108 @@ export async function fetchClients(params: ClientListParams): Promise<Paginated<
 }
 
 /**
- * The fields this screen may edit: `phone` and `ville_comercial` only.
+ * `GET /admin/clients/{id}` (`ClientController::show`, `view-clients`) —
+ * Client 360 (M7 Phase 1). `show()` eager-loads a FULL, unrestricted `agent`
+ * relation (unlike `index()`'s restricted `id,nom,prenom,num_compte`
+ * projection) — `ClientDetailAgentRow` models only the columns
+ * `ClientDetailCommercial` actually carries (ADR-0008), not every column
+ * `show()`'s nested agent brings along.
+ */
+type ClientDetailAgentRow = {
+  id: number;
+  nom: string;
+  prenom: string;
+  num_compte: string;
+};
+
+/**
+ * The `show()` wire row. Same `$hidden`/`$appends` aliasing as `ClientRow`
+ * (`ville_comercial`/`secteur_comercial`, not the hidden `ville`/`secteur`
+ * columns) — everything else `show()`'s raw serialization carries (`solde`,
+ * `dept_to_commercial`, `latitude`/`longitude`/`location_updated_at`,
+ * `last_login_at`, `otp_*`, `updated_at`) is deliberately unmapped
+ * (ADR-0008) — see `model/client.ts`'s `ClientDetail` docblock for why.
+ */
+type ClientDetailRow = {
+  id: number;
+  phone: string;
+  status: ClientStatus;
+  ville_comercial: string | null;
+  secteur_comercial: string | null;
+  created_at: string | null;
+  agent: ClientDetailAgentRow | null;
+};
+
+type ClientDetailEnvelope = {
+  success: boolean;
+  data: ClientDetailRow;
+};
+
+function toCommercial(row: ClientDetailAgentRow | null): ClientDetailCommercial | null {
+  if (!row) return null;
+  return { id: row.id, nom: row.nom, prenom: row.prenom, numCompte: row.num_compte };
+}
+
+function toClientDetail(row: ClientDetailRow): ClientDetail {
+  return {
+    id: row.id,
+    phone: row.phone,
+    status: row.status,
+    ville: row.ville_comercial,
+    secteur: row.secteur_comercial,
+    createdAt: row.created_at,
+    commercial: toCommercial(row.agent),
+  };
+}
+
+/**
+ * `Client::findOrFail($id)` sits inside a bare `catch (\Exception)` with no
+ * `ModelNotFoundException` carve-out (confirmed from source, the same
+ * pre-existing gap `clients-list-page.tsx`'s own docblock already
+ * discloses for `show`/`update`/`toggleStatus`) — a nonexistent client id
+ * 500s here, not 404s. `httpClient`'s own error normalization still
+ * classifies that 500 as `kind: "unknown"`, so `ClientWorkspacePage`'s
+ * not-found branch is reached only via a malformed `:id` route param
+ * (never constructed by this app's own navigation), not a genuine 404 from
+ * the backend — see the page's own docblock.
+ */
+export async function fetchClientById(id: number): Promise<ClientDetail> {
+  const { data } = await httpClient.get<ClientDetailEnvelope>(`/admin/clients/${id}`);
+  return toClientDetail(data.data);
+}
+
+/**
+ * The fields this screen may edit: `phone`, `ville_comercial` and
+ * `secteur_comercial` (M7 Phase 1 — `secteur` widened the original
+ * `phone`/`ville` pair, using the SAME city-scoped Secteurs mechanism the
+ * agent-onboarding wizard's Identity step already established, not a second
+ * implementation).
  *
  * DELIBERATELY NARROWER THAN THE VALIDATOR, the same reasoning as every
  * prior domain. `ClientController::update` also accepts `status` (excluded
  * on purpose — it is `sometimes|in:active,blocked`, deliberately NOT
  * `pending`, so a generic edit can never silently approve a self-registered
- * client; that is the status action's job, not a form field) and paired
- * `latitude`/`longitude` (map features, out of scope for this milestone).
+ * client; that is the status action's job, not a form field), `agent_id` is
+ * NOT EVEN IN THIS VALIDATOR (confirmed from source — Commercial
+ * assignment/reassignment is a dedicated workflow, `assign`/`reassign`/
+ * `assignBulk`/`unassign`, never `update()`; Client 360 Phase 2's own
+ * concern, not Edit's), and paired `latitude`/`longitude` (map features,
+ * out of scope for this milestone).
  *
- * `ville` IS REQUIRED HERE (`min(1)` in the zod schema) even though it is
- * NULLABLE ON READ — the same BC-U-class gap as Managers' `ville`. The
- * validator is `'ville_comercial' => 'sometimes|string'`, with NO
- * `nullable` — an empty string is converted to `null` by Laravel's global
+ * `ville`/`secteur` ARE REQUIRED HERE (`min(1)` in the zod schema) even
+ * though BOTH are NULLABLE ON READ — the same BC-U-class gap as Managers'
+ * `ville`. Neither validator (`'ville_comercial' => 'sometimes|string'`,
+ * `'secteur_comercial' => 'sometimes|string'`) has `nullable` — an empty
+ * string is converted to `null` by Laravel's global
  * `ConvertEmptyStringsToNull` middleware and then rejected by `string`
- * (confirmed identical to Managers'/Commercials' BC-U, a third instance).
- * Requiring a non-empty value client-side keeps this gap unreachable through
- * the UI; it does not fix it.
+ * (confirmed identical to Managers'/Commercials' BC-U). Requiring a
+ * non-empty value client-side keeps this gap unreachable through the UI; it
+ * does not fix it.
  */
 export type UpdateClientInput = {
   phone: string;
   ville: string;
+  secteur: string;
 };
 
 export async function updateClient(id: number, input: UpdateClientInput): Promise<void> {
@@ -136,6 +232,7 @@ export async function updateClient(id: number, input: UpdateClientInput): Promis
   await httpClient.put(`/admin/clients/${id}`, {
     phone: input.phone,
     ville_comercial: input.ville,
+    secteur_comercial: input.secteur,
   });
 }
 

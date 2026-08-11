@@ -14,7 +14,7 @@ import { ADMINS_PATH } from "@/domains/network/admins";
 import { MANAGERS_PATH } from "@/domains/network/managers";
 import { COMMERCIALS_PATH } from "@/domains/network/commercials";
 import { agentDetailPath } from "@/domains/network/agents";
-import { CLIENTS_PATH } from "@/domains/network/clients";
+import { CLIENTS_PATH, clientDetailPath } from "@/domains/network/clients";
 import { AGENT_ONBOARDING_PATH } from "@/domains/network/agent-onboarding";
 import {
   CHEQUES_PATH,
@@ -315,6 +315,10 @@ describe("every contributed domain route is guarded", () => {
   // `GET /admin/agents/{identifier}`'s own check (`routes/api.php:244-245`),
   // which sits behind the identical `agents` route group as both list
   // endpoints.
+  // `clientDetailPath(1)` (roadmap M7, Phase 1 — Client 360) is guarded by
+  // `view-clients` — the SAME string CLIENTS_PATH already uses, mirroring
+  // `GET /admin/clients/{id}`'s own check (`ClientController::show`), which
+  // sits behind the identical `clients` route group as the list endpoint.
   // `unpermittedSession` holds nothing at all, so it exercises every gate
   // identically.
   const domainPaths = [
@@ -350,6 +354,7 @@ describe("every contributed domain route is guarded", () => {
     GRATTAGE_INVOICES_PATH,
     grattageInvoiceDetailPath(1),
     agentDetailPath(1),
+    clientDetailPath(1),
   ];
 
   it.each(domainPaths)("refuses %s without the permission", async (path) => {

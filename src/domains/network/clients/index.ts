@@ -1,4 +1,9 @@
-export { CLIENTS_PATH, clientsRoutes } from "./routes";
+export {
+  CLIENTS_PATH,
+  CLIENT_DETAIL_PATH,
+  clientDetailPath,
+  clientsRoutes,
+} from "./routes";
 
 // api/, model/, queries/, components/ and the page stay internal. The app
 // layer needs the route contributions and the path (for the nav entry) —

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { isAppError, resolveErrorDisplay } from "@/infrastructure/errors";
 import { PERMISSIONS } from "@/infrastructure/permissions";
 import { usePermission } from "@/shared/hooks";
@@ -18,6 +18,7 @@ import { ClientFormSheet } from "../components/client-form-sheet";
 import { ClientStatusDialog } from "../components/client-status-dialog";
 import { ClientVilleFilter } from "../components/client-ville-filter";
 import { useClientsQuery } from "../queries/clients-queries";
+import { clientDetailPath } from "../routes";
 import {
   CLIENT_LIST_DEFAULTS,
   CLIENT_STATUSES,
@@ -30,12 +31,11 @@ import {
 } from "../model/client";
 
 /**
- * The Clients list (roadmap M3.4) — the fourth Network domain, and the
- * narrowest scope of the four by explicit decision, not by backend
- * limitation: `ClientController` exposes a full CRUD-plus-assignment
- * surface (create, delete, assign/reassign/unassign, bulk-assign,
- * statistics, password reset), of which this milestone deliberately builds
- * only list, edit and status.
+ * The Clients list (roadmap M3.4) — the fourth Network domain. `View` (M7
+ * Phase 1) navigates to Client 360 (`domains/network/clients/routes.tsx`'s
+ * own `CLIENT_DETAIL_PATH`); Edit and the status action stay here too,
+ * unchanged in shape — `ClientFormSheet`/`ClientStatusDialog` are SHARED
+ * with the workspace, not duplicated (see each component's own docblock).
  *
  * EXCLUDED BY DECISION, NOT DEFERRED FOR A CONTRACT REASON THE WAY
  * MANAGERS/COMMERCIALS' CREATE FORM WAS:
@@ -47,11 +47,12 @@ import {
  *     domains' BC-R soft-block. Not offered.
  *   - Single-client Assign / Reassign / Unassign / Reset password /
  *     Statistics — each a distinct, real backend capability, none built
- *     here. `assign-client` also gates these three (`routes/api.php:319-332`
- *     all share the identical middleware), but M3.5 builds only the bulk
- *     endpoint against it — holding the permission is not evidence these
- *     are in scope.
- *   - A detail page — ADR-0014's pattern, unchanged.
+ *     here yet. `assign-client` also gates the first three
+ *     (`routes/api.php:319-332` all share the identical middleware), but
+ *     only the bulk endpoint is built against it so far — holding the
+ *     permission is not evidence these are in scope. Single-client
+ *     reassignment (with its now-real assignment-history audit trail,
+ *     backend commit `7066ffa`) is Client 360's own Phase 2, not this list's.
  *   - Map/location editing — no map UI exists anywhere in this product yet.
  *
  * M3.5 ADDS BULK-ASSIGN ONLY (`PATCH /admin/clients/assign-bulk`), gated on
@@ -154,15 +155,21 @@ const SELECT_CLASS =
   "border-input focus-visible:border-ring focus-visible:ring-ring/50 h-9 rounded-md border bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-[3px]";
 
 export function ClientsListPage() {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const params = readParams(searchParams);
   const clientsQuery = useClientsQuery(params);
   const { has } = usePermission();
 
-  /** Each action mirrors ONE server-side check. No create gate, no delete gate — all explicitly out of scope. */
+  /**
+   * Each action mirrors ONE server-side check. No create gate, no delete
+   * gate — all explicitly out of scope. View (M7 Phase 1) is gated the same
+   * as the list itself (`view-clients`) — already held by anyone who can
+   * see this table at all, so it is always offered, mirroring
+   * `ManagersListPage`'s own "View" button into Agent 360.
+   */
   const canUpdate = has(PERMISSIONS.UPDATE_CLIENT);
   const canToggleStatus = has(PERMISSIONS.MANAGE_CLIENT_STATUS);
-  const hasAnyRowAction = canUpdate || canToggleStatus;
 
   /** Gates the bulk-assign checkboxes, select-all and action bar — fail-closed, same discipline as every row action above. */
   const canAssign = has(PERMISSIONS.ASSIGN_CLIENT);
@@ -480,34 +487,47 @@ export function ClientsListPage() {
                   </td>
                   <td className="p-2">{formatDate(client.dateDebut)}</td>
                   <td className="p-2">
-                    {hasAnyRowAction ? (
-                      <div className="flex justify-end gap-2">
-                        {canUpdate ? (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setEditing(client)}
-                            aria-label={`Edit ${client.phone}`}
-                          >
-                            Edit
-                          </Button>
-                        ) : null}
-                        {canToggleStatus ? (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setTogglingStatus(client)}
-                            aria-label={
-                              client.status === "active"
-                                ? `Block ${client.phone}`
-                                : `Activate ${client.phone}`
-                            }
-                          >
-                            {client.status === "active" ? "Block" : "Activate"}
-                          </Button>
-                        ) : null}
-                      </div>
-                    ) : null}
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => navigate(clientDetailPath(client.id))}
+                        aria-label={`View ${client.phone}`}
+                      >
+                        View
+                      </Button>
+                      {canUpdate ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setEditing(client)}
+                          aria-label={`Edit ${client.phone}`}
+                        >
+                          Edit
+                        </Button>
+                      ) : null}
+                      {/*
+                        Pending clients get NO status action — `toggleStatus()`
+                        400s them outright (fixed M7 Phase 1; see
+                        `client-status-dialog.tsx`'s own docblock for the full
+                        source verification). Never offer a control the
+                        backend will reject.
+                      */}
+                      {canToggleStatus && client.status !== "pending" ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setTogglingStatus(client)}
+                          aria-label={
+                            client.status === "active"
+                              ? `Block ${client.phone}`
+                              : `Activate ${client.phone}`
+                          }
+                        >
+                          {client.status === "active" ? "Block" : "Activate"}
+                        </Button>
+                      ) : null}
+                    </div>
                   </td>
                 </tr>
               ))}
