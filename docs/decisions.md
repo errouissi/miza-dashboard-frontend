@@ -954,3 +954,38 @@ decisions made *during implementation*.
   rendered inside a trapped Radix `Dialog`/`Sheet` should default to the
   same "stable node count, `hidden`-toggled" discipline for any element
   that can gain/lose focus mid-interaction.
+
+## ADR-0035 — Client 360's Commercial reassignment uses `PATCH /admin/clients/{id}/assign` exclusively; `POST` to the same path is never called
+
+- **Date:** 2026-08-11
+- **Status:** Accepted
+- **Context:** `ClientController` exposes TWO genuinely different endpoints
+  at the identical path `/admin/clients/{id}/assign`, distinguished only by
+  HTTP method — found during Client 360 Phase 2 discovery, re-verified from
+  source before implementation: `POST` (`assignToAgent`, the legacy
+  single-assign action) routes through `ClientAssignmentService::assign()`,
+  which ALSO silently overwrites `ville`/`secteur` from the target
+  Commercial; `PATCH` (`reassign`, the admin-facing action) routes through
+  `reassignTo()`, which touches `agent_id` ONLY and never branches on
+  whether the Client was previously assigned. Both existed before Client
+  360; M3.5's own bulk-assign (`PATCH /admin/clients/assign-bulk`) already
+  established the `agent_id`-only precedent this decision extends to the
+  single-Client case.
+- **Decision:** `ClientReassignDrawer`'s own mutation
+  (`useReassignClientMutation` → `reassignClient`) calls `PATCH
+  /admin/clients/{id}/assign` ONLY. `POST` to the same path is never called
+  from Client 360, for either the "Assign" or "Reassign" UI label — one
+  mutation serves both, since `reassignTo()` has no branch on the Client's
+  prior `agent_id`.
+- **Rationale:** An admin reassigning a Client's Commercial from the
+  dashboard must never silently rewrite that Client's own City/Sector as a
+  side effect — that is exactly the semantic `POST`'s own service method
+  carries, and it would surprise an operator who only intended to change
+  ownership. `PATCH`'s error contract is also strictly better (a real,
+  field-informative 422 vs. `POST`'s bare, message-only 400).
+- **Consequences:** Any future single-Client assignment UI in this product
+  should default to `PATCH`, not `POST`, unless a fresh decision explicitly
+  wants the ville/secteur-sync side effect back. Do not "simplify" this by
+  switching to `POST` because it looks like the more obvious REST verb for
+  a first-time assignment — the two are NOT interchangeable, and the
+  divergence is deliberate, verified backend behavior, not an oversight.

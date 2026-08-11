@@ -100,8 +100,14 @@ pass — workspace foundation, full role-aware Agent Edit, Money/Stock
 panels, Grattage Outstanding, and the zero-stock Manager reassignment
 guard, closing the milestone's one genuine gap against the frozen
 architecture rather than deferring it again. See "M7 — Agent 360" below
-for the full write-up. **Client 360 and the Overview widget grid are not
-yet started** — see `next-session.md` for which is next and why.
+for the full write-up. **Client 360, the second surface, has all three
+implementation phases done and individually reviewed** (foundation
+`9cc464a`; Commercial relationship/reassignment/assignment history
+`506e992`; Grattage purchase history, reviewed but not yet committed) —
+functionally complete against the frozen requirement, but not yet a closed
+milestone: manual QA has not run and Phase 3 is uncommitted. See
+`next-session.md` for the exact resume point. **The Overview widget grid is
+not yet started.**
 
 M3.x (Admin/Manager/Commercial detail pages, ADR-0014) remains the only
 open M3 item, blocked by FE-2 — unaffected by M4, M5 or M6.
@@ -2018,7 +2024,7 @@ were all exercised against the real running backend.
 | **M5 — Stock, full milestone** | ✅ **COMPLETE at the implementation level** (all five phases); manual validation owed for Transfers, Allocations, Bons |
 | **M6 — Grattage (the seam)** | ✅ **COMPLETE, manual QA passed** — Invoices, restock-gate domain, Stock integration, Deposit↔Invoice linking |
 | **M7 — Agent 360** | ✅ **COMPLETE, manual QA passed** — workspace foundation, full Agent Edit, Money/Stock panels, Grattage Outstanding, zero-stock Manager reassignment guard |
-| M7 — Client 360 | ⬜ not started — see `next-session.md` for the recommended next step |
+| M7 — Client 360 | 🟡 all 3 implementation phases done, reviewed (`9cc464a`, `506e992`, Phase 3 uncommitted) — manual QA owed before milestone close, see `next-session.md` |
 | M7 — Overview widget grid | ⬜ not started |
 
 **Tests: 1159/1159 across 60 files** (was 407/23 before M3.6; 431/24 at
