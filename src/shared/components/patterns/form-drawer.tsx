@@ -50,6 +50,14 @@ export type FormDrawerProps = {
    * errors render against their fields, inside `children`.
    */
   errorMessage?: string;
+  /**
+   * An additional, caller-computed reason to disable Submit that is NOT
+   * "pending" — e.g. Client 360's `ClientReassignDrawer` disabling Reassign
+   * while the selected Commercial still equals the client's current one.
+   * Defaults to `false`, so every existing caller is unaffected. The shell
+   * only ORs it into the button's `disabled`; it never inspects why.
+   */
+  submitDisabled?: boolean;
 };
 
 export function FormDrawer({
@@ -64,6 +72,7 @@ export function FormDrawer({
   pendingLabel = "Saving…",
   cancelLabel = "Cancel",
   errorMessage,
+  submitDisabled = false,
 }: FormDrawerProps) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -115,7 +124,7 @@ export function FormDrawer({
           </div>
 
           <SheetFooter className="shrink-0 border-t px-4">
-            <Button type="submit" disabled={isPending}>
+            <Button type="submit" disabled={isPending || submitDisabled}>
               {isPending ? pendingLabel : submitLabel}
             </Button>
             <Button

@@ -47,4 +47,48 @@ describe("FormDrawer", () => {
     screen.getByRole("button", { name: "Cancel" }).click();
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
+
+  it("submitDisabled defaults to false — omitting it preserves existing behavior (Submit enabled, not pending)", () => {
+    render(
+      <FormDrawer open onOpenChange={vi.fn()} title="Edit thing" onSubmit={vi.fn()}>
+        <input aria-label="only-field" />
+      </FormDrawer>,
+    );
+
+    expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
+  });
+
+  it("submitDisabled=true disables Submit even while not pending, and leaves Cancel enabled", () => {
+    render(
+      <FormDrawer
+        open
+        onOpenChange={vi.fn()}
+        title="Edit thing"
+        onSubmit={vi.fn()}
+        submitDisabled
+      >
+        <input aria-label="only-field" />
+      </FormDrawer>,
+    );
+
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeEnabled();
+  });
+
+  it("submitDisabled=false with isPending=true still disables Submit — the two reasons OR together", () => {
+    render(
+      <FormDrawer
+        open
+        onOpenChange={vi.fn()}
+        title="Edit thing"
+        onSubmit={vi.fn()}
+        isPending
+        submitDisabled={false}
+      >
+        <input aria-label="only-field" />
+      </FormDrawer>,
+    );
+
+    expect(screen.getByRole("button", { name: "Saving…" })).toBeDisabled();
+  });
 });

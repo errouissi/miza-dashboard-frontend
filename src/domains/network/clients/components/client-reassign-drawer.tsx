@@ -36,7 +36,18 @@ import type { ClientDetailCommercial } from "../model/client";
  * no reason to round-trip a mutation whose only effect is a wasted request.
  * `onSubmit` compares the selection against `client.commercial.id` BEFORE
  * calling the mutation and simply closes the drawer when they match — this
- * is NOT an error state, so no message is shown for it.
+ * is NOT an error state, so no message is shown for it. KEPT even after
+ * `submitDisabled` (below) was added — a disabled button only blocks the
+ * click path; Enter-key/programmatic submission still reaches `onSubmit`.
+ *
+ * `submitDisabled` (M7 Client 360 manual-QA fix) — Reassign is disabled
+ * for as long as `selectedAgentId === client.commercial?.id`, which is
+ * true the instant the drawer opens (seeded to the current Commercial, see
+ * below). A silent no-op close on Submit was correct but gave no signal
+ * that the click did nothing; disabling the button up front makes that
+ * state visible instead of surprising. `FormDrawer`'s own `submitDisabled`
+ * prop (new, optional, defaults `false`) carries this — no other caller of
+ * that shared shell is affected.
  *
  * PERMISSIONS ARE INDEPENDENT (Phase 2 discovery, §3): `assign-client` gates
  * whether this drawer is ever opened at all (the caller's job — see
@@ -114,12 +125,24 @@ export function ClientReassignDrawer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, client?.id]);
 
+  // Drives `submitDisabled` below — re-renders on every selection change,
+  // same `form.watch()` pattern `TransferManagerCommercialField`'s own
+  // caller already uses for a cascading field.
+  const selectedAgentId = form.watch("agentId");
+  const isSameTarget =
+    client?.commercial !== undefined &&
+    client.commercial !== null &&
+    String(client.commercial.id) === selectedAgentId;
+
   const onSubmit = form.handleSubmit((values) => {
     if (!client) return;
     const selectedId = Number(values.agentId);
 
     // Same-target: a genuine backend no-op (200, no history row). Skip the
-    // request — this is not an error, just nothing to do.
+    // request — this is not an error, just nothing to do. KEPT as
+    // defense-in-depth even though `submitDisabled` below already prevents
+    // this in the normal click path — Enter-key/programmatic submission
+    // bypasses a disabled button, not this handler.
     if (client.commercial && client.commercial.id === selectedId) {
       onOpenChange(false);
       return;
@@ -164,6 +187,7 @@ export function ClientReassignDrawer({
       errorMessage={generalError}
       submitLabel={hasCurrentCommercial ? "Reassign" : "Assign"}
       pendingLabel={hasCurrentCommercial ? "Reassigning…" : "Assigning…"}
+      submitDisabled={isSameTarget}
     >
       <div className="flex flex-col gap-1.5">
         <label htmlFor="reassignAgent" className="text-sm font-medium">

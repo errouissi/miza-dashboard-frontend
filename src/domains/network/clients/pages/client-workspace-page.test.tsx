@@ -743,7 +743,7 @@ describe("assignment", () => {
     ).toBeInTheDocument();
   });
 
-  it("same target: Save closes the drawer WITHOUT issuing a PATCH request", async () => {
+  it("same target: Reassign is disabled, so a click never issues a PATCH request", async () => {
     let patched = false;
     server.use(
       showHandler(7, detailRow(7, "0612345678")),
@@ -760,11 +760,75 @@ describe("assignment", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Reassign Commercial" }));
     const dialog = await screen.findByRole("dialog");
-    // Seeded to the current Commercial (636) already — Save without changing it.
-    fireEvent.click(within(dialog).getByRole("button", { name: /^reassign$/i }));
+    // Seeded to the current Commercial (636) already — the button is
+    // disabled, so a click is a no-op at the DOM level (no submit fires).
+    const reassignButton = within(dialog).getByRole("button", { name: /^reassign$/i });
+    expect(reassignButton).toBeDisabled();
+    fireEvent.click(reassignButton);
+
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(patched).toBe(false);
+  });
+
+  it("same target: defense-in-depth — a direct form submit (bypassing the disabled button) still skips the PATCH and closes the drawer", async () => {
+    let patched = false;
+    server.use(
+      showHandler(7, detailRow(7, "0612345678")),
+      http.patch(`${API}/admin/clients/7/assign`, () => {
+        patched = true;
+        return HttpResponse.json({
+          success: true,
+          message: "ok",
+          data: { id: 7, agent_id: 636 },
+        });
+      }),
+    );
+    renderPage("/network/clients/7");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Reassign Commercial" }));
+    const dialog = await screen.findByRole("dialog");
+    await within(dialog).findByRole("option", { name: "Youssef Bennani" });
+
+    // Simulates an Enter-key/programmatic submit, which a `disabled` button
+    // attribute does not intercept — exercises `onSubmit`'s own same-target
+    // short-circuit directly, per the module docblock's defense-in-depth note.
+    const form = dialog.querySelector("form");
+    expect(form).not.toBeNull();
+    fireEvent.submit(form!);
 
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(patched).toBe(false);
+  });
+
+  it("Reassign is disabled the instant the drawer opens, seeded to the current Commercial", async () => {
+    server.use(showHandler(7, detailRow(7, "0612345678")));
+    renderPage("/network/clients/7");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Reassign Commercial" }));
+    const dialog = await screen.findByRole("dialog");
+
+    await within(dialog).findByRole("option", { name: "Youssef Bennani" });
+    expect(within(dialog).getByLabelText(/commercial/i)).toHaveValue("636");
+    expect(within(dialog).getByRole("button", { name: /^reassign$/i })).toBeDisabled();
+  });
+
+  it("selecting a genuinely different Commercial enables Reassign; selecting the original Commercial again disables it", async () => {
+    server.use(showHandler(7, detailRow(7, "0612345678")));
+    renderPage("/network/clients/7");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Reassign Commercial" }));
+    const dialog = await screen.findByRole("dialog");
+    const picker = within(dialog).getByLabelText(/commercial/i);
+    await within(dialog).findByRole("option", { name: "Youssef Bennani" });
+    const reassignButton = within(dialog).getByRole("button", { name: /^reassign$/i });
+
+    expect(reassignButton).toBeDisabled();
+
+    fireEvent.change(picker, { target: { value: "700" } });
+    expect(reassignButton).toBeEnabled();
+
+    fireEvent.change(picker, { target: { value: "636" } });
+    expect(reassignButton).toBeDisabled();
   });
 
   it("a genuine target change PATCHes /assign with agent_id ONLY (never ville/secteur)", async () => {
