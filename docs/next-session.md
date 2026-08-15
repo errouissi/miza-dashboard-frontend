@@ -3,7 +3,7 @@
 **Read this file first.** It is written so a session with no prior context can resume
 immediately. Overwrite it at the end of every session.
 
-_Last updated: 2026-08-11_
+_Last updated: 2026-08-15_
 
 ---
 
@@ -11,59 +11,61 @@ _Last updated: 2026-08-11_
 
 **M4 (Money) is COMPLETE. M5 (Stock) is COMPLETE at the implementation level.
 M6 (Grattage — the seam) is COMPLETE, manual QA passed. M7 (Overview &
-workspaces, Agent 360, Client 360) is the current milestone — Agent 360 is
-COMPLETE, manual QA passed. Client 360, the second of the three composed
-surfaces, has all three implementation phases DONE and individually reviewed
-and approved — foundation, Commercial relationship/reassignment/assignment
-history, and Grattage purchase history. Client 360 is functionally complete
-against the frozen requirement, but is NOT DONE as a milestone yet:**
-**manual QA has not started, and Phase 3 is not committed.** See "Next task"
-below — it is the literal first thing the next session must do, before
-anything else, including before committing Phase 3.
+workspaces, Agent 360, Client 360) is the current milestone — Agent 360 AND
+Client 360, the first two of its three composed surfaces, are both now
+COMPLETE, manual QA passed.** Client 360's three implementation phases
+(foundation, Commercial relationship/assignment history, Grattage purchase
+history) shipped, manual QA ran against the real backend and found two real
+UX defects (same-Commercial reassignment leaving Reassign enabled with no
+feedback; Agent 360's own Available Grattage giving no indication it could
+be blocked) — both root-caused, fixed, and re-verified before commit. **The
+Overview widget grid, the third and final M7 surface, has not started —
+that is the next task: a discovery pass, not implementation.** See "Next
+task" below.
 
-- **Code / commit state (read carefully, this is not a clean checkpoint):**
-  - Client 360 **Phase 1** — committed, `9cc464a` (`feat(clients): add
-    Client 360 foundation`).
-  - Client 360 **Phase 2** — committed, `506e992` (`feat(clients): add
-    Commercial assignment history`).
-  - **Both Phase 1 and Phase 2 are local only — NOT pushed to `origin/main`.**
-  - Client 360 **Phase 3** (Grattage purchase-history panel) — implementation
-    complete, reviewed and approved this session, but **deliberately left
-    uncommitted**. The working tree right now contains exactly the Phase 3
-    source changes (`git status` will NOT show clean) — this is the intended
-    state, not an accident; do not commit it reflexively without first
-    running the manual QA below, and do not discard it.
-  - A docs-only checkpoint commit (this file + `project-status.md`) may exist
-    on top of these two, per this session's own final commit — see this
-    file's own git log for the exact hash if you need it; it carries no
-    source changes.
-- **Tests (automated only — manual QA is the open item)**: 1227/1227 across
-  61 files, run standalone twice to rule out FE-1. `pnpm lint`/`pnpm typecheck`/
-  `pnpm format:check`/`pnpm build` all clean, re-verified this session,
-  including with Phase 3's own uncommitted changes present.
-- **Manual validation**: Cheques' full workflow, Agent Stock Returns, all of M6
-  (Grattage Invoices, the restock-gate integration, Deposit↔Invoice linking,
-  including the corrected Allocation capacity scenario), and now all of Agent
-  360 (scrolling, file/photo replacement, existing previews, Commercial
-  Current Stock, the product breakdown, Available Grattage, Stock-Return-
-  triggered refresh, the zero-stock reassignment guard, and reassignment
-  succeeding once stock reaches zero) are manually validated against the real
-  running backend. **Deposits, Debt Payments, Agent Transfers, Allocations and
-  Bons (the M5 resources) still have NOT had a manual browser pass of their
-  own** — unaffected by M6/M7, still simply owed, none blocked.
-- **M7 Agent 360 shipped, five phases plus a finalization pass**: workspace
-  foundation (`c392a7e`); full role-aware Agent Edit, `manager_id`
+- **Code / commit state — clean.**
+  - Client 360 **Phase 1** — `9cc464a` (`feat(clients): add Client 360
+    foundation`).
+  - Client 360 **Phase 2** — `506e992` (`feat(clients): add Commercial
+    assignment history`).
+  - Client 360 **Phase 3** — `22f2ba9` (`feat(clients): add Grattage
+    purchase history`).
+  - Client 360 QA fix — `55cc33d` (`fix(clients): disable same-Commercial
+    reassignment until a different Commercial is selected`).
+  - Agent 360 QA fix — `47ab778` (`fix(agents): clarify blocked Grattage
+    transfer capacity in the Stock panel`).
+  - **All five are pushed to `origin/main`.** Working tree is clean; no
+    uncommitted source changes remain.
+- **Tests: 1237/1237 across 61 files**, run twice to rule out FE-1 — two
+  different, unrelated, untouched files (`pending-cheques-page.test.tsx`,
+  `agent-transfers-list-page.test.tsx`) hit the known flake under
+  interleaved load in one run, both passed clean standalone. `eslint .`/
+  `tsc -b`/`prettier --check .` all clean, re-verified this session.
+- **Manual validation**: Cheques' full workflow, Agent Stock Returns, all of
+  M6 (Grattage Invoices, the restock-gate integration, Deposit↔Invoice
+  linking, including the corrected Allocation capacity scenario), all of
+  Agent 360, and now all of Client 360 (route/profile, status flow, Edit
+  incl. Ville/Secteur dependency, Commercial reassignment incl. the
+  same-Commercial disabled UX, Assignment History, Grattage purchase
+  history incl. historical-Commercial independence, permission behavior,
+  panel isolation) are manually validated against the real running backend.
+  **Deposits, Debt Payments, Agent Transfers, Allocations and Bons (the M5
+  resources) still have NOT had a manual browser pass of their own** —
+  unaffected by M6/M7, still simply owed, none blocked.
+- **M7 Agent 360 shipped, five phases plus two finalization passes**:
+  workspace foundation (`c392a7e`); full role-aware Agent Edit, `manager_id`
   temporarily excluded pending a backend read (`21c6e05`); Money/Stock
   workspace panels (`2ff0d5a`); the Grattage Outstanding panel, the first
   real caller of `useGrattageOutstandingQuery` (`69f50aa`, fulfilling
   ADR-0026); the zero-stock Manager reassignment guard, closing the one
   genuine gap the completion review found against the frozen architecture's
-  own named workflow (`1aa1d66`); and a manual-QA finalization pass fixing
-  two real `FormDrawer`/`FileUploadField` defects and adding Commercial
-  Current Stock, the product breakdown, and Available Grattage — all three
-  reusing the SAME widened stock-quantity read, not a new query (`bc54e55`).
-  See `project-status.md`'s own "M7 — Agent 360" section for the full
-  write-up and `decisions.md` ADR-0033/ADR-0034 for the permanent decisions.
+  own named workflow (`1aa1d66`); a manual-QA finalization pass fixing two
+  real `FormDrawer`/`FileUploadField` defects and adding Commercial Current
+  Stock, the product breakdown, and Available Grattage (`bc54e55`); and,
+  found during Client 360's own manual QA, a presentation clarification
+  when the Grattage restock gate is blocked (`47ab778`). See
+  `project-status.md`'s own "M7 — Agent 360" section for the full write-up
+  and `decisions.md` ADR-0033/ADR-0034 for the permanent decisions.
 - **Backend additions during Agent 360, all reused as-is, none re-derived
   client-side**: `GET /admin/agents/{agent}/stock-quantity`
   (`5302f99`, Commercial-only, `access-dashboard`) widened twice
@@ -75,25 +77,25 @@ anything else, including before committing Phase 3.
 - **M6's own carry-forward is now delivered**: the per-agent
   Outstanding-obligation UI view (`useGrattageOutstandingQuery`, previously
   domain-private) shipped as Agent 360's Phase 3.
-- **M7 Client 360 initial discovery is COMPLETE (this session, docs-only
-  checkpoint).** Full source-verified findings across the frozen requirement,
-  identity/edit fields, Commercial relationship, financial fields, Grattage
-  purchase history, permissions, query/invalidation, panel design,
-  architecture, backend gaps and Agent-360-reuse questions — presented and
-  not yet implemented. **6 focused questions remain unresolved and must be
-  closed before implementation starts** — see "Next task" below for the
-  exact list. No Client 360 code has been written.
+- **M7 Client 360 shipped, three phases plus two manual-QA fixes**:
+  foundation (`9cc464a`); Commercial relationship + assignment history
+  (`506e992`); Grattage purchase history, the frozen requirement's final
+  named capability (`22f2ba9`); the same-Commercial reassignment disable UX
+  fix (`55cc33d`, an additive `FormDrawer.submitDisabled` prop, every other
+  caller unaffected); and the related Agent 360 presentation fix found in
+  the same QA pass (`47ab778`, see above). See `project-status.md`'s own
+  "M7 — Client 360" section for the full write-up. No new ADR — both QA
+  fixes reuse existing, already-decided infrastructure rather than
+  introducing a new pattern.
 
 ## Before anything else
 
 ```bash
 cd C:\Miza\frontend-v2
-git status                 # expect: EITHER clean (if this session's own docs
-                            # commit is HEAD) OR showing exactly the Phase 3
-                            # Grattage source changes, uncommitted — NOT an
-                            # error either way, see "Current state" above
-git log --oneline -5        # expect 506e992 and 9cc464a in recent history
-pnpm test:ci               # expect: 1227/1227 across 61 files
+git status                 # expect: clean
+git log --oneline -6        # expect 47ab778, 55cc33d, 22f2ba9, c638414,
+                            # 506e992, 9cc464a
+pnpm test:ci               # expect: 1237/1237 across 61 files
 pnpm lint && pnpm typecheck && pnpm format:check && pnpm build
 ```
 
@@ -260,8 +262,7 @@ pnpm lint && pnpm typecheck && pnpm format:check && pnpm build
   error. `useAssignClientsBulkMutation` (pre-existing, M3.5) was re-verified
   and updated to also invalidate the new history key, since `7066ffa` means
   it now writes history rows too.
-- **M7 Client 360 Phase 3 — Grattage purchase history** — implemented,
-  reviewed and approved, **NOT YET COMMITTED** (see "Current state" above).
+- **M7 Client 360 Phase 3 — Grattage purchase history** — `22f2ba9`.
   Widened `domains/grattage/invoices/` with the smallest sanctioned public
   export: `useClientGrattageInvoicesQuery`, nested UNDER the existing
   `["grattage-invoices"]` key prefix (`["grattage-invoices", "client",
@@ -279,94 +280,80 @@ pnpm lint && pnpm typecheck && pnpm format:check && pnpm build
   documented as "absent on index() rows"; `GrattageInvoiceController::index()`
   now eager-loads it identically to `show()` — re-verified fresh, comment
   corrected in both the api and model files, nothing else touched).
+- **M7 Client 360 manual-QA fix — same-Commercial reassignment disable** —
+  `55cc33d`. Manual QA found the Reassign button stayed enabled while the
+  picker still showed the client's current Commercial — clicking it
+  silently closed the drawer with no request and no feedback. No
+  functional/audit-integrity bug existed (the backend's own
+  `appendHistoryIfChanged` already makes a same-agent history row
+  structurally impossible, and the frontend already skipped the request);
+  this was UX-only. Fixed with an additive `FormDrawer.submitDisabled`
+  prop (defaults `false`, every other caller unaffected) —
+  `ClientReassignDrawer` disables Reassign whenever the selection still
+  equals the current Commercial. The existing `onSubmit` same-target
+  short-circuit is kept as defense-in-depth for a programmatic/Enter-key
+  submit that bypasses the disabled button.
+- **M7 Agent 360 manual-QA fix — blocked Grattage transfer capacity
+  clarification** — `47ab778`. Found during the same Client 360 QA pass:
+  Agent 360's Stock panel showed `available_grattage` with no indication
+  it could be non-actionable while `restock_gate.blocked === true`
+  (backend-confirmed: `blocked` has priority over the numeric capacity,
+  and Transfer validation already enforces that order correctly).
+  `CommercialStockTotal` now reuses the existing
+  `useGrattageRestockGateQuery` hook (no new query) and shows a small
+  contextual note only on a confirmed `blocked === true`; the numeric
+  capacity is never hidden or zeroed.
 
 Full write-ups for every item above: `project-status.md`'s own dedicated sections.
 
-## Next task: M7 — Client 360 FINAL MANUAL QA
+## Next task: M7 — Overview widget grid DISCOVERY
 
-**This is the literal first thing to do next session — before committing
-Phase 3, before pushing anything.** All three implementation phases are done
-and reviewed; what remains is a real-browser pass against the actual running
-backend, per the working agreement's own "test the golden path and edge
-cases... before reporting a feature complete" rule.
+**Client 360 is DONE — foundation, Commercial relationship/assignment
+history, Grattage purchase history, and both manual-QA fixes are committed
+(`9cc464a`, `506e992`, `22f2ba9`, `55cc33d`, `47ab778`) and pushed. Manual QA
+passed against the real running backend.** The Overview widget grid is the
+third and final M7 surface, and the next task is a **discovery pass only —
+do not implement anything yet.**
 
-**Recommended real-data strategy (fewest Clients):**
-- **Primary** — one assigned, active Client, ideally already carrying real
-  Grattage invoices (find via `/grattage/invoices`, note its `client_id`).
-  Reused for almost everything below; reassign it during Step 5 and reassign
-  it back afterward to leave data as found.
-- **Pending** — one genuinely `pending` Client (self-registered via OTP —
-  toggle can never produce or reach this state). Only needed for Step 2.
-- Optional: an **unassigned** Client (Step 4b) and a Client with **>5**
-  history rows or invoices (truncation checks in Steps 6/7) — skip either if
-  none exists; both are already covered by the automated suite.
+**Why discovery must come first, not assumed:** the frozen roadmap itself
+names a real, still-unverified risk at this exact point — both
+`phase8-architecture.html` §5 ("chartData / recentActivities /
+agentsOverview — need routing (discovery §6)") and
+`phase8-frontend-implementation-roadmap.html`'s own M7 section ("the
+Overview's chart/activity endpoints were unrouted at discovery... Overview
+ships with the widgets whose endpoints exist and flags the rest") disclose
+that some of Overview's backend endpoints may not exist yet. This has been
+carried forward, unverified, since before Client 360 started — it must be
+re-verified from source now, not assumed to have resolved itself.
 
-**The checklist, in order:**
+**Discovery checklist:**
 
-1. **Open Client 360** from Network → Clients → View. Canonical
-   `/network/clients/:id` route. Phone/status/Ville/Secteur/Client since only
-   — no raw financial/system/OTP/location fields.
-2. **Status** — active→Block, blocked→Activate, both refresh the workspace
-   and the list; pending offers no Block/Activate action at all (a real,
-   pre-existing defect fixed in Phase 1 — see above).
-3. **Edit** — phone/Ville/Secteur seeded correctly, no status/Commercial/
-   financial/location field present; Secteur options scoped to the selected
-   Ville, changing Ville never silently keeps an invalid Secteur; Save
-   refreshes the workspace; Cancel discards; drawer scrolls correctly in a
-   real browser (the exact defect class Agent 360's own manual QA found once
-   already — ADR-0034).
-4. **Current Commercial** — correct name/account number/deep link for an
-   assigned Client; `—` + "Assign Commercial" for an unassigned one.
-5. **Assign/Reassign** — active-only picker, current Commercial pre-seeded,
-   no Ville/Secteur field anywhere in this drawer; selecting the SAME
-   Commercial and saving must fire NO request (check DevTools Network); a
-   real reassignment updates Current Commercial, leaves Ville/Secteur
-   untouched, updates the Clients list row, and adds a new Assignment
-   History row.
-6. **Assignment History** — verify real "Assigned to X" / "Reassigned from X
-   to Y" / "Unassigned from X" rows, actor + timestamp, permission-aware
-   Commercial links, and the "Showing latest N of TOTAL" line if >5 exist. A
-   Client untouched since backend commit `7066ffa` correctly shows "No
-   recorded history yet." — this is expected, not a bug.
-7. **Grattage purchase history** — invoice reference/Commercial/`{amount}
-   DH`/status/"Purchased" date, invoice deep link opens the existing detail
-   page, cancelled invoices stay visible, truthful "Showing latest 5 of N".
-   **The one check that matters most**: if the Primary Client was reassigned
-   in Step 5, an invoice from BEFORE that reassignment must still show the
-   ORIGINAL historical Commercial, never the Client's new current one.
-8. **Permission behavior** — spot-check with whatever limited accounts are
-   practically available (`view-clients`, `update-client`,
-   `manage-client-status`, `assign-client`, `view-agents`, `access-dashboard`
-   each control exactly one capability, independently); report which cases
-   were actually browser-verified vs. only covered by the automated suite.
-9. **Panel isolation** — block the Grattage or Assignment History request in
-   DevTools and confirm only that panel shows its own error+Retry, nothing
-   else on the page breaks; Retry recovers only the affected panel.
-10. **Regression + console/network** — Clients list, list-row Edit/status,
-    Agent 360 deep links, Grattage Invoice detail page all still work
-    unchanged; watch for console errors, unauthorized (401/403) requests
-    firing when they shouldn't, duplicate requests, or malformed navigation.
+1. Re-read the frozen Overview requirement in full: `phase8-architecture.html`
+   §5 (Overview module: purpose, backend APIs, widget-grid future-scalability
+   note) and the M7 section of `phase8-frontend-implementation-roadmap.html`
+   (deliverables, dependencies, the named risk, exit criteria).
+2. Inspect the current frontend: confirm no Overview route/page/domain exists
+   yet (expected — M7's own deliverable list names it as not started).
+3. Inspect the actual backend source (`C:\Miza\backend`, read-only — do not
+   modify) for every endpoint the frozen spec names: `GET
+   /admin/dashboard/statistics`, `chartData`, `recentActivities`,
+   `agentsOverview`, and the three composed reads (`/admin/cheques/pending`,
+   `/admin/depos?status=pending`, `/admin/grattage-invoices?status=overdue`
+   — all three already used elsewhere in this codebase, so only their
+   existence needs confirming, not their shape).
+4. For each endpoint: is it actually routed (`routes/api.php`)? Does a
+   controller method exist and return real data, or is it a stub/TODO? What
+   permission does it require?
+5. Produce a readiness matrix (routed+usable / routed+stub / not routed) and
+   a proposed phase order — ship the widgets whose endpoints are real now,
+   name what's blocked, per the roadmap's own "designed for exactly this"
+   escape hatch. Get this approved before writing any implementation code.
 
-**Outcome:**
-- **Bug found** → fix it, re-verify, THEN commit Phase 3.
-- **Passes clean** → commit Phase 3 alone (`feat(clients): add Grattage
-  purchase history` or similar — do not reuse an existing message verbatim),
-  then review + push Phase 1 + Phase 2 + Phase 3 together as one push, then
-  do the Client 360 documentation-sync checkpoint (mark it COMPLETE in this
-  file and in `project-status.md`, per those files' own conventions), and
-  only then move to the next frozen M7 item.
-
-**What is known and safe to reuse if the next frozen item turns out to be
-the Overview widget grid instead of anything Client-360-adjacent:**
-
-- The Overview widget grid still carries the same disclosed,
-  still-unverified backend-readiness risk noted before Client 360 started
-  (chart/activity endpoints possibly still unrouted) — re-verify from source
-  before scoping it, exactly as this file already said prior to Client 360.
-- `WorkspacePage`/`PanelBoundary` are now proven across TWO real composed
-  surfaces (Agent 360, Client 360), not one — a third application should
-  still re-verify its own backend contract from source, not assume the
-  shape transfers unchanged.
+**Also re-verify, not assumed:** `WorkspacePage`/`PanelBoundary` are now
+proven across TWO real composed surfaces (Agent 360, Client 360) — Overview
+is a different shape (a widget grid, not an entity workspace), so this
+pattern's applicability to Overview should be verified, not assumed to
+transfer unchanged.
 
 ## Things that MUST NOT be changed without a new decision (carried, updated this session)
 
@@ -442,16 +429,19 @@ the Overview widget grid instead of anything Client-360-adjacent:**
   back to domain-private. If Client 360 needs a Grattage read of its own,
   verify fresh whether it is CLIENT-scoped (a different backend contract —
   see "What is known" above) before assuming this same hook applies.
-- 🚫 **Do not add a second Stock←Grattage, Money↔Grattage, or Network←Grattage
-  domain-to-domain import** beyond the three now sanctioned: Stock's
+- 🚫 **Do not add another Stock←Grattage, Money↔Grattage, or Network←Grattage
+  domain-to-domain import** beyond the four now sanctioned: Stock's
   `AgentTransferDetailPage` importing `useGrattageRestockGateQuery`
   (ADR-0027); Deposits' own private, domain-local
   `fetchLinkedGrattageInvoices` read instead of a Grattage import (Option B,
-  ADR-0030); and Network's `AgentOutstandingPanel` (inside
-  `network/agents`) importing `useGrattageOutstandingQuery` (M7 Agent 360
-  Phase 3, ADR-0033 — mechanism 2, FTA §4, the same public-hook-import
-  pattern as the first). A new cross-domain need should default to Option
-  B's private-duplicate-read pattern unless a fresh decision says otherwise.
+  ADR-0030); Network's `AgentOutstandingPanel` (inside `network/agents`)
+  importing `useGrattageOutstandingQuery` from `domains/grattage/
+  outstanding` (M7 Agent 360, ADR-0033); and Network's `ClientGrattagePanel`
+  (inside `network/clients`) importing `useClientGrattageInvoicesQuery`
+  from `domains/grattage/invoices` — a DIFFERENT Grattage submodule and
+  backend contract from the third (M7 Client 360 Phase 3, ADR-0036). A new
+  cross-domain need should default to Option B's private-duplicate-read
+  pattern unless a fresh decision says otherwise.
 - 🚫 **Do not build a proactive numeric-capacity read or UI for Allocation**
   without a new backend endpoint to back it — none exists, before or after
   `9af5d00` (BC-AA stays partially open).
@@ -502,18 +492,15 @@ the Overview widget grid instead of anything Client-360-adjacent:**
       the product breakdown, Available Grattage). Includes the per-agent
       Outstanding-obligation UI view explicitly carried forward from M6.
       See `project-status.md`'s own M7 section, ADR-0033/ADR-0034.
-- [ ] **M7 Client 360 — NEXT (immediately). All three implementation phases
-      DONE (`9cc464a`, `506e992`, Phase 3 reviewed but uncommitted) — see
-      "Next task" above.** What remains, in order: (1) real-browser manual
-      QA against the checklist above, (2) fix anything it finds, (3) commit
-      Phase 3, (4) push Phases 1–3 together, (5) documentation-sync
-      checkpoint. Do not skip straight to committing Phase 3 without QA, and
-      do not push Phase 1/2 alone ahead of Phase 3 — the intent is one push
-      for all three.
-- [ ] **M7 Overview widget grid — not started.** Carries a disclosed,
+- [x] **M7 Client 360 — DONE, manual QA passed.** All three implementation
+      phases (`9cc464a`, `506e992`, `22f2ba9`) plus two manual-QA fixes
+      (same-Commercial reassignment disable `55cc33d`, Agent 360 blocked-
+      Grattage-capacity clarification `47ab778`) — all committed and pushed.
+      See `project-status.md`'s own M7 — Client 360 section.
+- [ ] **M7 Overview widget grid — NEXT (immediately). Discovery first, not
+      implementation — see "Next task" above.** Carries a disclosed,
       still-unverified backend-readiness risk (chart/activity endpoints
-      possibly still unrouted) — re-verify from source before scoping if this
-      is picked up instead of/after Client 360.
+      possibly still unrouted) — re-verify from source before scoping.
 - [ ] **Manager per-commercial Grattage Outstanding breakdown — accepted
       coarse capability, NOT a roadmap gap.** The frozen architecture (§6)
       names "outstanding obligation" as an Agent 360 deliverable generically,
@@ -540,12 +527,17 @@ the Overview widget grid instead of anything Client-360-adjacent:**
       `domains → app` ban exist. The frozen roadmap's own claim that the
       Stock←Grattage boundary is "verified by the boundary lint" is not
       literally true. M7 Agent 360 added a THIRD sanctioned cross-domain
-      import (Network←Grattage, `AgentOutstandingPanel`) on top of the two
-      that already existed — all three remain correct today by review
-      discipline, not tooling, exactly as this follow-up predicted. Worth a
-      real lint rule before Client 360 potentially adds a fourth — not
-      attempted in M6 or M7 Agent 360 (deliberately deferred both times,
-      recorded as a follow-up rather than fixed as a side effect).
+      import (Network←Grattage, `AgentOutstandingPanel`, reading
+      `domains/grattage/outstanding`) on top of the two that already
+      existed; Client 360 Phase 3 then added a **fourth**
+      (Network←Grattage, `ClientGrattagePanel`, reading
+      `domains/grattage/invoices` — a genuinely different Grattage
+      submodule and backend contract from Agent 360's own, so this is a
+      new edge, not a reuse of the third) — exactly as this follow-up
+      predicted. All four remain correct today by review discipline, not
+      tooling. Worth a real lint rule now — deferred three times in a row
+      (M6, M7 Agent 360, M7 Client 360), recorded as a follow-up each time
+      rather than fixed as a side effect of unrelated work.
 - [ ] **BC-AA — PARTIALLY resolved.** Two per-owner stock reads exist now
       (`companies/{id}/stock`, `managers/{id}/stock`, ADR-0025), feeding Allocations'/
       Transfers' own product pickers. Still no cross-owner Stock ledger view and no

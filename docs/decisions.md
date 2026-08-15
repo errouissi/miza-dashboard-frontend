@@ -989,3 +989,48 @@ decisions made *during implementation*.
   switching to `POST` because it looks like the more obvious REST verb for
   a first-time assignment — the two are NOT interchangeable, and the
   divergence is deliberate, verified backend behavior, not an oversight.
+
+## ADR-0036 — Client 360 Phase 3's `ClientGrattagePanel` is a fourth sanctioned Network←Grattage import, a distinct edge from Agent 360's own
+
+- **Date:** 2026-08-15
+- **Status:** Accepted
+- **Context:** `next-session.md`'s own standing rule named exactly three
+  sanctioned cross-domain Grattage imports and required "a fresh decision"
+  before a fourth: Stock's `AgentTransferDetailPage` importing
+  `useGrattageRestockGateQuery` (ADR-0027); Deposits' private,
+  domain-local `fetchLinkedGrattageInvoices` read instead of a Grattage
+  import (Option B, ADR-0030); and Network's `AgentOutstandingPanel`
+  importing `useGrattageOutstandingQuery` from `domains/grattage/
+  outstanding` (M7 Agent 360, ADR-0033). Client 360 Phase 3 needed a
+  Client's own Grattage purchase history — a genuinely different backend
+  contract (`GET /admin/grattage-invoices?client_id=...`) from Agent 360's
+  own Outstanding read, and from a different Grattage submodule
+  (`domains/grattage/invoices`, not `domains/grattage/outstanding`).
+- **Decision:** `ClientGrattagePanel` (inside `network/clients`) imports
+  `useClientGrattageInvoicesQuery`, the smallest sanctioned public export
+  widened onto `domains/grattage/invoices`'s existing surface this phase —
+  mechanism 1 (page-level composition, FTA §4), the same pattern
+  `AgentOutstandingPanel` already established for its own, different
+  Grattage submodule. This is the fourth sanctioned Network←Grattage edge,
+  not a reuse of the third — `domains/grattage/invoices` and `domains/
+  grattage/outstanding` are two separate submodules with two separate
+  backend contracts, and neither Network caller imports the other's
+  Grattage submodule.
+- **Rationale:** Option B's private-duplicate-read pattern (Deposits' own
+  precedent) was considered and rejected here for the same reason
+  `AgentOutstandingPanel` rejected it: `domains/grattage/invoices` already
+  has its own real query/model/mapper layer with real business meaning
+  (invoice identity, status, historical Commercial) that a private
+  duplicate read inside `network/clients` would either re-implement badly
+  or drift from. Mechanism 1 (direct public-surface import) is the correct
+  choice once a domain's own public surface already carries exactly the
+  shape a caller needs, matching the FTA §4 mechanism-1/mechanism-2 split
+  already in use elsewhere in this codebase.
+- **Consequences:** The standing "do not add a second/third/fourth
+  Grattage cross-domain import" rule in `next-session.md` is updated to
+  name four sanctioned edges, not three. `eslint.config.js` still has no
+  rule enforcing this boundary (the ESLint domain-boundary gap, carried
+  forward again in `next-session.md`'s own follow-up list) — all four
+  edges remain correct today by review discipline, not tooling. A fifth
+  cross-domain Grattage need should still default to Option B unless a
+  fresh decision says otherwise, per the original rule's own intent.
