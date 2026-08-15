@@ -62,7 +62,15 @@ type GrattageInvoiceRow = {
   deposit_id: number | null;
   agent: GrattageInvoiceAgentRow;
   client: GrattageInvoiceClientRow;
-  /** Present on `show()`; absent on `index()` rows. */
+  /**
+   * Present on BOTH `index()` and `show()` — re-verified fresh during
+   * Client 360 Phase 3 discovery: `GrattageInvoiceController::index()` now
+   * eager-loads `['agent', 'client', 'sales']`, identically to `show()`
+   * (both confirmed from source). Still typed optional defensively (a raw,
+   * non-Resource serialization gives no compile-time guarantee), but the
+   * "absent on index()" claim this comment previously made was stale —
+   * corrected here, not assumed.
+   */
   sales?: GrattageInvoiceSaleRow[];
 };
 
@@ -139,6 +147,47 @@ export async function fetchGrattageInvoices(
     perPage: page.per_page,
     total: page.total,
     lastPage: page.last_page,
+  };
+}
+
+/**
+ * `GET /admin/grattage-invoices?client_id={id}` — Client 360 Phase 3's own
+ * authoritative, Client-filtered read. Reuses `toGrattageInvoice` verbatim
+ * (NOT a second mapper) — the wire shape is identical to `fetchGrattageInvoices`'s
+ * own, only the query params differ. `client_id` is a plain, backend-
+ * authoritative `where('client_id', ...)` clause (`GrattageInvoiceController
+ * ::index`, verified fresh from source) — the frontend never filters by
+ * client itself, only asks for it.
+ *
+ * DELIBERATELY A SEPARATE FUNCTION FROM `fetchGrattageInvoices`, not a
+ * widened `GrattageInvoiceListParams` — that type's own docblock already
+ * states `agent_id`/`client_id` are out of the general list page's own
+ * scope (no picker exists there); adding `clientId` to it would imply the
+ * general list page could filter by client too, which it cannot (Phase 1
+ * scope, unchanged). This function exists ONLY for `useClientGrattageInvoicesQuery`.
+ *
+ * `perPage` IS CALLER-SUPPLIED, NOT HARDCODED — `useClientGrattageInvoicesQuery`
+ * passes 5 (a compact workspace-panel read, mirroring Assignment History's
+ * own already-approved Client 360 convention), but this function itself
+ * makes no assumption about the caller's page size.
+ */
+export async function fetchClientGrattageInvoices(
+  clientId: number,
+  page: number,
+  perPage: number,
+): Promise<Paginated<GrattageInvoice>> {
+  const { data } = await httpClient.get<GrattageInvoicesEnvelope>(
+    "/admin/grattage-invoices",
+    { params: { client_id: clientId, page, per_page: perPage } },
+  );
+
+  const envelope = data.data;
+  return {
+    items: envelope.data.map(toGrattageInvoice),
+    page: envelope.current_page,
+    perPage: envelope.per_page,
+    total: envelope.total,
+    lastPage: envelope.last_page,
   };
 }
 

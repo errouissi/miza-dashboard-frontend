@@ -121,7 +121,7 @@ export type GrattageInvoice = {
    * integration is explicitly out of scope for Phase 1).
    */
   depositId: number | null;
-  /** Present on `show()`; absent on `index()` rows. */
+  /** Present on BOTH `index()` and `show()` (re-verified, Client 360 Phase 3 — see `api/grattage-invoices-api.ts`'s own docblock; this comment previously claimed index() omits it, which is now stale). Still optional: a raw, non-Resource serialization gives no compile-time guarantee. */
   sales?: GrattageInvoiceSaleLine[];
 };
 

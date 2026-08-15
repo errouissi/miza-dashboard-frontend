@@ -20,4 +20,21 @@ export const grattageInvoicesKeys = {
    * state too. `CancelGrattageInvoiceDialog` is this key's only reader.
    */
   freshness: (id: number) => [...grattageInvoicesKeys.detail(id), "freshness"] as const,
+  /**
+   * Client 360 Phase 3 — the Client-filtered read
+   * (`useClientGrattageInvoicesQuery`). DELIBERATELY NESTED under `all`
+   * (`["grattage-invoices", "client", clientId, page]`), NOT a separate
+   * top-level key space (unlike `commercialStockQuantityKeys`'s own
+   * deliberately-separate design) — four existing `invalidation-map.ts`
+   * events (`deposit.validated`, `deposit.rejected`, `deposit.created`,
+   * `grattage-invoice.cancelled`) already invalidate `["grattage-invoices"]`
+   * broadly; nesting here means all four continue to cover this cache for
+   * free, via TanStack's own prefix matching. A separate top-level space
+   * would silently go stale on every one of those four events. See
+   * `client-grattage-panel.tsx`'s own docblock for the full reasoning.
+   */
+  byClient: (clientId: number) =>
+    [...grattageInvoicesKeys.all, "client", clientId] as const,
+  clientList: (clientId: number, page: number) =>
+    [...grattageInvoicesKeys.byClient(clientId), page] as const,
 };

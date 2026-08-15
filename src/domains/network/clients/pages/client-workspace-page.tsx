@@ -13,6 +13,7 @@ import { WorkspacePage } from "@/shared/components/patterns/workspace-page";
 import { ClientAssignmentHistoryPanel } from "../components/client-assignment-history-panel";
 import { ClientCommercialSection } from "../components/client-commercial-section";
 import { ClientFormSheet } from "../components/client-form-sheet";
+import { ClientGrattagePanel } from "../components/client-grattage-panel";
 import { ClientReassignDrawer } from "../components/client-reassign-drawer";
 import { ClientStatusDialog } from "../components/client-status-dialog";
 import { useClientQuery } from "../queries/clients-queries";
@@ -34,10 +35,13 @@ import { CLIENT_STATUS_LABELS, CLIENT_STATUS_TONES } from "../model/client";
  * explicit Client 360 Phase 1 decision; see each component's own docblock
  * for the structural-prop-typing that makes the reuse work).
  *
- * PHASE 1 WAS IDENTITY/PROFILE/EDIT/STATUS ONLY. PHASE 2 (this update) adds
- * the Commercial relationship section, the Assign/Reassign action, and the
- * Assignment History panel — still NO Grattage purchase-history panel,
- * which stays a later Client 360 phase.
+ * PHASE 1 WAS IDENTITY/PROFILE/EDIT/STATUS ONLY. PHASE 2 added the
+ * Commercial relationship section, the Assign/Reassign action, and the
+ * Assignment History panel. PHASE 3 (this update) adds the Grattage
+ * purchase-history panel — the frozen requirement's final named Client 360
+ * capability (`phase8-architecture.html` §6: "profile/assignment history
+ * (Network) with purchase history via grattage invoices (Grattage)").
+ * Client 360 is now feature-complete against that frozen scope.
  *
  * `ClientCommercialSection` READS `ClientDetail.commercial` DIRECTLY, NEVER
  * FROM HISTORY — the current-Commercial and assignment-history reads are
@@ -47,15 +51,19 @@ import { CLIENT_STATUS_LABELS, CLIENT_STATUS_TONES } from "../model/client";
  * `client-workspace-page.test.tsx`'s own regression test constructing a
  * detail/history mismatch on purpose to prove this).
  *
- * `PanelBoundary` NOW WRAPS `ClientAssignmentHistoryPanel` — Phase 2 is the
- * phase that brings Client 360's own SECOND real panel (the first being
- * this one), the point `WorkspacePage`'s own docblock names as when a
- * per-panel crash boundary stops being "an abstraction fitted to an
- * imagined caller" and starts being a testable property. The Commercial
- * relationship section is identity-adjacent (reads the SAME `clientQuery`
- * this page's own Profile section already does, not a second query), so it
- * is not itself panel-wrapped — only genuinely independent, separately-
- * queried sections are.
+ * `PanelBoundary` WRAPS BOTH `ClientAssignmentHistoryPanel` (Phase 2) AND
+ * `ClientGrattagePanel` (Phase 3) — two independent panels, two independent
+ * boundaries, so one's failure (loading/error/retry/render crash) can never
+ * blank the other, or Profile/Edit/Commercial/Reassign above them. The
+ * Commercial relationship section is identity-adjacent (reads the SAME
+ * `clientQuery` this page's own Profile section already does, not a second
+ * query), so it is not itself panel-wrapped — only genuinely independent,
+ * separately-queried sections are. `ClientGrattagePanel` reads
+ * `useClientGrattageInvoicesQuery` (`domains/grattage/invoices`'s own
+ * public surface, widened this phase) — a SEPARATE Network←Grattage import
+ * from `AgentOutstandingPanel`'s own `domains/grattage/outstanding` one
+ * (Agent 360, a different submodule, a different backend contract);
+ * neither panel imports the other's Grattage submodule.
  *
  * STATUS ACTION FIX (M7 Phase 1, unchanged) — a pending Client gets NO
  * status button here, mirroring the identical fix on the list's own row
@@ -188,6 +196,10 @@ export function ClientWorkspacePage() {
 
       <PanelBoundary>
         <ClientAssignmentHistoryPanel clientId={client.id} />
+      </PanelBoundary>
+
+      <PanelBoundary>
+        <ClientGrattagePanel clientId={client.id} />
       </PanelBoundary>
 
       <ClientFormSheet open={editing} onOpenChange={setEditing} client={client} />

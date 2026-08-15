@@ -2,11 +2,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { STALE_TIMES, invalidateForEvent } from "@/infrastructure/query";
 import {
   cancelGrattageInvoice,
+  fetchClientGrattageInvoices,
   fetchGrattageInvoiceById,
   fetchGrattageInvoices,
 } from "../api/grattage-invoices-api";
 import type { GrattageInvoiceListParams } from "../model/grattage-invoice";
 import { grattageInvoicesKeys } from "./keys";
+
+/** Client 360 Phase 3's own compact-panel page size — see `fetchClientGrattageInvoices`'s own docblock for why this is caller-supplied, not hardcoded there. */
+const CLIENT_GRATTAGE_INVOICES_PAGE_SIZE = 5;
 
 /**
  * Grattage Invoices data hooks (FTA §8) — the first Grattage resource
@@ -34,6 +38,33 @@ export function useGrattageInvoiceQuery(id: number, options: { enabled?: boolean
   return useQuery({
     queryKey: grattageInvoicesKeys.detail(id),
     queryFn: () => fetchGrattageInvoiceById(id),
+    staleTime: STALE_TIMES.LIVE,
+    refetchOnWindowFocus: true,
+    enabled: options.enabled ?? true,
+  });
+}
+
+/**
+ * Client 360 Phase 3 — the authoritative, Client-filtered purchase-history
+ * read (`ClientGrattagePanel`'s only query). Same `LIVE` tier as the
+ * general list/detail — this is the identical underlying financial-queue
+ * data, not a new classification. Fixed at page 1,
+ * `CLIENT_GRATTAGE_INVOICES_PAGE_SIZE` (5) — a compact workspace-panel
+ * read, never a full browsable list; `query.data.total` (from the real
+ * paginator) is what the panel discloses truthfully when it exceeds 5, not
+ * anything derived here. `enabled` is the caller's own `access-dashboard`
+ * gate — this hook makes no permission decision itself, mirroring every
+ * other secondary-permission query in this codebase
+ * (`useVilleOptionsQuery({ enabled })`, etc.).
+ */
+export function useClientGrattageInvoicesQuery(
+  clientId: number,
+  options: { enabled?: boolean } = {},
+) {
+  return useQuery({
+    queryKey: grattageInvoicesKeys.clientList(clientId, 1),
+    queryFn: () =>
+      fetchClientGrattageInvoices(clientId, 1, CLIENT_GRATTAGE_INVOICES_PAGE_SIZE),
     staleTime: STALE_TIMES.LIVE,
     refetchOnWindowFocus: true,
     enabled: options.enabled ?? true,

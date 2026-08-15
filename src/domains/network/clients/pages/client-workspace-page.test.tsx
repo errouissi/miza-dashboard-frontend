@@ -7,6 +7,7 @@ import { server } from "@/test/msw/server";
 import { sessionManager } from "@/infrastructure/auth";
 import { createQueryClient } from "@/infrastructure/query";
 import { PERMISSIONS } from "@/infrastructure/permissions";
+import { formatDate } from "@/shared/formatters";
 import { ClientWorkspacePage } from "./client-workspace-page";
 import { clientDetailPath, CLIENT_DETAIL_PATH } from "../routes";
 import { clientAssignmentHistoryKeys, clientsKeys } from "../queries/keys";
@@ -198,6 +199,75 @@ function historyHandler(
 }
 
 /**
+ * One raw `grattage-invoices` row, exactly as `GrattageInvoiceController::
+ * index`/`show` emit it — a raw, non-Resource `GrattageInvoice` model
+ * serialization (verified fresh, Client 360 Phase 3 discovery).
+ */
+function grattageInvoiceRow(
+  id: number,
+  overrides: Partial<{
+    status: "pending" | "overdue" | "settled" | "cancelled";
+    total_amount: string;
+    sold_at: string;
+    due_at: string;
+    declared_at: string | null;
+    deposit_id: number | null;
+    agent: { id: number; nom: string; prenom: string; num_compte: string };
+    client: { id: number; phone: string };
+  }> = {},
+) {
+  return {
+    id,
+    status: "pending" as const,
+    total_amount: "150.00",
+    sold_at: "2026-02-15T10:00:00.000000Z",
+    due_at: "2026-02-16T12:00:00.000000Z",
+    declared_at: null,
+    deposit_id: null,
+    agent: {
+      id: 636,
+      nom: "Alaoui",
+      prenom: "Salma",
+      num_compte: "DEV-CPT-COMMERCIAL-001",
+    },
+    client: { id: 7, phone: "0612345678" },
+    ...overrides,
+  };
+}
+
+/**
+ * `GET /admin/grattage-invoices` (`useClientGrattageInvoicesQuery`, the
+ * Grattage Invoices domain's own public surface, widened M7 Phase 3).
+ * Registered as a DEFAULT (empty) handler in `beforeEach` — `access-dashboard`
+ * is already part of `ALL_CLIENT_PERMISSIONS`, so `ClientGrattagePanel`
+ * fires this request unconditionally in every test unless overridden.
+ */
+function grattageInvoicesHandler(
+  items: ReturnType<typeof grattageInvoiceRow>[] = [],
+  meta: Partial<{
+    total: number;
+    per_page: number;
+    current_page: number;
+    last_page: number;
+  }> = {},
+  onRequest?: (url: URL) => void,
+) {
+  return http.get(`${API}/admin/grattage-invoices`, ({ request }) => {
+    onRequest?.(new URL(request.url));
+    return HttpResponse.json({
+      success: true,
+      data: {
+        data: items,
+        current_page: meta.current_page ?? 1,
+        per_page: meta.per_page ?? 5,
+        total: meta.total ?? items.length,
+        last_page: meta.last_page ?? 1,
+      },
+    });
+  });
+}
+
+/**
  * Returns the `QueryClient` too — the invalidation tests below assert
  * `invalidateQueries` was called with the right keys directly (via
  * `vi.spyOn`), rather than only inferring it from a re-fetched network
@@ -233,11 +303,14 @@ beforeEach(() => {
   // M7 Phase 2 — `ClientReassignDrawer` is always mounted (same pattern),
   // so `useCommercialOptionsQuery` fires unconditionally once `view-agents`
   // is held. `ClientAssignmentHistoryPanel` fires unconditionally once
-  // `view-clients` is held (always true — it gates the whole route). Both
-  // get an empty/default response here; tests that care override with
-  // `server.use(...)` again.
+  // `view-clients` is held (always true — it gates the whole route).
+  // `ClientGrattagePanel` (M7 Phase 3) fires unconditionally once
+  // `access-dashboard` is held (already part of `ALL_CLIENT_PERMISSIONS`).
+  // All three get an empty/default response here; tests that care override
+  // with `server.use(...)` again.
   server.use(commercialOptionsHandler());
   server.use(historyHandler());
+  server.use(grattageInvoicesHandler());
 });
 
 describe("route helper", () => {
@@ -1112,5 +1185,346 @@ describe("panel isolation", () => {
     expect(
       await screen.findByText("Assignment history could not be loaded."),
     ).toBeInTheDocument();
+  });
+});
+
+describe("grattage purchase history — permission", () => {
+  it("ACCESS_DASHBOARD renders the panel and issues the request", async () => {
+    let requested = false;
+    server.use(
+      showHandler(7, detailRow(7, "0612345678")),
+      grattageInvoicesHandler([], {}, () => {
+        requested = true;
+      }),
+    );
+    renderPage("/network/clients/7");
+
+    await screen.findByRole("heading", { name: "06 12 34 56 78" });
+    expect(screen.getByText("Grattage purchase history")).toBeInTheDocument();
+    expect(requested).toBe(true);
+  });
+
+  it("no ACCESS_DASHBOARD: no panel, no request", async () => {
+    let requested = false;
+    signInWith([
+      PERMISSIONS.VIEW_CLIENTS,
+      PERMISSIONS.UPDATE_CLIENT,
+      PERMISSIONS.MANAGE_CLIENT_STATUS,
+      PERMISSIONS.ASSIGN_CLIENT,
+      PERMISSIONS.VIEW_AGENTS,
+    ]);
+    server.use(
+      showHandler(7, detailRow(7, "0612345678")),
+      grattageInvoicesHandler([], {}, () => {
+        requested = true;
+      }),
+    );
+    renderPage("/network/clients/7");
+
+    await screen.findByRole("heading", { name: "06 12 34 56 78" });
+    expect(screen.queryByText("Grattage purchase history")).not.toBeInTheDocument();
+    expect(requested).toBe(false);
+  });
+});
+
+describe("grattage purchase history — filtering", () => {
+  it("requests exactly client_id, page=1, per_page=5", async () => {
+    let requestedUrl: URL | undefined;
+    server.use(
+      showHandler(7, detailRow(7, "0612345678")),
+      grattageInvoicesHandler([], {}, (u) => (requestedUrl = u)),
+    );
+    renderPage("/network/clients/7");
+
+    await screen.findByText("Grattage purchase history");
+    expect(requestedUrl?.searchParams.get("client_id")).toBe("7");
+    expect(requestedUrl?.searchParams.get("page")).toBe("1");
+    expect(requestedUrl?.searchParams.get("per_page")).toBe("5");
+  });
+});
+
+describe("grattage purchase history — rows", () => {
+  it("renders invoice identity, amount (DH), status, and Purchased (soldAt)", async () => {
+    server.use(
+      showHandler(7, detailRow(7, "0612345678")),
+      grattageInvoicesHandler([
+        grattageInvoiceRow(42, {
+          total_amount: "250.00",
+          status: "pending",
+          sold_at: "2026-02-15T10:00:00.000000Z",
+        }),
+      ]),
+    );
+    renderPage("/network/clients/7");
+
+    expect(await screen.findByRole("link", { name: "Invoice #42" })).toBeInTheDocument();
+    expect(screen.getByText("Pending")).toBeInTheDocument();
+    const row = screen.getByRole("link", { name: "Invoice #42" }).closest("li");
+    expect(row).toHaveTextContent("250.00 DH");
+    expect(row).toHaveTextContent(
+      `Purchased ${formatDate("2026-02-15T10:00:00.000000Z")}`,
+    );
+  });
+
+  it("a cancelled invoice remains visible, not filtered out", async () => {
+    server.use(
+      showHandler(7, detailRow(7, "0612345678")),
+      grattageInvoicesHandler([grattageInvoiceRow(9, { status: "cancelled" })]),
+    );
+    renderPage("/network/clients/7");
+
+    expect(await screen.findByRole("link", { name: "Invoice #9" })).toBeInTheDocument();
+    expect(screen.getByText("Cancelled")).toBeInTheDocument();
+  });
+
+  it("historical Commercial comes from the invoice's own agent, NOT the current Client Commercial", async () => {
+    // ClientDetail.commercial = Salma Alaoui (id 636, detailRow's default).
+    // The invoice's own agent is someone else entirely (Youssef Bennani,
+    // id 700) — the Client was reassigned after this older purchase. The
+    // row must show Youssef Bennani, never substitute the current
+    // Commercial section's own Salma Alaoui.
+    server.use(
+      showHandler(7, detailRow(7, "0612345678")),
+      grattageInvoicesHandler([
+        grattageInvoiceRow(9, {
+          agent: {
+            id: 700,
+            nom: "Bennani",
+            prenom: "Youssef",
+            num_compte: "DEV-CPT-002",
+          },
+        }),
+      ]),
+    );
+    renderPage("/network/clients/7");
+    await screen.findByRole("heading", { name: "06 12 34 56 78" });
+
+    // Current Commercial section still shows Salma Alaoui.
+    const assignedToRow = screen.getByText("Assigned to").closest("div");
+    expect(within(assignedToRow!).getByText("Salma Alaoui")).toBeInTheDocument();
+
+    // The invoice row shows the HISTORICAL agent, Youssef Bennani.
+    const invoiceRow = (await screen.findByRole("link", { name: "Invoice #9" })).closest(
+      "li",
+    );
+    expect(within(invoiceRow!).getByText("Youssef Bennani")).toBeInTheDocument();
+    expect(within(invoiceRow!).queryByText("Salma Alaoui")).not.toBeInTheDocument();
+  });
+});
+
+describe("grattage purchase history — commercial navigation", () => {
+  it("VIEW_AGENTS grants a deep link to the invoice's own Commercial", async () => {
+    server.use(
+      showHandler(7, detailRow(7, "0612345678")),
+      grattageInvoicesHandler([
+        grattageInvoiceRow(9, {
+          agent: {
+            id: 700,
+            nom: "Bennani",
+            prenom: "Youssef",
+            num_compte: "DEV-CPT-002",
+          },
+        }),
+      ]),
+    );
+    renderPage("/network/clients/7");
+
+    expect(await screen.findByRole("link", { name: "Youssef Bennani" })).toHaveAttribute(
+      "href",
+      "/network/agents/700",
+    );
+  });
+
+  it("without VIEW_AGENTS, the invoice's Commercial renders as plain text, no link", async () => {
+    signInWith([
+      PERMISSIONS.VIEW_CLIENTS,
+      PERMISSIONS.UPDATE_CLIENT,
+      PERMISSIONS.MANAGE_CLIENT_STATUS,
+      PERMISSIONS.ASSIGN_CLIENT,
+      PERMISSIONS.ACCESS_DASHBOARD,
+    ]);
+    server.use(
+      showHandler(7, detailRow(7, "0612345678")),
+      grattageInvoicesHandler([
+        grattageInvoiceRow(9, {
+          agent: {
+            id: 700,
+            nom: "Bennani",
+            prenom: "Youssef",
+            num_compte: "DEV-CPT-002",
+          },
+        }),
+      ]),
+    );
+    renderPage("/network/clients/7");
+
+    // "Youssef Bennani" is bare text sharing the same `<p>` as the amount
+    // and date (no wrapping element), so `getByText` (which only matches
+    // an element's OWN exact textContent) cannot target it alone —
+    // `toHaveTextContent` reads the whole `<li>`'s content instead.
+    const invoiceRow = (await screen.findByRole("link", { name: "Invoice #9" })).closest(
+      "li",
+    );
+    expect(invoiceRow).toHaveTextContent("Youssef Bennani");
+    expect(
+      within(invoiceRow!).queryByRole("link", { name: "Youssef Bennani" }),
+    ).not.toBeInTheDocument();
+  });
+});
+
+describe("grattage purchase history — invoice navigation", () => {
+  it("the invoice reference deep-links via grattageInvoiceDetailPath", async () => {
+    server.use(
+      showHandler(7, detailRow(7, "0612345678")),
+      grattageInvoicesHandler([grattageInvoiceRow(42)]),
+    );
+    renderPage("/network/clients/7");
+
+    expect(await screen.findByRole("link", { name: "Invoice #42" })).toHaveAttribute(
+      "href",
+      "/grattage/invoices/42",
+    );
+  });
+});
+
+describe("grattage purchase history — states", () => {
+  it("shows a loading state before the read resolves", async () => {
+    server.use(
+      showHandler(7, detailRow(7, "0612345678")),
+      http.get(`${API}/admin/grattage-invoices`, () => new Promise(() => {})),
+    );
+    renderPage("/network/clients/7");
+
+    await screen.findByRole("heading", { name: "06 12 34 56 78" });
+    expect(screen.getByText("Grattage purchase history")).toBeInTheDocument();
+    expect(
+      screen.queryByText("No recorded Grattage purchases for this client."),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows a retryable error state and recovers", async () => {
+    // Same THREE-attempt retry-policy reasoning as the detail/history
+    // queries' own equivalent tests above.
+    let attempts = 0;
+    server.use(
+      showHandler(7, detailRow(7, "0612345678")),
+      http.get(`${API}/admin/grattage-invoices`, () => {
+        attempts += 1;
+        if (attempts <= 3) {
+          return HttpResponse.json({ success: false, error: null }, { status: 500 });
+        }
+        return HttpResponse.json({
+          success: true,
+          data: { data: [], current_page: 1, per_page: 5, total: 0, last_page: 1 },
+        });
+      }),
+    );
+    renderPage("/network/clients/7");
+
+    const retry = await screen.findByRole(
+      "button",
+      { name: /retry/i },
+      { timeout: 5000 },
+    );
+    fireEvent.click(retry);
+
+    expect(
+      await screen.findByText("No recorded Grattage purchases for this client."),
+    ).toBeInTheDocument();
+  });
+
+  it("empty history renders the honest empty state", async () => {
+    server.use(showHandler(7, detailRow(7, "0612345678")), grattageInvoicesHandler([]));
+    renderPage("/network/clients/7");
+
+    expect(
+      await screen.findByText("No recorded Grattage purchases for this client."),
+    ).toBeInTheDocument();
+  });
+
+  it("discloses truncation truthfully: 'Showing latest N of TOTAL'", async () => {
+    server.use(
+      showHandler(7, detailRow(7, "0612345678")),
+      grattageInvoicesHandler([grattageInvoiceRow(9)], { total: 23 }),
+    );
+    renderPage("/network/clients/7");
+
+    expect(await screen.findByText("Showing latest 1 of 23")).toBeInTheDocument();
+  });
+
+  it("hides the truncation indicator when total equals the rendered count", async () => {
+    server.use(
+      showHandler(7, detailRow(7, "0612345678")),
+      grattageInvoicesHandler([grattageInvoiceRow(9)]),
+    );
+    renderPage("/network/clients/7");
+
+    await screen.findByRole("link", { name: "Invoice #9" });
+    expect(screen.queryByText(/Showing latest/)).not.toBeInTheDocument();
+  });
+});
+
+describe("grattage purchase history — panel isolation", () => {
+  // `PanelBoundary`'s own generic crash-containment mechanism (including
+  // sibling-boundary isolation) is already exercised directly in
+  // `panel-boundary.test.tsx` — not re-proven here. This suite's own
+  // concern is narrower and specific to THIS panel: a Grattage QUERY
+  // failure must not affect Phase 1/2's own sections, which is directly
+  // observable (unlike a synthetic render crash) through this page.
+  it("a Grattage query failure does not break Profile/Edit/Status/current Commercial/Reassign/History", async () => {
+    server.use(
+      showHandler(7, detailRow(7, "0612345678")),
+      historyHandler([
+        historyRow(1, "assigned", {
+          to_agent: { id: 636, nom: "Alaoui", prenom: "Salma" },
+        }),
+      ]),
+      http.get(`${API}/admin/grattage-invoices`, () =>
+        HttpResponse.json({ success: false, error: null }, { status: 500 }),
+      ),
+    );
+    renderPage("/network/clients/7");
+
+    await screen.findByRole("heading", { name: "06 12 34 56 78" });
+    expect(screen.getByText("Phone")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Edit" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Block" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Salma Alaoui" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Reassign Commercial" }),
+    ).toBeInTheDocument();
+    expect(await screen.findByRole("listitem")).toHaveTextContent(
+      "Assigned to Salma Alaoui",
+    );
+
+    // The Grattage failure itself surfaces, scoped to its own panel only.
+    expect(
+      await screen.findByText("Grattage purchase history could not be loaded."),
+    ).toBeInTheDocument();
+  });
+});
+
+describe("grattage purchase history — semantics", () => {
+  it("never renders Client debt/outstanding/solde/dept_to_commercial/restock language anywhere on the page", async () => {
+    server.use(
+      showHandler(7, detailRow(7, "0612345678")),
+      grattageInvoicesHandler([
+        grattageInvoiceRow(9, { status: "overdue", total_amount: "999.00" }),
+      ]),
+      historyHandler([
+        historyRow(1, "assigned", {
+          to_agent: { id: 636, nom: "Alaoui", prenom: "Salma" },
+        }),
+      ]),
+    );
+    renderPage("/network/clients/7");
+
+    await screen.findByRole("link", { name: "Invoice #9" });
+    expect(screen.queryByText(/solde|balance/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/\bdebt\b/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/outstanding/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/dept.to.commercial/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/restock/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/amount owed/i)).not.toBeInTheDocument();
   });
 });
