@@ -34,6 +34,7 @@ import {
   useAgentStockReturnsQuery,
   type AgentStockReturn,
 } from "@/domains/stock/agent-stock-returns";
+import { useGrattageRestockGateQuery } from "@/domains/grattage/outstanding";
 import type { Agent } from "../model/agent";
 import { useCommercialStockQuantityQuery } from "../queries/agents-queries";
 import { ActivityList } from "./activity-list";
@@ -188,9 +189,29 @@ function StockProductTable({ items }: { items: ManagerStockItem[] }) {
  * Grattage still renders in the empty-stock case — it is not conditioned
  * on stock at all, since a commercial with no held stock can still have
  * (or lack) Transfer capacity.
+ *
+ * RESTOCK-GATE HELPER (M7 Agent 360 manual-QA fix) — `available_grattage`
+ * is only ever the remaining numeric TRANSFER CAPACITY (backend-confirmed);
+ * it says nothing about whether the commercial is currently ELIGIBLE to
+ * receive stock. `restock_gate.blocked` has priority over it, and
+ * `AgentTransferDetailPage`'s own Validate flow already enforces that
+ * order — this panel was presenting the capacity number with no signal
+ * that it can be non-actionable, which reads as "N can be transferred now"
+ * even while blocked. Reuses `useGrattageRestockGateQuery` (the SAME
+ * cache-sharing hook Transfer's own detail page already imports from
+ * Grattage's public surface) — no new API/query, no derivation from
+ * `Outstanding`'s amount. Gated implicitly the same way `stockQuantity`
+ * already is: `CommercialStockTotal` only mounts under `canViewStock`
+ * (`ACCESS_DASHBOARD`), the exact same permission `AgentOutstandingPanel`
+ * already requires for this same read, so no separate `enabled` condition
+ * is needed here. The helper renders ONLY on a known `blocked === true` —
+ * never inferred from a pending/errored gate read, and never turns into an
+ * "available for transfer" claim on the opposite state; the numeric value
+ * itself is always shown, unmodified, regardless of the gate query's state.
  */
 function CommercialStockTotal({ agentId }: { agentId: number }) {
   const query = useCommercialStockQuantityQuery(agentId);
+  const gateQuery = useGrattageRestockGateQuery(agentId);
   const errorMessage = isAppError(query.error)
     ? (resolveErrorDisplay(query.error).message ?? "Stock could not be loaded.")
     : "Stock could not be loaded.";
@@ -236,6 +257,12 @@ function CommercialStockTotal({ agentId }: { agentId: number }) {
         {/* A decimal-cast STRING — rendered verbatim, never through
             MoneyAmount, matching this file's own montant convention below. */}
         <p className="text-sm tabular-nums">{availableGrattage}</p>
+        {gateQuery.data?.blocked === true ? (
+          <p className="text-destructive text-xs">
+            Currently unavailable for transfer. Outstanding Grattage must be settled
+            before new stock can be received.
+          </p>
+        ) : null}
       </div>
     </>
   );

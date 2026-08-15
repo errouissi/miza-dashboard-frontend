@@ -15,7 +15,9 @@ export type {
 //
 // `useGrattageRestockGateQuery` remains the ONE sanctioned domain→domain
 // HOOK export in the app (FTA §4, mechanism 2) — `AgentTransferDetailPage`
-// is its only consumer (ADR-0027/0028).
+// was its original consumer (ADR-0027/0028). `AgentStockPanel`'s own
+// `CommercialStockTotal` (M7 Agent 360 manual-QA fix) is a second consumer,
+// same narrow `{blocked, reason}` read, no new query.
 //
 // `useGrattageOutstandingQuery` is promoted from private to public THIS
 // PHASE (M7 Phase 3, per ADR-0026's own anticipated consequence): Agent

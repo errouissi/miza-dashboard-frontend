@@ -134,6 +134,55 @@ function stockQuantityHandler(
   });
 }
 
+/**
+ * `GET /admin/agents/{id}/grattage-outstanding` — the SAME response
+ * `useGrattageRestockGateQuery` (via its `select`) and `AgentOutstandingPanel`
+ * both read; only `restock_gate` is exercised here, so `summary`/`invoices`
+ * are fixed to a clear, empty shape (own copy, not imported from
+ * `agent-outstanding-panel.test.tsx`, mirroring this codebase's own
+ * duplication-over-shared-test-fixture discipline, ADR-0012).
+ */
+function gateEnvelope(blocked: boolean, reason: "OUTSTANDING_GRATTAGE" | null = null) {
+  return {
+    success: true,
+    data: {
+      agent: {
+        id: 12,
+        nom: "Alaoui",
+        prenom: "Sara",
+        num_cin: "CIN012",
+        num_compte: "CM0012",
+        role: "commercial",
+        status: "active",
+        manager: { id: 5, nom: "Idrissi", prenom: "Youssef" },
+      },
+      summary: {
+        required_total: "0.00",
+        pending_total: "0.00",
+        overdue_total: "0.00",
+        invoice_count: 0,
+        oldest_due_at: null,
+      },
+      restock_gate: { blocked, reason },
+      invoices: [],
+    },
+  };
+}
+
+function gateHandler(
+  agentId: number,
+  body: Parameters<typeof HttpResponse.json>[0] = gateEnvelope(false),
+  onRequest?: (url: URL) => void,
+) {
+  return http.get(
+    `${API}/admin/agents/${agentId}/grattage-outstanding`,
+    ({ request }) => {
+      onRequest?.(new URL(request.url));
+      return HttpResponse.json(body);
+    },
+  );
+}
+
 function allocationRow(id: number) {
   return {
     id,
@@ -370,8 +419,10 @@ describe("Commercial stock panel", () => {
 
   it("hides Current stock AND Available Grattage without access-dashboard, independent of Transfers/Returns", async () => {
     let stockRequested = false;
+    let gateRequested = false;
     server.use(
       stockQuantityHandler(3, () => (stockRequested = true), "300.00"),
+      gateHandler(12, gateEnvelope(false), () => (gateRequested = true)),
       agentTransfersHandler([transferRow(1)]),
       agentStockReturnsHandler([]),
     );
@@ -381,12 +432,14 @@ describe("Commercial stock panel", () => {
     expect(screen.queryByText("Current stock")).not.toBeInTheDocument();
     expect(screen.queryByText("Available Grattage")).not.toBeInTheDocument();
     expect(stockRequested).toBe(false);
+    expect(gateRequested).toBe(false);
   });
 
   it("shows a loading state, then the empty-stock state AND Available Grattage together (zero stock, positive capacity)", async () => {
     signInWith([PERMISSIONS.ACCESS_DASHBOARD]);
     server.use(
       stockQuantityHandler(0, undefined, "4800.00"),
+      gateHandler(12),
       agentTransfersHandler([]),
       agentStockReturnsHandler([]),
     );
@@ -402,6 +455,7 @@ describe("Commercial stock panel", () => {
     signInWith([PERMISSIONS.ACCESS_DASHBOARD]);
     server.use(
       stockQuantityHandler(7, undefined, "300.00"),
+      gateHandler(12),
       agentTransfersHandler([]),
       agentStockReturnsHandler([]),
     );
@@ -415,6 +469,7 @@ describe("Commercial stock panel", () => {
     signInWith([PERMISSIONS.ACCESS_DASHBOARD]);
     server.use(
       stockQuantityHandler(2, undefined, "0.00"),
+      gateHandler(12),
       agentTransfersHandler([]),
       agentStockReturnsHandler([]),
     );
@@ -429,6 +484,7 @@ describe("Commercial stock panel", () => {
     signInWith([PERMISSIONS.ACCESS_DASHBOARD]);
     server.use(
       stockQuantityHandler(1, undefined, "1234.56"),
+      gateHandler(12),
       agentTransfersHandler([]),
       agentStockReturnsHandler([]),
     );
@@ -453,6 +509,7 @@ describe("Commercial stock panel", () => {
               stock: [stockRow(1, "IAM 10dh", 4)],
             }),
       ),
+      gateHandler(12),
       agentTransfersHandler([]),
       agentStockReturnsHandler([]),
     );
@@ -472,6 +529,7 @@ describe("Commercial stock panel", () => {
     let requested = false;
     server.use(
       stockQuantityHandler(1, () => (requested = true)),
+      gateHandler(12),
       agentTransfersHandler([]),
       agentStockReturnsHandler([]),
     );
@@ -484,6 +542,7 @@ describe("Commercial stock panel", () => {
     signInWith([PERMISSIONS.ACCESS_DASHBOARD]);
     server.use(
       stockQuantityHandler(1, undefined, "0.00", [stockRow(9, "IAM 10dh", 1)]),
+      gateHandler(12),
       agentTransfersHandler([]),
       agentStockReturnsHandler([]),
     );
@@ -507,6 +566,7 @@ describe("Commercial stock panel", () => {
         stockRow(1, "IAM 10dh", 1),
         stockRow(2, "Orange 5dh", 2),
       ]),
+      gateHandler(12),
       agentTransfersHandler([]),
       agentStockReturnsHandler([]),
     );
@@ -523,6 +583,7 @@ describe("Commercial stock panel", () => {
     signInWith([PERMISSIONS.ACCESS_DASHBOARD]);
     server.use(
       stockQuantityHandler(0, undefined, "500.00", []),
+      gateHandler(12),
       agentTransfersHandler([]),
       agentStockReturnsHandler([]),
     );
@@ -548,6 +609,7 @@ describe("Commercial stock panel", () => {
         stockRow(1, "IAM 10dh", 1),
         stockRow(2, "Orange 5dh", 2),
       ]),
+      gateHandler(12),
       agentTransfersHandler([]),
       agentStockReturnsHandler([]),
     );
@@ -555,6 +617,97 @@ describe("Commercial stock panel", () => {
 
     expect(await screen.findByText("Total stock: 99 units")).toBeInTheDocument();
     expect(screen.queryByText("Total stock: 3 units")).not.toBeInTheDocument();
+  });
+
+  it("shows the 'currently unavailable for transfer' helper beside Available Grattage when the restock gate is blocked", async () => {
+    signInWith([PERMISSIONS.ACCESS_DASHBOARD]);
+    server.use(
+      stockQuantityHandler(2, undefined, "460.00"),
+      gateHandler(12, gateEnvelope(true, "OUTSTANDING_GRATTAGE")),
+      agentTransfersHandler([]),
+      agentStockReturnsHandler([]),
+    );
+    renderPanel(commercialAgent);
+
+    // The numeric capacity is never zeroed or hidden by a blocked gate.
+    expect(await screen.findByText("460.00")).toBeInTheDocument();
+    expect(
+      await screen.findByText(/currently unavailable for transfer/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /outstanding grattage must be settled before new stock can be received/i,
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("does not show the helper when the restock gate is not blocked", async () => {
+    signInWith([PERMISSIONS.ACCESS_DASHBOARD]);
+    server.use(
+      stockQuantityHandler(2, undefined, "460.00"),
+      gateHandler(12, gateEnvelope(false)),
+      agentTransfersHandler([]),
+      agentStockReturnsHandler([]),
+    );
+    renderPanel(commercialAgent);
+
+    expect(await screen.findByText("460.00")).toBeInTheDocument();
+    expect(
+      screen.queryByText(/currently unavailable for transfer/i),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps Available Grattage visible while the restock-gate read is still pending, with no helper shown yet", async () => {
+    signInWith([PERMISSIONS.ACCESS_DASHBOARD]);
+    let resolveGate: (body: ReturnType<typeof gateEnvelope>) => void = () => {};
+    const gatePending = new Promise<ReturnType<typeof gateEnvelope>>((resolve) => {
+      resolveGate = resolve;
+    });
+    server.use(
+      stockQuantityHandler(2, undefined, "300.00"),
+      http.get(`${API}/admin/agents/12/grattage-outstanding`, async () =>
+        HttpResponse.json(await gatePending),
+      ),
+      agentTransfersHandler([]),
+      agentStockReturnsHandler([]),
+    );
+    renderPanel(commercialAgent);
+
+    // Capacity depends only on stock-quantity, which already resolved —
+    // it must not wait on the still-pending gate read.
+    expect(await screen.findByText("300.00")).toBeInTheDocument();
+    expect(
+      screen.queryByText(/currently unavailable for transfer/i),
+    ).not.toBeInTheDocument();
+
+    // Settle the still-open handler so the test doesn't leave a dangling request.
+    resolveGate(gateEnvelope(false));
+  });
+
+  it("keeps Available Grattage visible and shows no blocked/unblocked claim when the restock-gate read errors", async () => {
+    signInWith([PERMISSIONS.ACCESS_DASHBOARD]);
+    server.use(
+      stockQuantityHandler(2, undefined, "300.00"),
+      http.get(`${API}/admin/agents/12/grattage-outstanding`, () =>
+        HttpResponse.json({ success: false, message: "boom" }, { status: 500 }),
+      ),
+      agentTransfersHandler([]),
+      agentStockReturnsHandler([]),
+    );
+    renderPanel(commercialAgent);
+
+    expect(await screen.findByText("300.00")).toBeInTheDocument();
+    // Never inferred as "not blocked" from a failed/unknown read — the
+    // helper only ever appears on a confirmed blocked:true.
+    expect(
+      screen.queryByText(/currently unavailable for transfer/i),
+    ).not.toBeInTheDocument();
+    // Stays absent through the retry policy's one 5xx retry too.
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    expect(
+      screen.queryByText(/currently unavailable for transfer/i),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("300.00")).toBeInTheDocument();
   });
 
   it("filters transfers by the exact commercial_id", async () => {
@@ -626,19 +779,22 @@ describe("Commercial stock panel", () => {
     expect(returnsRequested).toBe(false);
   });
 
-  it("mounts no query — stock, transfers, or returns — without any permission", () => {
+  it("mounts no query — stock, transfers, returns, or restock-gate — without any permission", () => {
     signInWith([]);
     let stockRequested = false;
+    let gateRequested = false;
     let transfersRequested = false;
     let returnsRequested = false;
     server.use(
       stockQuantityHandler(0, () => (stockRequested = true)),
+      gateHandler(12, gateEnvelope(false), () => (gateRequested = true)),
       agentTransfersHandler([], () => (transfersRequested = true)),
       agentStockReturnsHandler([], () => (returnsRequested = true)),
     );
     renderPanel(commercialAgent);
 
     expect(stockRequested).toBe(false);
+    expect(gateRequested).toBe(false);
     expect(transfersRequested).toBe(false);
     expect(returnsRequested).toBe(false);
   });
