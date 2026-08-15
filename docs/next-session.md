@@ -12,35 +12,87 @@ _Last updated: 2026-08-15_
 **M4 (Money) is COMPLETE. M5 (Stock) is COMPLETE at the implementation level.
 M6 (Grattage — the seam) is COMPLETE, manual QA passed. M7 (Overview &
 workspaces, Agent 360, Client 360) is the current milestone — Agent 360 AND
-Client 360, the first two of its three composed surfaces, are both now
-COMPLETE, manual QA passed.** Client 360's three implementation phases
-(foundation, Commercial relationship/assignment history, Grattage purchase
-history) shipped, manual QA ran against the real backend and found two real
-UX defects (same-Commercial reassignment leaving Reassign enabled with no
-feedback; Agent 360's own Available Grattage giving no indication it could
-be blocked) — both root-caused, fixed, and re-verified before commit. **The
-Overview widget grid, the third and final M7 surface, has not started —
-that is the next task: a discovery pass, not implementation.** See "Next
-task" below.
+Client 360, the first two of its three composed surfaces, are both
+COMPLETE, manual QA passed, committed and pushed.** The Overview widget
+grid, the third and final M7 surface, has cleared discovery (the prior
+backend-readiness blocker is resolved — see below) and its **Phase 1
+(Foundation + decision queues) is IMPLEMENTED — automated QA passed —
+MANUAL QA PENDING — UNCOMMITTED.** Do not start Phase 2. **Manual QA of
+Phase 1 is the literal first thing to do next session, before anything
+else.** See "Next task" below for the exact checklist.
 
-- **Code / commit state — clean.**
-  - Client 360 **Phase 1** — `9cc464a` (`feat(clients): add Client 360
-    foundation`).
-  - Client 360 **Phase 2** — `506e992` (`feat(clients): add Commercial
-    assignment history`).
-  - Client 360 **Phase 3** — `22f2ba9` (`feat(clients): add Grattage
-    purchase history`).
-  - Client 360 QA fix — `55cc33d` (`fix(clients): disable same-Commercial
-    reassignment until a different Commercial is selected`).
-  - Agent 360 QA fix — `47ab778` (`fix(agents): clarify blocked Grattage
-    transfer capacity in the Stock panel`).
-  - **All five are pushed to `origin/main`.** Working tree is clean; no
-    uncommitted source changes remain.
-- **Tests: 1237/1237 across 61 files**, run twice to rule out FE-1 — two
-  different, unrelated, untouched files (`pending-cheques-page.test.tsx`,
-  `agent-transfers-list-page.test.tsx`) hit the known flake under
-  interleaved load in one run, both passed clean standalone. `eslint .`/
-  `tsc -b`/`prettier --check .` all clean, re-verified this session.
+- **Overview discovery is CLOSED.** The backend blocker disclosed by the
+  frozen roadmap (`chartData`/`recentActivities`/`agentsOverview` possibly
+  unrouted) is resolved: backend commit `6aa671f` on branch
+  `feature/Update-claude` routed all three, alongside the pre-existing
+  `GET /admin/dashboard/statistics`. **All four Dashboard endpoints are now
+  routed, all four gated on `access-dashboard` alone, and there is no
+  remaining blocking backend gap.** Full verification (exact contracts,
+  response shapes, permission matrix, widget mapping, phase plan) is in the
+  M7 Overview discovery report from this session — not re-copied here in
+  full; re-read it before Phase 2 if the detail is needed again.
+- **Overview implementation is now split into four phases** (re-planned
+  from verified source, not the earlier tentative A/B split):
+  **Phase 1 — Foundation + decision queues** (Pending Cheques, Pending
+  Deposits, Overdue Grattage Invoices) — **implemented this session, see
+  below.** Phase 2 — Statistics tiles. Phase 3 — Network/cash charts.
+  Phase 4 — Recent activity + agents overview. Do not skip ahead to Phase 2
+  before Phase 1's own manual QA passes and is committed.
+- **Code / commit state — NOT clean. Read carefully before doing anything.**
+  - Client 360 (all phases + both QA fixes) and Agent 360 — all committed
+    and pushed, unchanged since the last checkpoint (`9cc464a`, `506e992`,
+    `22f2ba9`, `55cc33d`, `47ab778`, `a595b0a`).
+  - **Overview Phase 1 is implemented locally but deliberately
+    UNCOMMITTED and UNPUSHED, pending manual QA** — `git status` will NOT
+    show clean. This is the intended state, not an accident: do not commit
+    it reflexively, and do not discard it. The working tree contains
+    exactly:
+    - `src/domains/overview/` (new) — `pages/overview-page.tsx` +
+      its own test file, `components/pending-cheques-widget.tsx`,
+      `components/pending-deposits-widget.tsx`,
+      `components/overdue-grattage-widget.tsx`, `index.ts`.
+    - `src/app/router/routes.tsx` (modified) — the index route (`/`) now
+      renders `OverviewPage` instead of `WelcomePlaceholder`.
+    - `src/app/router/app-shell.test.tsx` (modified) — the one assertion
+      that checked the old placeholder's heading.
+    - `src/app/placeholders.tsx` (DELETED) — `WelcomePlaceholder`, no
+      longer referenced anywhere; its own docblock invited exactly this
+      ("deleted by the milestone that replaces it").
+    - `src/domains/grattage/invoices/index.ts` (modified) — widened to
+      export the already-existing `useGrattageInvoicesQuery`/
+      `GRATTAGE_INVOICE_LIST_DEFAULTS`/`GrattageInvoiceListParams`
+      (Overdue Grattage widget's own read — no new query, no duplicate
+      mapper).
+    - `src/domains/money/deposits/index.ts` (modified) — widened to export
+      the already-existing `DEPOSIT_TYPE_LABELS` (Pending Deposits
+      widget's own type label).
+- **A real bug was found and fixed during Phase 1 implementation, not left
+  for QA to find**: the naive "check permission, then call the query hook"
+  shape would have fired an unauthorized request from every widget —
+  `useChequesQuery`/`useDepositsQuery`/`useGrattageInvoicesQuery` have no
+  `enabled` option (every existing caller sits inside an already
+  permission-gated route; Overview is the first caller composed with no
+  such route guard). Fixed with an outer-gate + inner-content component
+  split per widget (`PendingChequesWidget` → `PendingChequesContent`,
+  etc.) — the same conditional-MOUNTING discipline `AgentStockPanel`/
+  `ClientGrattagePanel` already established, not a change to any domain's
+  query layer. Verified by test: zero requests fire for any widget whose
+  permission is absent, in every permission combination.
+- **Automated verification, this session**: 32/32 focused Overview tests;
+  directly-relevant regression (Cheques, Deposits, Grattage Invoices,
+  Agent 360, Client 360, app-shell, route-authorization) clean; a clean
+  full-suite run at 1268/1268 across 62 files; `tsc -b`/`eslint .`
+  (0 errors)/`prettier --check .` all clean; `vite build` succeeds. **None
+  of this is manual QA** — see "Next task" below for what manual QA still
+  owes.
+- **FE-1 (test flake) is unchanged, still present, still non-blocking** —
+  observed intermittently across several full-suite reruns this session,
+  always a different, unrelated, untouched "retryable error"/"freshness
+  retry" timing test, always passing clean standalone. Not caused by
+  today's changes.
+- **Tests: 1237/1237 across 61 files** was the count BEFORE today's
+  Overview Phase 1 work; **1268/1268 across 62 files** is the count WITH
+  it (still uncommitted). Run twice to rule out FE-1 — see above.
 - **Manual validation**: Cheques' full workflow, Agent Stock Returns, all of
   M6 (Grattage Invoices, the restock-gate integration, Deposit↔Invoice
   linking, including the corrected Allocation capacity scenario), all of
@@ -92,12 +144,21 @@ task" below.
 
 ```bash
 cd C:\Miza\frontend-v2
-git status                 # expect: clean
-git log --oneline -6        # expect 47ab778, 55cc33d, 22f2ba9, c638414,
+git status                 # expect: NOT clean — Overview Phase 1's
+                            # uncommitted files (see "Current state" above)
+                            # plus this session's own docs checkpoint commit
+                            # already on top of the last code commit
+git log --oneline -8        # expect a docs-only checkpoint commit, then
+                            # a595b0a, 47ab778, 55cc33d, 22f2ba9, c638414,
                             # 506e992, 9cc464a
-pnpm test:ci               # expect: 1237/1237 across 61 files
+pnpm test:ci               # expect: 1268/1268 across 62 files (WITH
+                            # Overview Phase 1's own uncommitted tests)
 pnpm lint && pnpm typecheck && pnpm format:check && pnpm build
 ```
+
+**Do not run `git clean`/`git checkout -- .`/`git stash` reflexively because
+`git status` looks "wrong" — the uncommitted Overview Phase 1 files ARE the
+work. Manual QA them first (see "Next task" below), then commit.**
 
 ## Last completed work
 
@@ -303,60 +364,132 @@ pnpm lint && pnpm typecheck && pnpm format:check && pnpm build
   `useGrattageRestockGateQuery` hook (no new query) and shows a small
   contextual note only on a confirmed `blocked === true`; the numeric
   capacity is never hidden or zeroed.
+- **M7 Overview — final discovery** — docs-only, no source changes.
+  Re-verified backend commit `6aa671f` (`feature/Update-claude`) directly
+  from source (routes, controller diff, the new feature-test file,
+  `docs/api-endpoints.md`), not from the backend developer's summary alone
+  — confirmed all three previously-unrouted `DashboardController` methods
+  are now live behind the identical `access-dashboard` gate
+  `/dashboard/statistics` already carries, with real `days`/`limit`
+  input-bounding and a genuine PostgreSQL query-order bug fixed
+  (`agentsOverview()`'s `select()` now precedes `withCount()`). Produced
+  the full endpoint contract matrix, the frozen-purpose → widget mapping,
+  the permission matrix, and the four-phase plan (Foundation, Statistics,
+  Charts, Recent activity) — no implementation this pass.
+- **M7 Overview Phase 1 — Foundation + decision queues** — implemented,
+  automated QA passed, **NOT YET COMMITTED** (see "Current state" above
+  for the exact file list and the permission-gating bug found and fixed
+  during implementation). `/` now renders `OverviewPage` (replacing
+  `WelcomePlaceholder`, deleted) with three independently-permission-gated,
+  independently-`PanelBoundary`-wrapped decision-queue widgets — Pending
+  Cheques (`VIEW_CHEQUES`), Pending Deposits (`VIEW_DEPOSITS`), Overdue
+  Grattage Invoices (`ACCESS_DASHBOARD`) — each reusing its domain's own
+  existing list query unchanged (Grattage Invoices' general query and
+  Deposits' `DEPOSIT_TYPE_LABELS` were widened onto their public surfaces
+  for this, the same "smallest necessary export" pattern already used
+  repeatedly elsewhere; no new query, no duplicate mapper, no new
+  permission). Manual QA is the explicit next task before this is
+  committed — see "Next task" below.
 
 Full write-ups for every item above: `project-status.md`'s own dedicated sections.
 
-## Next task: M7 — Overview widget grid DISCOVERY
+## Next task: M7 Overview Phase 1 — MANUAL QA (do NOT start Phase 2)
 
-**Client 360 is DONE — foundation, Commercial relationship/assignment
-history, Grattage purchase history, and both manual-QA fixes are committed
-(`9cc464a`, `506e992`, `22f2ba9`, `55cc33d`, `47ab778`) and pushed. Manual QA
-passed against the real running backend.** The Overview widget grid is the
-third and final M7 surface, and the next task is a **discovery pass only —
-do not implement anything yet.**
+**This is the literal first thing to do next session, before anything
+else — including before touching Phase 2.** Overview Phase 1 (Foundation +
+decision queues) is implemented and automated-QA-clean, but **UNCOMMITTED**
+pending a real-browser pass, per the working agreement's own "test the
+golden path and edge cases... before reporting a feature complete" rule —
+the identical discipline every prior M7 surface (Agent 360, Client 360)
+already went through before its own commit.
 
-**Why discovery must come first, not assumed:** the frozen roadmap itself
-names a real, still-unverified risk at this exact point — both
-`phase8-architecture.html` §5 ("chartData / recentActivities /
-agentsOverview — need routing (discovery §6)") and
-`phase8-frontend-implementation-roadmap.html`'s own M7 section ("the
-Overview's chart/activity endpoints were unrouted at discovery... Overview
-ships with the widgets whose endpoints exist and flags the rest") disclose
-that some of Overview's backend endpoints may not exist yet. This has been
-carried forward, unverified, since before Client 360 started — it must be
-re-verified from source now, not assumed to have resolved itself.
+**Sign in as Super Admin and start at `/`.**
 
-**Discovery checklist:**
+**The checklist, in order:**
 
-1. Re-read the frozen Overview requirement in full: `phase8-architecture.html`
-   §5 (Overview module: purpose, backend APIs, widget-grid future-scalability
-   note) and the M7 section of `phase8-frontend-implementation-roadmap.html`
-   (deliverables, dependencies, the named risk, exit criteria).
-2. Inspect the current frontend: confirm no Overview route/page/domain exists
-   yet (expected — M7's own deliverable list names it as not started).
-3. Inspect the actual backend source (`C:\Miza\backend`, read-only — do not
-   modify) for every endpoint the frozen spec names: `GET
-   /admin/dashboard/statistics`, `chartData`, `recentActivities`,
-   `agentsOverview`, and the three composed reads (`/admin/cheques/pending`,
-   `/admin/depos?status=pending`, `/admin/grattage-invoices?status=overdue`
-   — all three already used elsewhere in this codebase, so only their
-   existence needs confirming, not their shape).
-4. For each endpoint: is it actually routed (`routes/api.php`)? Does a
-   controller method exist and return real data, or is it a stub/TODO? What
-   permission does it require?
-5. Produce a readiness matrix (routed+usable / routed+stub / not routed) and
-   a proposed phase order — ship the widgets whose endpoints are real now,
-   name what's blocked, per the roadmap's own "designed for exactly this"
-   escape hatch. Get this approved before writing any implementation code.
+1. **Inspect the full Overview layout** — heading, the three-widget grid,
+   desktop multi-column vs. mobile stacking, no horizontal overflow.
+2. **Pending Cheques widget** — real pending cheques appear (reference,
+   Agent identity, submitted date, amount); confirm against what
+   `/money/cheques/pending` itself shows for the same data.
+3. **Pending Deposits widget** — real pending deposits appear (reference,
+   Agent identity, type, submitted date, amount as a real formatted
+   number); cross-check against `/money/deposits?status=pending`.
+4. **Overdue Grattage widget** — real overdue invoices appear (reference,
+   Commercial, Client phone, due date, amount, Overdue badge); cross-check
+   against `/grattage/invoices?status=overdue`.
+5. **Displayed totals** — when a queue has more than 5 real rows, "Showing
+   5 of N" must show the TRUE total, not a count of the 5 rendered rows;
+   when 5 or fewer exist, no truncation line should appear at all.
+6. **Empty/populated presentation** — if any queue is genuinely empty
+   right now, confirm its own honest empty copy ("No pending cheques." /
+   "No pending deposits." / "No overdue Grattage invoices.") renders, not
+   an error state and not a blank gap.
+7. **Navigation** — each widget's "View all" link, and each Grattage row's
+   own invoice link, must land on the real existing page with the right
+   filter already applied (check the URL, not just that a page loaded).
+8. **Responsive behavior** — resize/narrow the viewport; confirm the grid
+   stacks cleanly to one column with no overflow.
+9. **Permission combinations**, as practical with available accounts —
+   confirm a session missing one of `VIEW_CHEQUES`/`VIEW_DEPOSITS`/
+   `ACCESS_DASHBOARD` shows exactly the other widgets, and that DevTools
+   Network shows no request at all for the one that's absent.
 
-**Also re-verify, not assumed:** `WorkspacePage`/`PanelBoundary` are now
-proven across TWO real composed surfaces (Agent 360, Client 360) — Overview
-is a different shape (a widget grid, not an entity workspace), so this
-pattern's applicability to Overview should be verified, not assumed to
-transfer unchanged.
+**Outcome:**
+- **Bug found** → fix it, re-verify, THEN commit.
+- **Passes clean** → review the final diff, commit Phase 1 alone (do not
+  bundle a Phase 2 start into the same commit), push, then update
+  `next-session.md`/`project-status.md` to mark Phase 1 COMPLETE — only
+  then move on to preparing Phase 2.
+
+**Do not mark Overview Phase 1 COMPLETE before manual QA runs.** Its
+current, accurate status is: **IMPLEMENTED — automated QA passed — manual
+QA pending — uncommitted.**
+
+**Future-phase decisions/open items, preserved from this session's
+discovery — do not re-derive, and do not start any of these before Phase 1
+is committed:**
+
+- **Phase 2 (Statistics tiles)**: use only the source-verified metrics that
+  actually answer the frozen Overview purpose (network health / cash
+  movement / stock exposure / needs-attention) — do not blindly expose
+  every `statistics` field merely because it exists. Specifically exclude
+  `debt.*` (an internal admin-accounting figure, not a network/cash/stock
+  signal) and the redundant, confusingly-named `agents.total` (duplicates
+  `agents.total_active`), unless a later, explicit product decision says
+  otherwise.
+- **Phase 3 (Network/cash charts)**: deposits-over-time and
+  agent-registration-trend charts. **No chart library exists in this
+  codebase today** (verified from `package.json` in full). The charting
+  approach — inline SVG vs. a new dependency — is **NOT decided**. Do not
+  add a charting dependency without explicit approval and an ADR (CLAUDE.md:
+  "No new dependency without justification and an ADR").
+- **Phase 4 (Recent activity + agents overview)**: `recent-activities`
+  returns TWO separate, independently-ordered collections (`recent_deposits`,
+  `recent_payments`) — verified from source, not assumed. They must stay
+  two separate collections/widgets; do not merge them into one synthetic
+  chronological feed the backend does not actually provide. Top Managers
+  (from `agents-overview`) may link to Agent 360 (`agentDetailPath`). Do
+  not duplicate the city-breakdown data across multiple widgets — pick one
+  source (this was flagged as redundant across `statistics.cities.breakdown`,
+  `chart-data.agents_by_city`, and `agents-overview.agents_by_role_and_city`
+  during discovery).
 
 ## Things that MUST NOT be changed without a new decision (carried, updated this session)
 
+- 🚫 **Do not add a charting dependency for M7 Overview Phase 3 without
+  explicit approval and an ADR.** No chart library exists in this codebase
+  today (verified from `package.json` in full during Overview discovery) —
+  the choice between inline SVG and a real dependency is an open decision,
+  not a default. CLAUDE.md's own rule: "No new dependency without
+  justification and an ADR."
+- 🚫 **Do not start M7 Overview Phase 2 (or later) before Phase 1's own
+  manual QA passes and Phase 1 is committed and pushed.** See "Next task"
+  above — this is the literal next session's first action.
+- 🚫 **Do not commit Overview Phase 1 without running its manual QA
+  checklist first**, even though every automated gate is clean — the same
+  discipline Agent 360's and Client 360's own manual-QA passes already
+  required (and each found real defects automated tests could not).
 - 🚫 **Do not add edit mode to the M3.6 wizard**, an agent detail page, or move
   `TextField` to `shared/`. Unchanged (ADR-0014, Rule-of-Three).
 - 🚫 **Do not build a generic wizard framework.** FTA D-9. Unchanged.
@@ -429,19 +562,23 @@ transfer unchanged.
   back to domain-private. If Client 360 needs a Grattage read of its own,
   verify fresh whether it is CLIENT-scoped (a different backend contract —
   see "What is known" above) before assuming this same hook applies.
-- 🚫 **Do not add another Stock←Grattage, Money↔Grattage, or Network←Grattage
-  domain-to-domain import** beyond the four now sanctioned: Stock's
-  `AgentTransferDetailPage` importing `useGrattageRestockGateQuery`
-  (ADR-0027); Deposits' own private, domain-local
-  `fetchLinkedGrattageInvoices` read instead of a Grattage import (Option B,
-  ADR-0030); Network's `AgentOutstandingPanel` (inside `network/agents`)
-  importing `useGrattageOutstandingQuery` from `domains/grattage/
-  outstanding` (M7 Agent 360, ADR-0033); and Network's `ClientGrattagePanel`
-  (inside `network/clients`) importing `useClientGrattageInvoicesQuery`
-  from `domains/grattage/invoices` — a DIFFERENT Grattage submodule and
-  backend contract from the third (M7 Client 360 Phase 3, ADR-0036). A new
-  cross-domain need should default to Option B's private-duplicate-read
-  pattern unless a fresh decision says otherwise.
+- 🚫 **Do not add another Stock←Grattage, Money↔Grattage, Network←Grattage,
+  or Overview←Grattage domain-to-domain import** beyond the five now
+  sanctioned: Stock's `AgentTransferDetailPage` importing
+  `useGrattageRestockGateQuery` (ADR-0027); Deposits' own private,
+  domain-local `fetchLinkedGrattageInvoices` read instead of a Grattage
+  import (Option B, ADR-0030); Network's `AgentOutstandingPanel` (inside
+  `network/agents`) importing `useGrattageOutstandingQuery` from
+  `domains/grattage/outstanding` (M7 Agent 360, ADR-0033); Network's
+  `ClientGrattagePanel` (inside `network/clients`) importing
+  `useClientGrattageInvoicesQuery` from `domains/grattage/invoices` (M7
+  Client 360 Phase 3, ADR-0036); and Overview's `OverdueGrattageWidget`
+  (inside `domains/overview`) importing the general
+  `useGrattageInvoicesQuery` from the SAME `domains/grattage/invoices`
+  surface — the first edge from a domain other than Network or Stock (M7
+  Overview Phase 1, ADR-0037). A new cross-domain need should default to
+  Option B's private-duplicate-read pattern unless a fresh decision says
+  otherwise.
 - 🚫 **Do not build a proactive numeric-capacity read or UI for Allocation**
   without a new backend endpoint to back it — none exists, before or after
   `9af5d00` (BC-AA stays partially open).
@@ -497,10 +634,13 @@ transfer unchanged.
       (same-Commercial reassignment disable `55cc33d`, Agent 360 blocked-
       Grattage-capacity clarification `47ab778`) — all committed and pushed.
       See `project-status.md`'s own M7 — Client 360 section.
-- [ ] **M7 Overview widget grid — NEXT (immediately). Discovery first, not
-      implementation — see "Next task" above.** Carries a disclosed,
-      still-unverified backend-readiness risk (chart/activity endpoints
-      possibly still unrouted) — re-verify from source before scoping.
+- [ ] **M7 Overview widget grid — Phase 1 IMPLEMENTED, automated QA passed,
+      MANUAL QA PENDING, UNCOMMITTED. NEXT (immediately): manual QA, not
+      Phase 2 — see "Next task" above.** Discovery is CLOSED — the prior
+      backend-readiness risk is resolved (backend commit `6aa671f`, all
+      four Dashboard endpoints routed on `access-dashboard`). Do not
+      re-open discovery; do not start Phase 2 before Phase 1 is manually
+      QA'd and committed.
 - [ ] **Manager per-commercial Grattage Outstanding breakdown — accepted
       coarse capability, NOT a roadmap gap.** The frozen architecture (§6)
       names "outstanding obligation" as an Agent 360 deliverable generically,

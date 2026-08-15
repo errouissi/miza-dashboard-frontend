@@ -1034,3 +1034,42 @@ decisions made *during implementation*.
   edges remain correct today by review discipline, not tooling. A fifth
   cross-domain Grattage need should still default to Option B unless a
   fresh decision says otherwise, per the original rule's own intent.
+
+## ADR-0037 — M7 Overview Phase 1's `OverdueGrattageWidget` is a fifth sanctioned Grattage cross-domain import, and the first from a domain other than Network
+
+- **Date:** 2026-08-15
+- **Status:** Accepted
+- **Context:** The standing rule (ADR-0036) named four sanctioned
+  Stock←Grattage/Money↔Grattage/Network←Grattage imports and required a
+  fresh decision before a fifth. Overview Phase 1 needed a queue of
+  overdue Grattage invoices — the identical underlying read Grattage
+  Invoices' own list page already exposes, and the exact same
+  `useGrattageInvoicesQuery` `ClientGrattagePanel` already proved out as
+  the general (non-Client-scoped) sibling of `useClientGrattageInvoicesQuery`.
+  This is a NEW domain (`overview`, not `network`) reaching into Grattage
+  for the first time.
+- **Decision:** `OverdueGrattageWidget` (inside `domains/overview`) imports
+  `useGrattageInvoicesQuery`, widened onto `domains/grattage/invoices`'s
+  existing public surface this same session (alongside
+  `GRATTAGE_INVOICE_LIST_DEFAULTS`/`GrattageInvoiceListParams`) — mechanism
+  1 (page-level composition, FTA §4), the identical pattern every prior
+  Grattage cross-domain edge already used. This is the fifth sanctioned
+  edge, and the first one originating from Overview rather than Network or
+  Stock.
+- **Rationale:** Option B (a private, domain-local duplicate read) was
+  rejected for the same reason it was rejected for `ClientGrattagePanel`
+  (ADR-0036) and `AgentOutstandingPanel` (ADR-0033): Grattage Invoices'
+  own public surface already carries exactly the shape this widget needs
+  (list, status filter, real pagination total), with real business
+  meaning (invoice identity, Commercial, Client, status) a private
+  duplicate would either re-implement badly or drift from. No new
+  query/model/mapper was written — `useGrattageInvoicesQuery` is the SAME
+  general list query `GrattageInvoicesListPage` itself calls, merely
+  exported for a second caller.
+- **Consequences:** The standing "do not add another Grattage cross-domain
+  import" rule in `next-session.md` is updated to name five sanctioned
+  edges, not four. No new permission was introduced — the widget reuses
+  `ACCESS_DASHBOARD`, the identical permission the read already carried
+  before this widening. A sixth cross-domain Grattage need should still
+  default to Option B's private-duplicate-read pattern unless a fresh
+  decision says otherwise.

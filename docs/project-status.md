@@ -111,8 +111,18 @@ against the frozen requirement (`phase8-architecture.html` §6: "profile/
 assignment history (Network) with purchase history via grattage invoices
 (Grattage)"), manual QA passed against the real running backend. See "M7
 — Client 360" below for the full write-up. **The Overview widget grid,
-the third and final M7 surface, is not yet started** — discovery is the
-next task, see `next-session.md`.
+the third and final M7 surface: discovery is CLOSED (the prior
+backend-readiness blocker is resolved — backend commit `6aa671f` routed
+all four Dashboard endpoints on `access-dashboard`), and Phase 1
+(Foundation + decision queues: Pending Cheques, Pending Deposits, Overdue
+Grattage Invoices) is IMPLEMENTED — automated QA passed — MANUAL QA
+PENDING — deliberately UNCOMMITTED.** This is a checkpoint, not a
+completed-milestone write-up per this file's own convention — the full
+Phase 1 detail (exact file list, the permission-gating bug found and
+fixed, verification results) lives in `next-session.md`'s own "Current
+state" section; this file gets its own "M7 — Overview" section once
+Phase 1 passes manual QA and is committed. **Do not start Phase 2 before
+that happens** — see `next-session.md` for the exact next action.
 
 M3.x (Admin/Manager/Commercial detail pages, ADR-0014) remains the only
 open M3 item, blocked by FE-2 — unaffected by M4, M5 or M6.
@@ -2124,7 +2134,7 @@ running backend.
 | **M6 — Grattage (the seam)** | ✅ **COMPLETE, manual QA passed** — Invoices, restock-gate domain, Stock integration, Deposit↔Invoice linking |
 | **M7 — Agent 360** | ✅ **COMPLETE, manual QA passed** — workspace foundation, full Agent Edit, Money/Stock panels, Grattage Outstanding, zero-stock Manager reassignment guard |
 | **M7 — Client 360** | ✅ **COMPLETE, manual QA passed** — foundation, Commercial relationship/assignment history, Grattage purchase history, plus two manual-QA fixes (same-Commercial reassignment disable, Agent 360 blocked-Grattage-capacity clarification) |
-| M7 — Overview widget grid | ⬜ not started — discovery is the next task |
+| M7 — Overview widget grid | 🟡 discovery closed; Phase 1 (Foundation + decision queues) IMPLEMENTED, automated QA passed, manual QA PENDING, uncommitted — see `next-session.md` |
 
 **Tests: 1237/1237 across 61 files** (was 407/23 before M3.6; 431/24 at
 M3.6's initial implementation; 442/24 after M3.6's three post-validation fix
