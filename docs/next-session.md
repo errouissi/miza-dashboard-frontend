@@ -9,21 +9,30 @@ _Last updated: 2026-08-16_
 
 ## Current state
 
-**M4 (Money) is COMPLETE. M5 (Stock) is COMPLETE at the implementation level.
-M6 (Grattage — the seam) is COMPLETE, manual QA passed. M7 (Overview &
-workspaces, Agent 360, Client 360) is the current milestone — Agent 360 AND
-Client 360, the first two of its three composed surfaces, are both
-COMPLETE, manual QA passed, committed and pushed.** The Overview widget
-grid, the third and final M7 surface, has cleared discovery. **Phase 1
-(Foundation + decision queues) is COMPLETE — manual QA passed, committed
-(`15a64fb`) and pushed. Phase 2 (Statistics) is COMPLETE — manual QA
-passed, committed (`263ad78`) and pushed. Phase 3 (Trends: Deposit
-Submissions + Agent Registrations) is now ALSO COMPLETE — manual QA
-passed against the real running backend (Statistics cards, both trend
-charts, both tooltips, desktop layout, responsive/mobile layout, Needs
-attention, no regressions), committed (`d11e29c`) and pushed.** **Phase 4
-(Recent activity + agents overview) is next — it has not been discovered
-yet; see "Next task" below.**
+**M4 (Money), M5 (Stock, implementation level), M6 (Grattage — the seam),
+and M7 (Overview & workspaces, Agent 360, Client 360) are ALL COMPLETE.**
+**M7 is CLOSED — it is no longer the current milestone.** Agent 360 and
+Client 360 are both COMPLETE, manual QA passed, committed and pushed. The
+Overview widget grid — Phase 1 (Foundation + decision queues, `15a64fb`),
+Phase 2 (Statistics, `263ad78`), and Phase 3 (Trends, `d11e29c`) — is
+COMPLETE, manual QA passed, committed and pushed. **Phase 4 (Recent
+activity + agents overview) is CLOSED BY DISCOVERY/DECISION — no
+frontend implementation was built.** A dedicated discovery pass
+re-verified `recent-activities`/`agents-overview` fresh from source and
+live, and confirmed M7 Overview's own frozen deliverable ("KPI tiles,
+queues, charts") was already fully satisfied by Phases 1–3. Recent
+Deposits, Recent Payments, Top Managers, and a city breakdown were each
+evaluated and explicitly excluded — see ADR-0040 for the full reasoning.
+**The frozen Overview purpose's "is stock exposure normal" question
+remains a genuine, disclosed, NON-BLOCKING backend capability gap
+(BC-AE)** — no Dashboard endpoint provides this; it is NOT implemented,
+NOT hidden, and NOT approximated client-side. See "M7 closure" below.
+
+**The next milestone is M8 — Hardening: "making it trustworthy"**, per
+the frozen roadmap. M8 has NOT been started — see "Next task" below for
+its faithfully-restated deliverables and exit criteria. Do not begin any
+M8 work without a fresh discovery/kickoff pass, the same discipline
+every prior milestone required.
 
 - **Overview discovery is CLOSED.** The backend blocker disclosed by the
   frozen roadmap (`chartData`/`recentActivities`/`agentsOverview` possibly
@@ -42,8 +51,14 @@ yet; see "Next task" below.**
   Phase 2 — Statistics (Network health / Cash movement / Exposure) —
   COMPLETE, manual QA passed, committed `263ad78`. Phase 3 — Trends
   (Deposit Submissions, Agent Registrations) — COMPLETE, manual QA passed,
-  committed `d11e29c`.** Phase 4 — Recent activity + agents overview, not
-  yet discovered.
+  committed `d11e29c`. Phase 4 — CLOSED BY DISCOVERY/DECISION (ADR-0040),
+  no frontend implementation.** Recent Deposits, Recent Payments, Top
+  Managers, and a city breakdown were each evaluated against the frozen
+  Overview purpose and Phases 1–3's own already-delivered signals, and
+  explicitly excluded — none was silently skipped. The "is stock exposure
+  normal" purpose-clause stays a disclosed, non-blocking backend
+  capability gap (BC-AE) — see `project-status.md`'s own M7 Overview
+  section and ADR-0040 for the full reasoning behind every exclusion.
 - **Phase 1's exact file list, as committed in `15a64fb`:**
   - `src/domains/overview/` (new) — `pages/overview-page.tsx` +
     its own test file, `components/pending-cheques-widget.tsx`,
@@ -307,14 +322,18 @@ yet; see "Next task" below.**
 
 ```bash
 cd C:\Miza\frontend-v2
-git status                 # expect: clean, or only this session's own
-                            # docs checkpoint commit on top of d11e29c
-git log --oneline -8        # expect a docs-only checkpoint commit, then
-                            # d11e29c, 5ae7ef2, 263ad78, 3bca8ab, 15a64fb,
-                            # bdb709d, a595b0a
-pnpm test:ci               # expect: 1319/1319 across 66 files
+git status                 # expect: clean
+git log --oneline -8        # expect the M7 closeout docs commit, then
+                            # dc0c37f, d11e29c, 5ae7ef2, 263ad78, 3bca8ab,
+                            # 15a64fb, bdb709d
+pnpm test:ci               # expect: 1319/1319 across 66 files (no source
+                            # changed since Phase 3 — M7 closeout is
+                            # documentation-only)
 pnpm lint && pnpm typecheck && pnpm format:check && pnpm build
 ```
+
+**M7 is closed. Do not resume Overview Phase 4 work, and do not start M8
+without a fresh discovery/kickoff pass** — see "Next task" below.
 
 ## Last completed work
 
@@ -562,6 +581,17 @@ pnpm lint && pnpm typecheck && pnpm format:check && pnpm build
   from Phase 1's three widgets, both directions. See `project-status.md`'s
   own "M7 — Overview" section for the full write-up and ADR-0038 for the
   decimal-normalization decision.
+- **M7 closure — Overview Phase 4 discovery/decision (ADR-0040), docs
+  only, no source changes.** Re-verified `recentActivities()`/
+  `agentsOverview()` fresh from source and live against the running dev
+  database. Confirmed M7 Overview's own frozen deliverable ("KPI tiles,
+  queues, charts") was already fully satisfied by Phases 1–3 and closed
+  the milestone without building against either endpoint. Recorded four
+  explicit exclusions (Recent Deposits, Recent Payments, Top Managers,
+  city breakdown) and the stock-exposure backend capability gap (BC-AE)
+  — see `project-status.md`'s own M7 — Overview section for the full
+  write-up. **M7 is now CLOSED; M8 — Hardening is the next milestone,
+  not yet started.**
 - **M7 Overview Phase 3 — Trends** — `d11e29c`. COMPLETE, manual QA
   passed (see "Current state" above for the exact file list, the
   ADR-0038-concern correction, the honest "Deposit Submissions" labeling,
@@ -581,39 +611,47 @@ pnpm lint && pnpm typecheck && pnpm format:check && pnpm build
 
 Full write-ups for every item above: `project-status.md`'s own dedicated sections.
 
-## Next task: M7 Overview Phase 4 — Recent activity + agents overview
+## Next task: M8 — Hardening ("making it trustworthy")
 
-**Overview Phase 1 (`15a64fb`), Phase 2 (`263ad78`) and Phase 3 (Trends,
-`d11e29c`) are all COMPLETE, manual QA passed, committed and pushed.**
-Phase 4 is next.
+**M7 is CLOSED (Agent 360, Client 360, Overview Phases 1–3 delivered,
+Phase 4 closed by discovery/decision, ADR-0040).** M8 is the next
+milestone per the frozen roadmap. **M8 has NOT been started** — no
+discovery, no kickoff, no code. What follows is the roadmap's own
+deliverables and exit criteria, restated faithfully, not expanded or
+reinterpreted:
 
-Phase 4 has **not been discovered yet** — no source re-verification, no
-live contract check, no scope decision has been made for it. Only the
-pointer already carried forward from the original Overview discovery
-report is recorded below; treat it as a starting point for a fresh
-discovery pass, not as pre-approved scope:
+**Framing, from the roadmap itself**: *"Not a phase for finishing
+features. A phase for proving the finished ones deserve an operator's
+trust."* M8 is **not** a feature-completion phase — the rules
+(formatters, focus states, error handling, boundaries) are enforced from
+M0 onward and were never deferred; what M8 audits is whether that
+enforcement actually held everywhere, systematically.
 
-- **`recent-activities`** returns TWO separate, independently-ordered
-  collections (`recent_deposits`, `recent_payments`) — verified from
-  source during the original discovery, not assumed. They must stay two
-  separate collections/widgets; do not merge them into one synthetic
-  chronological feed the backend does not actually provide.
-- **`agents-overview`**'s Top Managers may link to Agent 360
-  (`agentDetailPath`).
-- **Do not duplicate city-breakdown data across multiple widgets** — pick
-  one source. This was flagged as redundant across
-  `statistics.cities.breakdown` (excluded from Phase 2),
-  `chart-data.agents_by_city` (excluded from Phase 3), and
-  `agents-overview.agents_by_role_and_city` — Phase 4 is the first phase
-  that would actually touch this data, so the "pick one source" decision
-  becomes live here, not before.
-- Both endpoints' exact response shapes, runtime types, and permission
-  gates should be re-verified fresh from source AND live against the
-  running dev database before any implementation — the same discipline
-  every phase so far has required (ADR-0022).
+**Deliverables** (roadmap M8 section, verbatim):
+- E2E suite on the irreversible money paths (FTA §16) — begun at M5,
+  completed here.
+- Accessibility pass: keyboard-complete flows, focus visibility,
+  contrast, reduced motion (Design System §1, §10).
+- Performance: no serial waterfalls, time-to-populated-table measured
+  per domain (FTA §18).
+- Observability live: error reporting with PII scrubbing, correlation
+  IDs surfaced as support references (FTA §11, §18).
+- Flag cleanup — every expired flag removed with its dead branch (FTA
+  §14).
+- ADR log reconciled with what was actually built.
 
-**Do not start Phase 4 implementation before its own discovery is run and
-reviewed** — the same discipline every prior phase required.
+**Exit criteria** (roadmap M8 section, verbatim):
+- Every irreversible flow has a passing E2E test against a real backend.
+- Every flow is completable by keyboard alone.
+- Zero expired feature flags; zero boundary suppressions without an ADR.
+- No P1 defects open.
+
+**Do not start any M8 task yet.** The literal first thing to do, next
+session, is a discovery/kickoff pass for M8 itself — scoping which
+domains/flows need E2E coverage first, auditing the current
+accessibility/performance/observability baseline, and confirming the ADR
+log's own reconciliation scope — mirroring the same discipline every
+prior milestone required before its own first line of code.
 
 ## Things that MUST NOT be changed without a new decision (carried, updated this session)
 
@@ -623,10 +661,23 @@ reviewed** — the same discipline every prior phase required.
   the choice between inline SVG and a real dependency is an open decision,
   not a default. CLAUDE.md's own rule: "No new dependency without
   justification and an ADR."
-- 🚫 **Do not write M7 Overview Phase 4 implementation code before its own
-  discovery is run and reviewed.** See "Next task" above. Phases 1–3 are
-  all COMPLETE, manual QA passed, committed and pushed (`15a64fb`,
-  `263ad78`, `d11e29c`).
+- 🚫 **Do not add a Recent Deposits, Recent Payments, Top Managers, or
+  city-breakdown widget to Overview without a fresh, explicit decision
+  superseding ADR-0040.** M7 Overview Phase 4 was discovered and
+  deliberately closed without building against `recent-activities`/
+  `agents-overview` — each candidate was evaluated on its own merits and
+  excluded for a specific, verified reason (ADR-0040), not skipped for
+  lack of time. Re-adding any of them later needs the same discovery
+  discipline that closed them, not an assumption that "the endpoint
+  already exists" is reason enough.
+- 🚫 **Do not derive or approximate a stock-exposure figure client-side.**
+  The frozen Overview purpose's "is stock exposure normal" question has
+  no backing Dashboard endpoint (BC-AE, ADR-0040) — this is a disclosed,
+  non-blocking gap, not something to paper over with a computed number
+  from Grattage/Stock data already available elsewhere in the product.
+  The same restraint ADR-0032/ADR-0033/ADR-0038 already established for
+  every other backend-owned figure applies here: no number is more
+  honest than an invented one.
 - 🚫 **Do not re-derive `total_solde`/`total_cash` (or any future
   `SUM()`-aggregate dashboard field) through `Number()`/`parseFloat()` or
   any other floating-point reconstruction.** `normalizeAggregateDecimal`
@@ -835,9 +886,29 @@ reviewed** — the same discipline every prior phase required.
       ADR-0038. `agents_by_city`/`deposits_by_method` deliberately
       excluded. See "Current state" above for the full file list and
       findings.
-- [ ] **M7 Overview widget grid — Phase 4 NOT started, NOT discovered.
-      NEXT: Phase 4 (Recent activity + agents overview) discovery — see
-      "Next task" above.**
+- [x] **M7 Overview widget grid — Phase 4 CLOSED BY DISCOVERY/DECISION,
+      no frontend implementation (ADR-0040).** Recent Deposits, Recent
+      Payments, Top Managers, and a city breakdown were each evaluated
+      against the frozen Overview purpose and Phases 1–3's own delivered
+      signals, and explicitly excluded — see `project-status.md`'s own
+      M7 — Overview section and ADR-0040 for the full reasoning behind
+      every exclusion. **M7 Overview is fully COMPLETE.**
+- [x] **M7 — full milestone — CLOSED.** Agent 360, Client 360, and the
+      Overview widget grid (Phases 1–3 delivered, Phase 4 closed by
+      decision) are all done. M7's own frozen exit criteria (zero
+      boundary-lint suppressions, verified parallel panel firing,
+      independent panel-crash isolation) are all met. **M8 — Hardening is
+      the next milestone, not yet started — see "Next task" above.**
+- [ ] **Stock exposure snapshot — genuine, disclosed, NON-BLOCKING
+      backend capability gap (BC-AE, ADR-0040).** The frozen Overview
+      purpose's own "is stock exposure normal" question has no backing
+      Dashboard endpoint — none of `statistics`/`chart-data`/
+      `recent-activities`/`agents-overview` expose a Grattage/Stock
+      exposure snapshot. Phase 1's Overdue Grattage Invoices queue is a
+      decision SIGNAL, not a health snapshot. Do NOT derive or
+      approximate this client-side — closing it needs a future backend
+      capability that does not exist today. Not a reason to withhold M7
+      closure; recorded here so it isn't silently forgotten.
 - [ ] **Manager per-commercial Grattage Outstanding breakdown — accepted
       coarse capability, NOT a roadmap gap.** The frozen architecture (§6)
       names "outstanding obligation" as an Agent 360 deliverable generically,

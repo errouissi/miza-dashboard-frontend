@@ -1193,3 +1193,105 @@ decisions made *during implementation*.
   independent domain ever needs comparable chart geometry, promoting a
   shared primitive to `shared/business/` becomes a live Rule-of-Three
   question (ADR-0006) — not before.
+
+## ADR-0040 — M7 Overview stops after Phase 3; Recent Activities, Top Managers and city breakdown are intentionally excluded; the stock-exposure snapshot is a disclosed, non-blocking backend capability gap
+
+- **Date:** 2026-08-16
+- **Status:** Accepted
+- **Context:** `GET /admin/dashboard/recent-activities` and
+  `GET /admin/dashboard/agents-overview` were the two remaining routed
+  Dashboard endpoints after Phase 3 shipped, both re-verified fresh from
+  source AND live against the running dev database during a dedicated
+  Phase 4 discovery pass (mirroring the same discipline every prior phase
+  required, ADR-0022). Two frozen-document facts anchor this decision,
+  both re-read directly rather than assumed from the earlier discovery
+  report that first flagged these endpoints as merely "needing routing":
+  `phase8-architecture.html` §5 names Overview's purpose as answering "is
+  the network healthy, is cash moving, is stock exposure normal, what
+  needs a decision right now" — purpose-level language, not a widget
+  inventory; the roadmap's own M7 deliverable list names exactly **"KPI
+  tiles, queues, charts"** — three widget types, all delivered by Phases
+  1–3. Neither frozen document names `recentActivities`/`agentsOverview`
+  as a required widget category anywhere. The roadmap's own M7 risk note
+  states the design intent explicitly: "Overview ships with the widgets
+  whose endpoints exist and flags the rest — the widget grid was designed
+  for exactly this."
+- **Decision:** M7 Overview's widget grid is COMPLETE after Phase 3.
+  Four specific capabilities available from the two remaining endpoints
+  were evaluated and explicitly excluded, not silently skipped:
+  - **Recent Deposits** (`recent_deposits`) — excluded. Duplicates
+    signals already covered by Phase 1's Pending Deposits queue, Phase
+    2's deposit KPIs (Last 7 Days/This Month/Last Month), and Phase 3's
+    Deposit Submissions trend; adds no new frozen-purpose question. A
+    real, freshly-verified contract note for the record: this endpoint's
+    raw model serialization returns `Deposit.amount` as a STRING
+    (confirmed live), the OPPOSITE of `/admin/depos`'s own `DepoResource`
+    cast to `(float)` for the identical column — a genuine divergence a
+    future session must re-verify fresh if this is ever reconsidered, not
+    assume from Phase 1's own `MoneyAmount`-based Pending Deposits widget.
+  - **Recent Payments** (`recent_payments`) — excluded. Verified from
+    `DebtPayment.php`: `admin_id` belongs to `User` (internal dashboard
+    admins), not `Agent`/`Client`. This is an admin paying down their own
+    internal debt (`User.debt`) — the SAME `debt.*` domain Phase 2's own
+    Statistics already excluded as "an internal admin-accounting figure,
+    not a network/cash/stock signal." No agent/client/network operational
+    meaning, and no navigation target exists at all (Admins has no
+    detail page anywhere in this product).
+  - **Top Managers** (`agents-overview.top_managers`) — excluded, by
+    explicit product decision. It is a descriptive ranking by ACTIVE
+    commercial headcount only (verified from source: the query computes
+    no sales/performance metric) — real, working navigation to Agent 360
+    exists for every row, but ranking alone is not a decision-driving or
+    required M7 signal, and nothing about it was named in either frozen
+    document.
+  - **City breakdown** (`agents-overview.agents_by_role_and_city`) —
+    excluded. A third redundant agent-geography visualization: Phase 2
+    already excluded `statistics.cities.breakdown` and Phase 3 already
+    excluded `chart-data.agents_by_city` for identical duplication
+    reasons (both verified byte-for-byte-identical or near-identical
+    query shapes to this one, sharing the same base filter). Phase 2's
+    "Active Cities" count and Phase 3's Agent Registrations trend already
+    cover this ground; a third rendering answers no new operational
+    question.
+
+  **Stock exposure ("is stock exposure normal?") remains a genuine,
+  disclosed, NON-BLOCKING backend capability gap — not implemented, not
+  hidden, not approximated.** None of the four Dashboard endpoints
+  (`statistics`, `chart-data`, `recent-activities`, `agents-overview`)
+  exposes an authoritative Grattage/Stock exposure snapshot — verified
+  fresh from `DashboardController` source across all four methods, and
+  re-confirmed specifically for `recent-activities`/`agents-overview`
+  during this discovery pass (neither touches Grattage/Stock data at
+  all). Phase 1's Overdue Grattage Invoices queue is a real, partial
+  signal — a decision TRIGGER when obligations go overdue — but it is
+  NOT a current "is stock exposure normal right now" health snapshot.
+  Closing this gap requires a NEW backend capability that does not exist
+  today; it is explicitly out of this milestone's control.
+- **Rationale:** Every excluded capability was evaluated against the
+  frozen purpose's own four questions and against what Phases 1–3
+  already deliver, not excluded merely because "the backend endpoint
+  exists" was insufficient reason to build it — the roadmap's own words
+  distinguish "the widget grid ships with what exists" from "the widget
+  grid must render everything that exists." Building any of the four
+  excluded capabilities would have added description without a
+  new operational question, the same "decoration" the frozen widget-grid
+  philosophy explicitly does not require. The stock-exposure gap is kept
+  honestly unresolved rather than papered over with a derived or
+  approximated number — the same restraint ADR-0032/ADR-0033/ADR-0038
+  already established for every other backend-owned business figure in
+  this product: a UI that confidently shows a wrong or invented number is
+  worse than one that honestly shows none.
+- **Consequences:** M7 Overview is considered COMPLETE against its own
+  frozen deliverable (KPI tiles, queues, charts) and exit criteria
+  without Phase 4. `recentActivities`/`agentsOverview` remain routed,
+  gated, and available on the backend but are NOT called from any
+  Overview surface — a future session must not add a Recent Deposits,
+  Recent Payments, Top Managers, or city-breakdown widget as a "quick
+  addition" without a fresh, explicit decision superseding this one, the
+  same discipline every other exclusion in this project's history
+  (ADR-0009, ADR-0014, ADR-0016) already protects. The stock-exposure gap
+  stays recorded as standing, non-blocking follow-up work — the same
+  class of entry as this project's existing BC-codes — until a real
+  backend capability exists to close it; no future session should
+  describe it as resolved, and no future session should build a
+  client-side approximation to quiet it.

@@ -93,43 +93,64 @@ per-agent Outstanding-obligation UI view. The data layer exists
 route, or navigation entry — that UI is an M7 Agent 360 deliverable, not an
 M6 one (see `next-session.md`).
 
-**M7 — Overview & workspaces, Agent 360, Client 360 — is the current
-milestone. Agent 360 and Client 360, the first two of its three composed
-surfaces, are both now COMPLETE, manual QA passed.** Agent 360: five
-phases plus a manual-QA finalization pass — workspace foundation, full
-role-aware Agent Edit, Money/Stock panels, Grattage Outstanding, and the
-zero-stock Manager reassignment guard, closing the milestone's one genuine
-gap against the frozen architecture rather than deferring it again. See
-"M7 — Agent 360" below for the full write-up. Client 360: three
-implementation phases (foundation `9cc464a`; Commercial
-relationship/reassignment/assignment history `506e992`; Grattage purchase
-history `22f2ba9`) plus two manual-QA fixes found during the real-browser
-pass (same-Commercial reassignment left Reassign enabled with no request
-skipped for it, `55cc33d`; Agent 360's own Available Grattage capacity
-gave no indication it could be blocked, `47ab778`) — fully complete
-against the frozen requirement (`phase8-architecture.html` §6: "profile/
-assignment history (Network) with purchase history via grattage invoices
-(Grattage)"), manual QA passed against the real running backend. See "M7
-— Client 360" below for the full write-up. **The Overview widget grid,
-the third and final M7 surface, is IN PROGRESS. Phase 1 (Foundation +
-decision queues: Pending Cheques, Pending Deposits, Overdue Grattage
-Invoices) is COMPLETE, manual QA passed against the real running
-backend, committed and pushed (`15a64fb`). Phase 2 (Statistics: Network
-health / Cash movement / Exposure, nine headline metrics from one
-`ACCESS_DASHBOARD`-gated read) is COMPLETE, manual QA passed against the
-real running backend including responsive/mobile behavior, committed and
-pushed (`263ad78`). Phase 3 (Trends: Deposit Submissions + Agent
-Registrations, two small purpose-built SVG charts from one
-`ACCESS_DASHBOARD`-gated read) is now ALSO COMPLETE, manual QA passed
-against the real running backend, committed and pushed (`d11e29c`).**
-Discovery was closed earlier this milestone (the prior backend-readiness
-blocker resolved — backend commit `6aa671f` routed all four Dashboard
-endpoints on `access-dashboard`). See "M7 — Overview" below for the full
-Phase 1/2/3 write-up. **Phase 4 (Recent activity + agents overview)
-remains, not yet discovered.**
+**M7 — Overview & workspaces, Agent 360, Client 360 — COMPLETE.** All
+three composed surfaces are done, manual QA passed, committed and
+pushed. Agent 360: five phases plus a manual-QA finalization pass —
+workspace foundation, full role-aware Agent Edit, Money/Stock panels,
+Grattage Outstanding, and the zero-stock Manager reassignment guard,
+closing the milestone's one genuine gap against the frozen architecture
+rather than deferring it again. See "M7 — Agent 360" below for the full
+write-up. Client 360: three implementation phases (foundation `9cc464a`;
+Commercial relationship/reassignment/assignment history `506e992`;
+Grattage purchase history `22f2ba9`) plus two manual-QA fixes found
+during the real-browser pass (same-Commercial reassignment left Reassign
+enabled with no request skipped for it, `55cc33d`; Agent 360's own
+Available Grattage capacity gave no indication it could be blocked,
+`47ab778`) — fully complete against the frozen requirement
+(`phase8-architecture.html` §6: "profile/assignment history (Network)
+with purchase history via grattage invoices (Grattage)"), manual QA
+passed against the real running backend. See "M7 — Client 360" below for
+the full write-up.
+
+**The Overview widget grid, the third M7 surface, is COMPLETE.** Phase 1
+(Foundation + decision queues: Pending Cheques, Pending Deposits,
+Overdue Grattage Invoices) is COMPLETE, manual QA passed, committed and
+pushed (`15a64fb`). Phase 2 (Statistics: Network health / Cash movement
+/ Exposure, nine headline metrics from one `ACCESS_DASHBOARD`-gated
+read) is COMPLETE, manual QA passed including responsive/mobile
+behavior, committed and pushed (`263ad78`). Phase 3 (Trends: Deposit
+Submissions + Agent Registrations, two small purpose-built SVG charts
+from one `ACCESS_DASHBOARD`-gated read) is COMPLETE, manual QA passed,
+committed and pushed (`d11e29c`). **Phase 4 (Recent activity + agents
+overview) is CLOSED BY DISCOVERY/DECISION — no frontend implementation
+required.** A dedicated Phase 4 discovery pass re-verified
+`recent-activities`/`agents-overview` fresh from source and live against
+the running dev database, and confirmed the frozen M7 deliverable
+("KPI tiles, queues, charts", roadmap M7 section) is already fully
+satisfied by Phases 1–3. Recent Deposits, Recent Payments, Top Managers,
+and a city breakdown were each evaluated and explicitly excluded (see
+ADR-0040 for the full reasoning and evidence) — **this is a deliberate
+scope decision, not an unfinished phase.** The frozen Overview purpose's
+own "is stock exposure normal" question remains a genuine, disclosed,
+**non-blocking backend capability gap** — no Dashboard endpoint exposes
+an authoritative Grattage/Stock exposure snapshot; this is NOT
+implemented, NOT hidden, and NOT approximated client-side (ADR-0040).
+See "M7 — Overview" below for the full Phase 1–4 write-up.
+
+**M7 is COMPLETE.** Its own frozen exit criteria (Agent 360 composes
+four domains with zero boundary-lint suppressions; independent panels
+fire in parallel, verified not assumed; killing one panel's endpoint
+degrades that panel only) are all met — confirmed fresh at closeout: no
+domain-boundary ESLint suppression exists anywhere in `src/domains/`,
+and every Overview/Agent 360/Client 360 panel is independently
+`PanelBoundary`-wrapped and independently queried, extensively tested.
 
 M3.x (Admin/Manager/Commercial detail pages, ADR-0014) remains the only
-open M3 item, blocked by FE-2 — unaffected by M4, M5 or M6.
+open M3 item, blocked by FE-2 — unaffected by M4–M7 (Agent 360/Client
+360 both use flat routes, not nested ones, so FE-2 does not apply to
+them). M5's own owed manual browser validation (Deposits, Debt Payments,
+Agent Transfers, Allocations, Bons) also remains open, unrelated to M7.
+Neither blocks M7's own closure.
 
 ## Current branch
 
@@ -148,6 +169,11 @@ running backend). No uncommitted files remain besides this documentation
 pass. See `next-session.md` for verification commands.
 
 ## Last completed implementation
+
+**M7 — COMPLETE.** Agent 360, Client 360, and the Overview widget grid
+(Phases 1–3 implemented; Phase 4 closed by discovery/decision, ADR-0040)
+are all done, manual QA passed, committed and pushed. See "M7 — Overview"
+below for the full write-up. The previous entries, kept for continuity:
 
 **M7 — Overview Phase 3 (Trends) — COMPLETE, manual QA passed.** See its
 own section below ("M7 — Overview") for the full write-up. The previous
@@ -2113,15 +2139,19 @@ staying independent from the Client's current Commercial), panel
 isolation, and permission behavior were all exercised against the real
 running backend.
 
-## M7 — Overview — Phases 1–3 COMPLETE, manual QA passed; Phase 4 remains
+## M7 — Overview — COMPLETE (Phases 1–3 delivered; Phase 4 closed by discovery/decision)
 
 The third and final M7 composed surface. Unlike Agent 360/Client 360,
 Overview has no single entity — it is the frozen architecture's own
 "widget grid" (`phase8-architecture.html` §5): "Built as a widget grid,
 not a fixed page — each stat tile, chart, or queue is one widget reading
 one endpoint... Widget visibility follows the same permission registry as
-the sidebar." M7 Overview is split into four independently-reviewed
-phases; the first three are delivered so far.
+the sidebar." M7 Overview's own frozen deliverable (roadmap M7 section)
+names exactly **"KPI tiles, queues, charts"** — three widget types, all
+delivered. `recentActivities`/`agentsOverview` were never named as a
+required widget category in either frozen document; Phase 4 evaluated
+them and closed by explicit decision rather than building against them
+by default (see below and ADR-0040).
 
 **Discovery (docs-only, no source changes).** Re-verified backend commit
 `6aa671f` (`feature/Update-claude`) directly from source — confirmed all
@@ -2342,12 +2372,46 @@ regression); a clean full-suite run at 1319/1319 across 66 files;
 `tsc -b`/`eslint .` (0 errors, same 4 pre-existing unrelated
 warnings)/`prettier --check .` all clean; `vite build` succeeds.
 
-**Phase 4 (Recent activity + agents overview) is NOT started and NOT
-discovered.** See `next-session.md` for the pointer carried forward from
-the original Overview discovery (two separate `recent-activities`
-collections, never merged; the "pick one city-breakdown source" decision
-becomes live at Phase 4, since Phases 2 and 3 both already excluded
-their own city-data candidates).
+**Phase 4 — CLOSED BY DISCOVERY/DECISION, no frontend implementation
+required (ADR-0040).** A dedicated discovery pass re-verified
+`recent-activities`/`agents-overview` fresh from source AND live against
+the running dev database. Four candidate capabilities were evaluated and
+explicitly excluded:
+
+- **Recent Deposits** — duplicates Phase 1's Pending Deposits queue,
+  Phase 2's deposit KPIs, and Phase 3's Deposit Submissions trend; adds
+  no new frozen-purpose question. (A real contract note for the record:
+  this endpoint's raw serialization returns `Deposit.amount` as a
+  STRING, the opposite of `/admin/depos`'s own `DepoResource` cast to a
+  number for the identical column — verified live, not assumed.)
+- **Recent Payments** — `DebtPayment.admin_id` belongs to `User`
+  (internal dashboard admins), not `Agent`/`Client`; this is the SAME
+  `debt.*` domain Phase 2 already excluded from Statistics. No
+  agent/client/network signal, and no navigation target exists (Admins
+  has no detail page).
+- **Top Managers** — a descriptive ranking by active-commercial headcount
+  only (verified: the query computes no performance/sales metric); real
+  navigation to Agent 360 exists, but ranking alone is not a
+  decision-driving or required M7 signal. Excluded by explicit product
+  decision.
+- **City breakdown** (`agents_by_role_and_city`) — a third redundant
+  agent-geography visualization after Phase 2's Active Cities and Phase
+  3's Agent Registrations; Phases 2 and 3 already excluded their own
+  city-data candidates (`cities.breakdown`, `agents_by_city`) for the
+  identical reason.
+
+**Stock exposure ("is stock exposure normal?") remains a genuine,
+disclosed, NON-BLOCKING backend capability gap** — no Dashboard endpoint
+exposes an authoritative Grattage/Stock exposure snapshot; Phase 1's
+Overdue Grattage Invoices queue is a decision signal, not a current
+health snapshot. This is NOT implemented, NOT hidden, and NOT
+approximated client-side. Closing it requires a future backend
+capability that does not exist today. See ADR-0040 for the full
+reasoning and evidence behind every exclusion above.
+
+**M7 Overview is COMPLETE** against its own frozen deliverable ("KPI
+tiles, queues, charts") without Phase 4 — this is a deliberate scope
+decision, not an unfinished phase.
 
 ## Overall progress
 
@@ -2392,7 +2456,8 @@ their own city-data candidates).
 | **M7 — Overview widget grid, Phase 1 (Foundation + decision queues)** | ✅ **COMPLETE, manual QA passed** — Pending Cheques, Pending Deposits, Overdue Grattage Invoices, each independently permission-gated |
 | **M7 — Overview widget grid, Phase 2 (Statistics)** | ✅ **COMPLETE, manual QA passed** — nine metrics, Network health/Cash movement/Exposure, one `ACCESS_DASHBOARD`-gated query, `StatCard`'s first real caller |
 | **M7 — Overview widget grid, Phase 3 (Trends)** | ✅ **COMPLETE, manual QA passed** — Deposit Submissions + Agent Registrations, two small SVG charts, no chart dependency (ADR-0039), one `ACCESS_DASHBOARD`-gated query |
-| M7 — Overview widget grid, Phase 4 (Recent activity + agents overview) | 🟡 not started, not discovered — see `next-session.md` |
+| **M7 — Overview widget grid, Phase 4 (Recent activity + agents overview)** | ✅ **CLOSED BY DISCOVERY/DECISION** — Recent Deposits/Recent Payments/Top Managers/city breakdown all intentionally excluded (ADR-0040); no frontend implementation required |
+| **M7 — full milestone** | ✅ **COMPLETE** — Agent 360, Client 360, Overview (Phases 1–3 delivered, Phase 4 closed by decision); stock-exposure snapshot recorded as a non-blocking backend capability gap, not implemented |
 
 **Tests: 1237/1237 across 61 files** (was 407/23 before M3.6; 431/24 at
 M3.6's initial implementation; 442/24 after M3.6's three post-validation fix
@@ -2763,6 +2828,19 @@ available-capacity read" gaps this file previously carried as open:**
 | — | **verified, positive** | `manager_id` reassignment validation (`update()`) requires the target to be an active `Agent` with `role=manager` (`Rule::exists('agents','id')->where('status','active')->where('role','manager')`) — the same "eligible manager" convention Allocation/Agent Transfer/Agent Stock Return FormRequests already use | ✅ no action needed; the Manager `<select>` sources from `useManagerOptionsQuery({status:"active"})`, so an ineligible target can never be selected in the first place |
 | — | **verified, positive** | The reassignment guard itself (`COMMERCIAL_HAS_STOCK_CANNOT_REASSIGN`, 422) is atomic — `update()` now locks the commercial row, re-checks stock, and writes the reassignment inside one transaction, closing a prior TOCTOU gap between the proactive read and the write | ✅ no action needed; the frontend's own stock-quantity read is explicitly a UX hint, never the authorization check — a backend race still surfaces correctly as a 422 that keeps the Edit drawer open and refreshes the read |
 | — | **verified, positive, gap closed** | `update()` now catches `ValidationException` before its generic handler (same backend commit as the guard) — a genuine field-level 422 (e.g. an ineligible `manager_id`) now maps onto its own field, no longer swallowed into a generic 500 | ✅ resolved; this was a disclosed BC-N-class defect specific to `update()`, now fixed. Every other BC-N instance elsewhere in the product (Managers/Commercials/Clients list validation, etc.) is unaffected and stays open |
+
+**From the M7 Overview Phase 4 discovery pass, against
+`DashboardController::recentActivities()`/`agentsOverview()`, re-verified
+fresh from source AND live against the running dev database — the pass
+that closed M7 Overview without building against either endpoint
+(ADR-0040):**
+
+| ID | Class | Item | Status |
+| --- | --- | --- | --- |
+| **BC-AE (new)** | **genuine capability gap, non-blocking** | No Dashboard endpoint (`statistics`, `chart-data`, `recent-activities`, `agents-overview`) exposes an authoritative Grattage/Stock exposure snapshot — the frozen Overview purpose's own "is stock exposure normal" question has no backing data source anywhere in the four routed endpoints | 🟡 open, non-blocking — Phase 1's Overdue Grattage Invoices queue remains a partial, decision-triggered signal, not a snapshot. Closing this needs a NEW backend capability; the frontend does not (and must not) approximate it client-side. See ADR-0040 |
+| — | **verified, positive** | Both remaining Dashboard endpoints share the identical `access-dashboard` gate every other Dashboard endpoint already carries — confirmed fresh from `routes/api.php`, not assumed from `/dashboard/statistics`'s own gate | ✅ no action needed; would have been a single shared outer-gate component if either endpoint had been used |
+| — | **verified, positive, real divergence found** | `recentActivities()`'s raw model serialization returns `Deposit.amount` as a STRING (confirmed live) — the OPPOSITE of `/admin/depos`'s own `DepoResource`, which casts the identical column to `(float)`. Never assumed safe by resemblance to Phase 1's own `MoneyAmount`-based Pending Deposits widget | ✅ no action needed today (endpoint unused, ADR-0040); recorded so a future session reconsidering Recent Deposits re-verifies this fresh rather than copying Phase 1's own number-typed convention |
+| — | **verified, positive** | `DebtPayment.admin_id` belongs to `User` (internal dashboard admins), confirmed from `DebtPayment.php` — `recent_payments` is admin-debt accounting, the same `debt.*` domain already excluded from Statistics (Phase 2), not an agent/client/network signal | ✅ no action needed; confirms the ADR-0040 exclusion is contract-grounded, not a guess |
 
 ## Domain inventory
 
