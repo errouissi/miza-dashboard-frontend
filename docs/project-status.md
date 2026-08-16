@@ -165,6 +165,13 @@ touched. Full findings, the approved phase structure, and the verified
 — that file, not this one, is the durable checkpoint for M8's
 in-progress state. **Next task: M8 Phase 1A.**
 
+**Unrelated to M8 — a future Stock module idea was discovered and
+recorded, NOT scheduled, NOT part of any active milestone.** See
+`docs/future-stock-module.md` for the full discovery (verified backend
+stock-ledger domain, approved future direction, provisional phase
+sequence, unresolved business decisions). This does not change M8's own
+status or next task above.
+
 ## Current branch
 
 `main`, level with `origin/main` at `d11e29c` (pushed this session). Since

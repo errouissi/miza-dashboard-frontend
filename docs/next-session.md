@@ -186,6 +186,18 @@ outside E2E.
   currently-dormant architectural gap, unexercised because no nested
   route has been built.
 
+## Future work (not scheduled, does not change the next task above)
+
+**A future Stock module idea was discovered and its direction recorded
+this session — it is NOT part of M8, NOT scheduled, and does NOT change
+"Next task" above.** Full discovery (verified backend stock-ledger
+domain: `stocks`/`stock_movements`/`StockService`, approved future
+module shape, Stock Value definition, provisional 6-phase sequence,
+unresolved business decisions) is persisted in
+**`docs/future-stock-module.md`** — read that file directly if this ever
+gets picked up; do not re-derive the backend domain from scratch. **The
+active next task remains M8 Phase 1A**, unchanged.
+
 ## M7 closure (historical, unchanged from its own closeout)
 
 - **Overview discovery is CLOSED.** The backend blocker disclosed by the
