@@ -152,6 +152,19 @@ them). M5's own owed manual browser validation (Deposits, Debt Payments,
 Agent Transfers, Allocations, Bons) also remains open, unrelated to M7.
 Neither blocks M7's own closure.
 
+**M8 — Hardening is the current milestone. Discovery/kickoff is
+COMPLETE; implementation has NOT started.** A full discovery pass ran
+across all six frozen deliverables (E2E, accessibility, performance,
+observability, feature flags, ADR reconciliation), producing an approved
+7-phase structure and five approved decisions (Playwright selected for
+E2E; a dedicated, isolated E2E Postgres environment, fail-closed;
+Phase 1A's narrow scope; the error-reporting vendor deferred to Phase 5;
+this project's first P1 working definition). No source code was
+touched. Full findings, the approved phase structure, and the verified
+12-flow irreversible-money inventory are recorded in `next-session.md`
+— that file, not this one, is the durable checkpoint for M8's
+in-progress state. **Next task: M8 Phase 1A.**
+
 ## Current branch
 
 `main`, level with `origin/main` at `d11e29c` (pushed this session). Since

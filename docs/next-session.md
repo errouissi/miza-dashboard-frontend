@@ -10,29 +10,183 @@ _Last updated: 2026-08-16_
 ## Current state
 
 **M4 (Money), M5 (Stock, implementation level), M6 (Grattage — the seam),
-and M7 (Overview & workspaces, Agent 360, Client 360) are ALL COMPLETE.**
-**M7 is CLOSED — it is no longer the current milestone.** Agent 360 and
-Client 360 are both COMPLETE, manual QA passed, committed and pushed. The
-Overview widget grid — Phase 1 (Foundation + decision queues, `15a64fb`),
-Phase 2 (Statistics, `263ad78`), and Phase 3 (Trends, `d11e29c`) — is
-COMPLETE, manual QA passed, committed and pushed. **Phase 4 (Recent
-activity + agents overview) is CLOSED BY DISCOVERY/DECISION — no
-frontend implementation was built.** A dedicated discovery pass
-re-verified `recent-activities`/`agents-overview` fresh from source and
-live, and confirmed M7 Overview's own frozen deliverable ("KPI tiles,
-queues, charts") was already fully satisfied by Phases 1–3. Recent
-Deposits, Recent Payments, Top Managers, and a city breakdown were each
-evaluated and explicitly excluded — see ADR-0040 for the full reasoning.
-**The frozen Overview purpose's "is stock exposure normal" question
-remains a genuine, disclosed, NON-BLOCKING backend capability gap
-(BC-AE)** — no Dashboard endpoint provides this; it is NOT implemented,
-NOT hidden, and NOT approximated client-side. See "M7 closure" below.
+and M7 (Overview & workspaces, Agent 360, Client 360) are ALL COMPLETE
+and CLOSED.** Agent 360 and Client 360 are both COMPLETE, manual QA
+passed, committed and pushed. The Overview widget grid — Phase 1
+(`15a64fb`), Phase 2 (`263ad78`), Phase 3 (`d11e29c`) — is COMPLETE;
+Phase 4 is CLOSED BY DISCOVERY/DECISION, no frontend implementation
+(ADR-0040). The "is stock exposure normal" purpose-clause remains a
+disclosed, non-blocking backend capability gap (BC-AE). Full M7 detail
+is preserved further down this section, unchanged from its own closeout.
 
-**The next milestone is M8 — Hardening: "making it trustworthy"**, per
-the frozen roadmap. M8 has NOT been started — see "Next task" below for
-its faithfully-restated deliverables and exit criteria. Do not begin any
-M8 work without a fresh discovery/kickoff pass, the same discipline
-every prior milestone required.
+**M8 — Hardening ("making it trustworthy") is the current milestone.
+Discovery/kickoff is COMPLETE. Implementation has NOT started.** A full
+discovery pass ran across all six frozen M8 deliverables (E2E, a11y,
+performance, observability, feature flags, ADR reconciliation) —
+findings and approved decisions are recorded in full under "M8 discovery
+— findings and approved decisions" below. **The repository was clean
+before this checkpoint; nothing was implemented, installed, or
+modified.** **Next task: M8 Phase 1A — Playwright foundation + isolated
+E2E environment/harness.** See "Next task" below — tomorrow's session
+implements Phase 1A, it does not re-discover it.
+
+## M8 discovery — findings and approved decisions (this session, no implementation)
+
+**Approved M8 phase structure** (supersedes the roadmap's own generic
+"E2E/a11y/performance/observability/flags" ordering with a reviewed,
+dependency-aware split):
+
+1. **Phase 1A — Playwright foundation + isolated E2E environment/harness**
+   — **NEXT TASK, see below.**
+2. **Phase 1B — deterministic backend fixture support** (kept separate
+   from 1A by explicit decision).
+3. **Phase 2 — irreversible money-path E2E** (the 12-flow inventory below).
+4. **Phase 3 — accessibility hardening.**
+5. **Phase 4 — performance measurement/hardening.**
+6. **Phase 5 — observability** (error-reporting vendor decision happens
+   HERE, not earlier).
+7. **Phase 6 — feature flags + ADR reconciliation + final P1 sweep.**
+
+**Approved decisions, this session:**
+
+1. **E2E tooling: Playwright.** Selected, not yet installed. **An ADR
+   must be written when Phase 1A implementation begins** — do not skip
+   this; it has not been created yet on purpose (a discovery-stage
+   decision, not yet a built one).
+2. **E2E environment: a dedicated, isolated E2E PostgreSQL
+   environment/database — never the shared dev DB.** Irreversible
+   automated E2E MUST NOT run against the same shared Postgres instance
+   every manual QA session in this project's history has used. Missing
+   E2E configuration MUST fail closed (refuse to run, never silently
+   fall back to another DB). Real backend + real authentication required
+   — **MSW-backed browser tests do NOT satisfy the M8 "real backend"
+   criterion**, no matter how thorough.
+3. **Phase 1A scope, approved, narrow:** minimal Playwright
+   install/config; the isolated E2E environment's own safety/config
+   (fail-closed if misconfigured); deterministic REAL authentication
+   (real login against the real backend, not a mocked session); exactly
+   ONE non-destructive smoke test (`browser → login → real Laravel
+   backend → authenticated Overview`); a CI foundation ONLY if it can
+   honestly run the real backend + isolated Postgres (do not fake this
+   with MSW in CI). **No irreversible money operations in Phase 1A.** No
+   Cheque/DebtPayment factories in Phase 1A unless strictly required
+   just to authenticate for the smoke test. **Phase 1B (fixtures) stays
+   separate — do not fold it into 1A.**
+4. **Error-reporting vendor decision is DEFERRED to Phase 5.** Do NOT
+   install Sentry or any other vendor during Phase 1A (or 1B/2/3/4).
+   Backend ticket **B-4** (correlation-ID echo) remains the known,
+   already-tracked backend dependency for when Phase 5 starts — the
+   frontend's own half (generating and displaying `X-Request-Id`) is
+   already built and live, confirmed this session.
+5. **P1 working definition, approved:** *"A P1 is a defect reachable in
+   a shipped, permission-granted production flow that can: corrupt
+   authoritative financial, stock, allocation, or debt data; expose
+   protected data belonging to another operator/user; or prevent
+   completion of a critical irreversible operation with no viable
+   workaround."* Do NOT automatically classify dormant architecture gaps,
+   backend capability gaps, testability gaps, feature requests, or known
+   non-blocking flakes (FE-1) as P1 under this definition.
+
+**The verified 12 irreversible-flow inventory (Phase 2's own scope,
+preserved in full so it never needs rediscovering):**
+
+| # | Flow | Route | Mutation hook | Permission | Confirmation | Unit/integration coverage |
+|---|---|---|---|---|---|---|
+| 1 | Cheque Approve | `/money/cheques/:id` | `useApproveChequeMutation` | `approve-cheque` | `ConfirmActionDialog` | 43 tests (shared file) |
+| 2 | Cheque Reject | `/money/cheques/:id` | `useRejectChequeMutation` | `reject-cheque` | `ConfirmActionDialog` | (same file) |
+| 3 | Cheque Annuler | `/money/cheques/:id` | `useAnnulerChequeMutation` | `annuler-cheque` | `ConfirmActionDialog` | (same file) |
+| 4 | Deposit Validate | `/money/deposits/:id` | `useValidateDepositMutation` | `validate-depo` | `ConfirmActionDialog` | 46 tests (shared file) |
+| 5 | Deposit Reject | `/money/deposits/:id` | `useRejectDepositMutation` | `reject-depo` | `ConfirmActionDialog` | (same file) |
+| 6 | Debt Payment Create | `/money/debt-payments` | `useCreateDebtPaymentMutation` | `debt_cash` | none (direct submit) | 16 tests |
+| 7 | Agent Stock Return Validate | `/stock/returns/:id` | `useValidateAgentStockReturnMutation` | (Return's own) | `ConfirmActionDialog` | 23 tests |
+| 8 | Agent Transfer Validate | `/stock/transfers/:id` | `useValidateAgentTransferMutation` | (Transfer's own) | `ConfirmActionDialog`, Grattage restock gate | 29 tests |
+| 9 | Allocation Validate | `/stock/allocations/:id` | `useValidateAllocationMutation` | `validate-allocation` | `ConfirmActionDialog`, deposit-capacity gate | 25 tests |
+| 10 | Bon Validate | `/stock/bons/:id` | `useValidateBonMutation` | `validate-bon` | `ConfirmActionDialog` | 27 tests (shared file) |
+| 11 | Bon Cancel | `/stock/bons/:id` | `useCancelBonMutation` | `cancel-bon` | `ConfirmActionDialog` (reason required) | (same file) |
+| 12 | Grattage Invoice Cancel | `/grattage/invoices/:id` | `useCancelGrattageInvoiceMutation` | `access-dashboard` | `ConfirmActionDialog` | 25 tests |
+
+All 12 currently have **zero real-backend E2E coverage** (confirmed —
+E2E infrastructure is completely greenfield, see below). Rows 4–11
+overlap exactly with the standing M5 owed-manual-validation follow-up
+(Deposits, Debt Payments, Agent Transfers, Allocations, Bons) — **Phase
+2's own E2E coverage, flow by flow, closes that debt as it lands**; it
+is the same underlying obligation, not a second one. Rows 1–3 (Cheques)
+and 7 (Agent Stock Return) are the two flows already manually validated
+outside E2E.
+
+**Other discovery findings that must survive this session:**
+
+- **E2E infrastructure is completely greenfield** — zero Playwright/
+  Cypress/browser tooling anywhere in `package.json`/lockfile, no
+  `e2e/` directory, no CI job capable of starting a browser or the real
+  backend (`.github/workflows/ci.yml` today only runs lint/typecheck/
+  Vitest/build).
+- **Shared dev PostgreSQL is unsafe for repeatable irreversible E2E** —
+  every one of the 12 flows above permanently mutates state with no undo;
+  running them against the same DB every manual QA session has used
+  would exhaust or corrupt the existing seeded fixtures.
+- **Deterministic fixture gaps exist** — backend has factories for
+  Agent/Client/Deposit/AgentTransfer/AgentStockReturn/Allocation/Bon/
+  GrattageInvoice/Company/Supplier/Ville/User, but **no factory exists
+  for Cheque or DebtPayment** — needed before Phase 2 can seed those two
+  flows deterministically (this is Phase 1B's own concern, not 1A's).
+- **Accessibility — two confirmed M8 exit-criteria blockers**: zero
+  `prefers-reduced-motion` support anywhere in the codebase; Overview's
+  two Phase-3 chart components (`deposit-submissions-chart.tsx`,
+  `agent-registrations-chart.tsx`) render each data bar as an SVG
+  `<rect>` with no `tabIndex`, so individual bar tooltips are
+  mouse-hover-only — keyboard/screen-reader users get only the chart's
+  own top-level label, never a single bar's real value. One strong
+  positive: all 12 money/stock confirmation dialogs above use
+  `ConfirmActionDialog` uniformly (ADR-0020), inheriting Radix's
+  focus-trap/Escape-to-close for free — no P1-severity a11y defect found
+  on any irreversible flow itself.
+- **Performance measurement currently depends on browser/E2E tooling** —
+  no `performance.mark`/web-vitals/Lighthouse CI exists; "time to
+  populated table per domain" cannot be measured until Phase 1A's own
+  tooling exists to measure it with. No accidental serial waterfalls
+  found — every sequential-looking query pattern already verified as
+  deliberate (ADR-0025's own dependent-query pattern; Agent 360/Client
+  360 blocking child panels only on their own required parent id).
+  Bundle: 933.87 KB (262.41 KB gzip), unchanged since M7 Phase 3, still
+  over Vite's 500KB warning.
+- **Observability**: the frontend ALREADY sends `X-Request-Id`
+  (`infrastructure/http/correlation.ts`) and both error boundaries
+  already surface it as a "Ref. {id}" support reference in the UI — this
+  half is live, not greenfield. **Backend ticket B-4 (already tracked
+  via `BC-E`) still prevents true end-to-end correlation** — the backend
+  does not echo/log the header today. No toast system, no console
+  logging in production code, no error-reporting SDK, no PII-leak
+  surface found (nothing exists yet that could serialize PII into a
+  report — the risk is entirely prospective, for Phase 5 to handle
+  correctly when it adds a real reporting call).
+- **Feature flags — zero expired flags found.** Exactly three exist
+  (`config.features.environmentBanner/devtools/errorReporting`, per
+  CLAUDE.md's own mandated pattern); `environmentBanner` is consumed
+  (`app-shell.tsx`), `devtools`/`errorReporting` are declared and tested
+  for their own computed value but have **no consumer anywhere yet** —
+  this is deliberate forward-looking scaffolding for Phase 5/6 to wire
+  up, not dead code to remove.
+- **Boundary suppressions — zero found**, freshly re-verified (not
+  reused from M7's own result). All 13 `eslint-disable` comments in
+  `src/` are `react-hooks/exhaustive-deps`, none touch
+  `no-restricted-imports` or any domain-boundary rule. The M8 exit
+  criterion ("zero boundary suppressions without an ADR") is currently
+  met trivially.
+- **ADR reconciliation found zero source contradictions** across all 40
+  ADRs. Three pre-existing, already-known follow-ups remain owed
+  (ADR-0008's own deferred formal-promotion revisit; ADR-0014's detail
+  pages, blocked by FE-2; ADR-0016's "all-pages" bulk-assign step) — none
+  newly discovered, none stale.
+- **P1 baseline**: this project has NEVER had a P1/P0/P2 taxonomy before
+  this session — the working definition above (approved decision 5) is
+  the first one. Under it, no open P1 was found: the four 🔴-marked
+  BC-codes (BC-N ×2, BC-A, BC-G) are backend-gap/testability issues, not
+  reachable production defects; FE-2 (nested-route guard) is a real but
+  currently-dormant architectural gap, unexercised because no nested
+  route has been built.
+
+## M7 closure (historical, unchanged from its own closeout)
 
 - **Overview discovery is CLOSED.** The backend blocker disclosed by the
   frozen roadmap (`chartData`/`recentActivities`/`agentsOverview` possibly
@@ -323,17 +477,20 @@ every prior milestone required.
 ```bash
 cd C:\Miza\frontend-v2
 git status                 # expect: clean
-git log --oneline -8        # expect the M7 closeout docs commit, then
-                            # dc0c37f, d11e29c, 5ae7ef2, 263ad78, 3bca8ab,
-                            # 15a64fb, bdb709d
+git log --oneline -8        # expect this M8-discovery checkpoint commit,
+                            # then 153edfb, dc0c37f, d11e29c, 5ae7ef2,
+                            # 263ad78, 3bca8ab, 15a64fb
 pnpm test:ci               # expect: 1319/1319 across 66 files (no source
-                            # changed since Phase 3 — M7 closeout is
+                            # changed today — M8 discovery/checkpoint is
                             # documentation-only)
 pnpm lint && pnpm typecheck && pnpm format:check && pnpm build
 ```
 
-**M7 is closed. Do not resume Overview Phase 4 work, and do not start M8
-without a fresh discovery/kickoff pass** — see "Next task" below.
+**This is a fresh source/git freshness check, required before Phase 1A
+implementation starts** — confirm the above still matches before writing
+any code. **M7 is closed. M8 discovery is complete. Do not resume
+Overview Phase 4 work. Implement M8 Phase 1A only** — see "Next task"
+below for its exact, narrow scope.
 
 ## Last completed work
 
@@ -581,6 +738,17 @@ without a fresh discovery/kickoff pass** — see "Next task" below.
   from Phase 1's three widgets, both directions. See `project-status.md`'s
   own "M7 — Overview" section for the full write-up and ADR-0038 for the
   decimal-normalization decision.
+- **M8 discovery/kickoff — docs-only checkpoint, no source changes.**
+  Full discovery pass across all six frozen M8 deliverables (E2E,
+  accessibility, performance, observability, feature flags, ADR
+  reconciliation) — see "M8 discovery — findings and approved decisions"
+  above for the complete findings, the approved 7-phase structure, the
+  12-flow irreversible-money inventory, and all five approved decisions
+  (Playwright selected; dedicated isolated E2E Postgres environment,
+  fail-closed; Phase 1A's exact narrow scope; error-reporting vendor
+  deferred to Phase 5; the project's first-ever P1 working definition).
+  Repository was clean before and after this pass — nothing implemented,
+  installed, or modified. **Next: M8 Phase 1A.**
 - **M7 closure — Overview Phase 4 discovery/decision (ADR-0040), docs
   only, no source changes.** Re-verified `recentActivities()`/
   `agentsOverview()` fresh from source and live against the running dev
@@ -611,50 +779,82 @@ without a fresh discovery/kickoff pass** — see "Next task" below.
 
 Full write-ups for every item above: `project-status.md`'s own dedicated sections.
 
-## Next task: M8 — Hardening ("making it trustworthy")
+## Next task: M8 Phase 1A — Playwright foundation + isolated E2E environment/harness
 
-**M7 is CLOSED (Agent 360, Client 360, Overview Phases 1–3 delivered,
-Phase 4 closed by discovery/decision, ADR-0040).** M8 is the next
-milestone per the frozen roadmap. **M8 has NOT been started** — no
-discovery, no kickoff, no code. What follows is the roadmap's own
-deliverables and exit criteria, restated faithfully, not expanded or
-reinterpreted:
+**M7 is CLOSED. M8 discovery/kickoff is COMPLETE** (see "M8 discovery —
+findings and approved decisions" above for the full findings, the
+approved 7-phase structure, the 12-flow inventory, and all five approved
+decisions). **Nothing has been implemented yet — Phase 1A is next.**
 
-**Framing, from the roadmap itself**: *"Not a phase for finishing
-features. A phase for proving the finished ones deserve an operator's
-trust."* M8 is **not** a feature-completion phase — the rules
-(formatters, focus states, error handling, boundaries) are enforced from
-M0 onward and were never deferred; what M8 audits is whether that
-enforcement actually held everywhere, systematically.
+**Before writing any code, do a brief source/git freshness check** —
+confirm `git status`/`git log` still match this file's own expectations
+(see "Before anything else" below) and that nothing changed underneath
+this checkpoint since it was written, the same discipline every prior
+session-start in this project has required.
 
-**Deliverables** (roadmap M8 section, verbatim):
-- E2E suite on the irreversible money paths (FTA §16) — begun at M5,
-  completed here.
-- Accessibility pass: keyboard-complete flows, focus visibility,
-  contrast, reduced motion (Design System §1, §10).
-- Performance: no serial waterfalls, time-to-populated-table measured
-  per domain (FTA §18).
-- Observability live: error reporting with PII scrubbing, correlation
-  IDs surfaced as support references (FTA §11, §18).
-- Flag cleanup — every expired flag removed with its dead branch (FTA
-  §14).
-- ADR log reconciled with what was actually built.
+**Phase 1A's approved scope, exactly (do not expand it):**
+- Minimal Playwright install + config.
+- The isolated E2E environment's own safety/config — a dedicated
+  Postgres database/environment, separate from the shared dev DB used by
+  every manual QA session so far. **Missing E2E configuration must fail
+  closed** (refuse to run, never silently fall back to the shared DB).
+- Deterministic REAL authentication — a real login against the real
+  Laravel backend, not a mocked session. MSW does not satisfy this.
+- Exactly ONE non-destructive smoke test: `browser → login → real
+  Laravel backend → authenticated Overview`.
+- A CI foundation ONLY if it can honestly start the real backend +
+  isolated Postgres — do not fake this with MSW in CI.
+- **Write the Playwright-tooling ADR as part of this phase** (approved
+  decision 1 — the decision was made this session, the ADR was
+  deliberately deferred to implementation time).
 
-**Exit criteria** (roadmap M8 section, verbatim):
-- Every irreversible flow has a passing E2E test against a real backend.
-- Every flow is completable by keyboard alone.
-- Zero expired feature flags; zero boundary suppressions without an ADR.
-- No P1 defects open.
+**Explicitly OUT of scope for Phase 1A:**
+- No irreversible money operations, no Phase 2 flows.
+- No Cheque/DebtPayment factories unless strictly required just to
+  authenticate for the one smoke test — real fixture work is Phase 1B's
+  job, kept deliberately separate.
+- No error-reporting vendor install (Sentry or otherwise) — deferred to
+  Phase 5.
+- No accessibility/performance/feature-flag work — later phases.
 
-**Do not start any M8 task yet.** The literal first thing to do, next
-session, is a discovery/kickoff pass for M8 itself — scoping which
-domains/flows need E2E coverage first, auditing the current
-accessibility/performance/observability baseline, and confirming the ADR
-log's own reconciliation scope — mirroring the same discipline every
-prior milestone required before its own first line of code.
+**Roadmap framing, for context** (not Phase-1A-specific, restated from
+the roadmap verbatim): *"Not a phase for finishing features. A phase for
+proving the finished ones deserve an operator's trust."* Full M8
+deliverables/exit criteria are unchanged from the roadmap and were
+already restated faithfully during M7's own closeout — see this file's
+git history or `phase8-frontend-implementation-roadmap.html` directly if
+the verbatim list is needed again.
 
 ## Things that MUST NOT be changed without a new decision (carried, updated this session)
 
+- 🚫 **Do not run irreversible automated E2E against the shared dev
+  PostgreSQL database.** Approved decision this session: a dedicated,
+  isolated E2E environment/database is required; missing E2E config MUST
+  fail closed, never silently fall back to the shared DB. This applies
+  from Phase 1A onward, not only once Phase 2 (money-path E2E) starts.
+- 🚫 **Do not treat an MSW-backed browser test as satisfying the M8
+  "real backend" E2E criterion.** Approved this session — real backend,
+  real authentication, required for every E2E test this milestone counts
+  toward its exit criteria.
+- 🚫 **Do not fold Phase 1B (deterministic backend fixtures, incl.
+  Cheque/DebtPayment factories) into Phase 1A.** Kept deliberately
+  separate by approved decision — Phase 1A's own scope is foundation +
+  one smoke test only.
+- 🚫 **Do not install Sentry or any other error-reporting vendor before
+  Phase 5.** Approved decision: the vendor choice is deferred, not
+  skipped — do not default to installing one "while we're in the area"
+  during Phase 1A/1B/2/3/4.
+- 🚫 **Do not skip writing the Playwright ADR once Phase 1A
+  implementation begins.** The tooling decision (Playwright) was made
+  during discovery, deliberately WITHOUT an ADR yet — the ADR is due at
+  implementation time, not before, and not skipped entirely.
+- 🚫 **Do not classify a dormant architecture gap, backend capability
+  gap, testability gap, feature request, or known non-blocking flake
+  (FE-1) as a P1 defect.** Use the approved working definition (see "M8
+  discovery" above) — a P1 is reachable-in-production AND causes data
+  corruption, cross-operator data exposure, or blocks a critical
+  irreversible operation with no workaround. Nothing found so far meets
+  this bar.
 - 🚫 **Do not add a charting dependency for M7 Overview Phase 3 without
   explicit approval and an ADR.** No chart library exists in this codebase
   today (verified from `package.json` in full during Overview discovery) —
@@ -846,6 +1046,21 @@ prior milestone required before its own first line of code.
 
 ## Known follow-ups (carried, updated this session)
 
+- [x] **M8 discovery/kickoff — COMPLETE.** All six frozen deliverables
+      audited, 7-phase structure approved, 12-flow inventory recorded,
+      five decisions approved (Playwright; dedicated isolated E2E
+      Postgres, fail-closed; Phase 1A's narrow scope; error-reporting
+      vendor deferred to Phase 5; P1 working definition). See "M8
+      discovery" above.
+- [ ] **M8 Phase 1A — NOT started. NEXT TASK.** Playwright foundation +
+      isolated E2E environment/harness + one non-destructive smoke test
+      + the Playwright ADR. See "Next task" above for the exact,
+      approved, narrow scope.
+- [ ] **M8 Phase 1B and later (fixtures, money-path E2E, a11y,
+      performance, observability, flags/ADR/P1 sweep) — NOT started,
+      NOT scoped in detail yet.** Each gets its own discovery/review pass
+      before implementation, the same discipline every phase in this
+      project has required.
 - [x] **M4 (Cheques, Deposits, Debt Payments) — fully DONE.** See `project-status.md`.
 - [x] **Freshness-rule retrofit (`useFreshConfirm`) — DONE.**
 - [x] **M5 — Stock, ALL FIVE PHASES DONE at the implementation level** (discovery,
