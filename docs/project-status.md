@@ -114,20 +114,23 @@ assignment history (Network) with purchase history via grattage invoices
 the third and final M7 surface, is IN PROGRESS. Phase 1 (Foundation +
 decision queues: Pending Cheques, Pending Deposits, Overdue Grattage
 Invoices) is COMPLETE, manual QA passed against the real running
-backend, committed and pushed (`15a64fb`).** Discovery was closed earlier
-this milestone (the prior backend-readiness blocker resolved — backend
-commit `6aa671f` routed all four Dashboard endpoints on
-`access-dashboard`). See "M7 — Overview" below for the full Phase 1
-write-up. **Phases 2 (Statistics tiles), 3 (Network/cash charts) and 4
-(Recent activity + agents overview) remain** — Phase 2 discovery is the
-current next step; see `next-session.md`.
+backend, committed and pushed (`15a64fb`). Phase 2 (Statistics: Network
+health / Cash movement / Exposure, nine headline metrics from one
+`ACCESS_DASHBOARD`-gated read) is now ALSO COMPLETE, manual QA passed
+against the real running backend including responsive/mobile behavior,
+committed and pushed (`263ad78`).** Discovery was closed earlier this
+milestone (the prior backend-readiness blocker resolved — backend commit
+`6aa671f` routed all four Dashboard endpoints on `access-dashboard`). See
+"M7 — Overview" below for the full Phase 1/2 write-up. **Phases 3
+(Network/cash charts) and 4 (Recent activity + agents overview) remain**
+— Phase 3 discovery is the current next step; see `next-session.md`.
 
 M3.x (Admin/Manager/Commercial detail pages, ADR-0014) remains the only
 open M3 item, blocked by FE-2 — unaffected by M4, M5 or M6.
 
 ## Current branch
 
-`main`, level with `origin/main` at `15a64fb` (pushed this session). Since
+`main`, level with `origin/main` at `263ad78` (pushed this session). Since
 M6 shipped: Agent 360 workspace foundation (`c392a7e`), full Agent Edit
 (`21c6e05`), Money/Stock workspace panels (`2ff0d5a`), Grattage Outstanding
 panel (`69f50aa`), the zero-stock Manager reassignment guard (`1aa1d66`),
@@ -135,12 +138,17 @@ the manual-QA finalization pass (`bc54e55`), Client 360 foundation
 (`9cc464a`), Commercial relationship/assignment history (`506e992`),
 Grattage purchase history (`22f2ba9`), the same-Commercial reassignment
 disable fix (`55cc33d`), the Agent 360 blocked-Grattage-capacity
-clarification (`47ab778`), and Overview Phase 1 — Foundation + decision
-queues (`15a64fb`, manual QA passed against the real running backend). No
-uncommitted files remain besides this documentation pass. See
-`next-session.md` for verification commands.
+clarification (`47ab778`), Overview Phase 1 — Foundation + decision
+queues (`15a64fb`), and Overview Phase 2 — Statistics (`263ad78`, manual
+QA passed against the real running backend, including responsive/mobile
+behavior). No uncommitted files remain besides this documentation pass.
+See `next-session.md` for verification commands.
 
 ## Last completed implementation
+
+**M7 — Overview Phase 2 (Statistics) — COMPLETE, manual QA passed.** See
+its own section below ("M7 — Overview") for the full write-up. The
+previous entries, kept for continuity:
 
 **M7 — Overview Phase 1 (Foundation + decision queues) — COMPLETE, manual
 QA passed.** See its own section below ("M7 — Overview") for the full
@@ -2098,7 +2106,7 @@ staying independent from the Client's current Commercial), panel
 isolation, and permission behavior were all exercised against the real
 running backend.
 
-## M7 — Overview — Phase 1 COMPLETE, manual QA passed; Phases 2–4 remain
+## M7 — Overview — Phases 1 and 2 COMPLETE, manual QA passed; Phases 3–4 remain
 
 The third and final M7 composed surface. Unlike Agent 360/Client 360,
 Overview has no single entity — it is the frozen architecture's own
@@ -2106,7 +2114,7 @@ Overview has no single entity — it is the frozen architecture's own
 not a fixed page — each stat tile, chart, or queue is one widget reading
 one endpoint... Widget visibility follows the same permission registry as
 the sidebar." M7 Overview is split into four independently-reviewed
-phases; only the first is delivered so far.
+phases; the first two are delivered so far.
 
 **Discovery (docs-only, no source changes).** Re-verified backend commit
 `6aa671f` (`feature/Update-claude`) directly from source — confirmed all
@@ -2185,12 +2193,76 @@ timing test, confirmed non-regressing by passing clean standalone and
 clean on rerun); `tsc -b`/`eslint .` (0 errors, 4 pre-existing unrelated
 warnings)/`prettier --check .` all clean; `vite build` succeeds.
 
-**Phases 2–4 are NOT started.** Phase 2 (Statistics tiles) discovery is
-the explicit next task — see `next-session.md` for its exact scope and
-the candidate-metric list carried from Phase 1's own discovery pass.
-Phase 3 (Network/cash charts) has an open, undecided charting-approach
-question (no chart library exists in this codebase — CLAUDE.md requires
-an ADR before adding one). Phase 4 (Recent activity + agents overview)
+**Phase 2 — Statistics (`263ad78`).** Nine headline KPI metrics from ONE
+`GET /admin/dashboard/statistics` read, gated on `ACCESS_DASHBOARD` alone,
+grouped into the three sections the frozen Overview purpose names:
+
+- **Network health** — Active Commercials, Active Managers, Blocked
+  Agents, Active Cities.
+- **Cash movement** — Deposits — Last 7 Days, Deposits — This Month,
+  Deposits — Last Month.
+- **Exposure** — Total Solde, Total Cash.
+
+Every other field the real endpoint returns (`agents.total_active`/
+`total`, `cities.breakdown`, `deposits.total_count`/`total_amount`/
+`cash_count`/`bank_count`, the whole `debt` group) is deliberately NOT
+modeled or rendered — an explicit, reviewed exclusion, not an oversight
+(ADR-0008 — map only consumed fields). `StatCard`
+(`shared/components/business/stat-card.tsx`) is the design-system-
+specified KPI tile (§5: "28/34 · bold · tabular · stat tiles only"),
+built at this, its first real caller — the smallest shape that satisfies
+both the spec and this one caller, not a speculative dashboard-widget
+API. `StatisticsPanel` follows the identical outer-gate + inner-content
+split Phase 1's three widgets already established, and is independently
+`PanelBoundary`-isolated from them, both directions (a Statistics crash/
+query failure cannot affect Pending Cheques/Deposits/Overdue Grattage,
+and vice versa). `SLOW` (5 min) stale tier — an aggregate KPI read, not a
+decision-gating queue; no `invalidation-map.ts` entry, since no mutation
+in the product writes the fields this read aggregates in a way that
+needs instant reaction.
+
+**A real backend representation inconsistency was found and normalized,
+verified LIVE against the running dev database, not assumed from PHP
+source alone**: `total_solde`/`total_cash` are raw SQL `SUM()` aggregates
+over `decimal:2` columns — Laravel's query-builder `sum()` never casts
+its raw driver return, and pgsql returns a non-empty aggregate as a
+STRING (confirmed live: `"total_solde":"500.00"`). But `sum()`'s own body
+is `return $result ?: 0`, so a `SUM()` over ZERO rows returns SQL `NULL`,
+which is falsy, yielding a literal JSON INTEGER `0` instead of `"0.00"`
+(confirmed live on a sibling `sum()` field, `debt.total_paid`, on an
+empty table). `normalizeAggregateDecimal` (`dashboard-statistics-api.ts`)
+corrects ONLY this wire-representation gap: a string is returned
+untouched, verbatim; a numeric `0` becomes `"0.00"`; any OTHER non-zero
+number THROWS rather than being silently formatted — no
+`Number()`/`parseFloat()`, no float reconstruction, ever, matching the
+same restraint ADR-0032/ADR-0033 already established for other
+backend-owned financial values. See ADR-0038.
+
+**Manual QA passed**, against the real running backend as Super Admin:
+Statistics' visual hierarchy (clearly grouped Network health / Cash
+movement / Exposure, not an undifferentiated wall of cards); all nine
+metrics rendering correctly; `Total Solde`/`Total Cash` matching the real
+backend values exactly (`500.00`/`0.00` — confirming the zero-decimal
+normalization live, not only against a synthetic test fixture); `Needs
+attention` (Phase 1's three widgets) remaining visually separate, usable,
+and unaffected; responsive/mobile behavior (no horizontal overflow, no
+broken card layout).
+
+**No backend changes.** ADR-0038 is the one new architectural decision
+this phase produced (the aggregate zero-normalization discipline).
+Verification at closeout: 53/53 focused Overview Phase 2 tests; 569/569
+regression (Cheques, Deposits, Grattage Invoices, Agent 360, Client 360);
+a clean full-suite run at 1290/1290 across 64 files; `tsc -b`/`eslint .`
+(0 errors, same 4 pre-existing unrelated warnings)/`prettier --check .`
+all clean; `vite build` succeeds.
+
+**Phases 3–4 are NOT started.** Phase 3 (Network/cash charts) discovery
+is the explicit next task — see `next-session.md`. It has an open,
+undecided charting-approach question (no chart library exists in this
+codebase — CLAUDE.md requires an ADR before adding one), and should
+re-verify `chart-data`'s own `SUM(amount)`-shaped series
+(`deposits_over_time.total_amount`) live before assuming it needs no
+normalization of its own. Phase 4 (Recent activity + agents overview)
 must keep `recent_deposits`/`recent_payments` as two separate collections
 per the verified backend contract, not merge them into one synthetic
 feed.
@@ -2236,7 +2308,8 @@ feed.
 | **M7 — Agent 360** | ✅ **COMPLETE, manual QA passed** — workspace foundation, full Agent Edit, Money/Stock panels, Grattage Outstanding, zero-stock Manager reassignment guard |
 | **M7 — Client 360** | ✅ **COMPLETE, manual QA passed** — foundation, Commercial relationship/assignment history, Grattage purchase history, plus two manual-QA fixes (same-Commercial reassignment disable, Agent 360 blocked-Grattage-capacity clarification) |
 | **M7 — Overview widget grid, Phase 1 (Foundation + decision queues)** | ✅ **COMPLETE, manual QA passed** — Pending Cheques, Pending Deposits, Overdue Grattage Invoices, each independently permission-gated |
-| M7 — Overview widget grid, Phases 2–4 (Statistics/Charts/Recent activity) | 🟡 not started — Phase 2 discovery is next, see `next-session.md` |
+| **M7 — Overview widget grid, Phase 2 (Statistics)** | ✅ **COMPLETE, manual QA passed** — nine metrics, Network health/Cash movement/Exposure, one `ACCESS_DASHBOARD`-gated query, `StatCard`'s first real caller |
+| M7 — Overview widget grid, Phases 3–4 (Charts/Recent activity) | 🟡 not started — Phase 3 discovery is next, see `next-session.md` |
 
 **Tests: 1237/1237 across 61 files** (was 407/23 before M3.6; 431/24 at
 M3.6's initial implementation; 442/24 after M3.6's three post-validation fix
@@ -2250,11 +2323,13 @@ four phases plus the Allocation capacity correction (1022/52), M7 Agent
 360's five phases plus the manual-QA finalization pass (1159/60), then M7
 Client 360's three phases plus the two manual-QA fixes (same-Commercial
 reassignment disable, Agent 360 blocked-Grattage-capacity clarification,
-1237/61), then M7 Overview Phase 1 (Foundation + decision queues), net
-**1269/62**). Run three times at closeout to rule out FE-1's known
-flake — the same untouched `bons-list-page.test.tsx` timing test failed
-on one of three runs, passed clean standalone and clean on the third
-full-suite run, confirming the flake rather than a regression.
+1237/61), then M7 Overview Phase 1 (Foundation + decision queues, 1269/62),
+then M7 Overview Phase 2 (Statistics), net **1290/64**). Phase 1's own
+closeout ran three times to rule out FE-1's known flake — the same
+untouched `bons-list-page.test.tsx` timing test failed on one of three
+runs, passed clean standalone and clean on the third full-suite run,
+confirming the flake rather than a regression; Phase 2's own closeout run
+was clean on the first pass.
 Lint ·
 typecheck · format · build all clean, re-verified fresh this session.
 

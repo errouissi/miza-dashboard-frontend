@@ -14,11 +14,13 @@ M6 (Grattage — the seam) is COMPLETE, manual QA passed. M7 (Overview &
 workspaces, Agent 360, Client 360) is the current milestone — Agent 360 AND
 Client 360, the first two of its three composed surfaces, are both
 COMPLETE, manual QA passed, committed and pushed.** The Overview widget
-grid, the third and final M7 surface, has cleared discovery and **Phase 1
-(Foundation + decision queues) is now COMPLETE — manual QA passed against
-the real running backend, committed (`15a64fb`) and pushed.** **Phase 2
-(Statistics tiles) discovery is the literal first thing to do next
-session, before writing any Phase 2 code.** See "Next task" below.
+grid, the third and final M7 surface, has cleared discovery. **Phase 1
+(Foundation + decision queues) is COMPLETE — manual QA passed, committed
+(`15a64fb`) and pushed. Phase 2 (Statistics) is now ALSO COMPLETE — manual
+QA passed against the real running backend, including responsive/mobile
+behavior, committed (`263ad78`) and pushed.** **Phase 3 (Network/cash
+charts) discovery is the literal first thing to do next session, before
+writing any Phase 3 code** — see "Next task" below.
 
 - **Overview discovery is CLOSED.** The backend blocker disclosed by the
   frozen roadmap (`chartData`/`recentActivities`/`agentsOverview` possibly
@@ -33,11 +35,12 @@ session, before writing any Phase 2 code.** See "Next task" below.
 - **Overview implementation is split into four phases** (re-planned from
   verified source, not the earlier tentative A/B split): **Phase 1 —
   Foundation + decision queues (Pending Cheques, Pending Deposits, Overdue
-  Grattage Invoices) — COMPLETE, manual QA passed, committed `15a64fb`.**
-  Phase 2 — Statistics tiles (discovery next, see "Next task" below).
-  Phase 3 — Network/cash charts. Phase 4 — Recent activity + agents
-  overview. Do not skip ahead to Phase 2 IMPLEMENTATION before its own
-  discovery is reviewed and approved.
+  Grattage Invoices) — COMPLETE, manual QA passed, committed `15a64fb`.
+  Phase 2 — Statistics (Network health / Cash movement / Exposure) —
+  COMPLETE, manual QA passed, committed `263ad78`.** Phase 3 — Network/cash
+  charts (discovery next, see "Next task" below). Phase 4 — Recent activity
+  + agents overview. Do not skip ahead to Phase 3 IMPLEMENTATION before its
+  own discovery is reviewed and approved.
 - **Phase 1's exact file list, as committed in `15a64fb`:**
   - `src/domains/overview/` (new) — `pages/overview-page.tsx` +
     its own test file, `components/pending-cheques-widget.tsx`,
@@ -58,6 +61,45 @@ session, before writing any Phase 2 code.** See "Next task" below.
   - `src/domains/money/deposits/index.ts` (modified) — widened to export
     the already-existing `DEPOSIT_TYPE_LABELS` (Pending Deposits
     widget's own type label).
+- **Phase 2's exact file list, as committed in `263ad78`:**
+  - `src/domains/overview/model/dashboard-statistics.ts` (new) — the
+    narrow `DashboardStatistics` model, grouped `networkHealth`/
+    `cashMovement`/`exposure` (exactly the nine approved metrics).
+  - `src/domains/overview/api/dashboard-statistics-api.ts` (new) —
+    `fetchDashboardStatistics`, mapping only the nine approved wire
+    fields, plus `normalizeAggregateDecimal` (see the decimal-zero
+    finding below).
+  - `src/domains/overview/queries/keys.ts` (new) — the flat
+    `dashboardStatisticsKeys.all` factory (no params — one global read).
+  - `src/domains/overview/queries/dashboard-statistics-queries.ts` (new)
+    — `useDashboardStatisticsQuery`, `SLOW` tier, `enabled` option for
+    the same outer-gate pattern.
+  - `src/domains/overview/components/statistics-panel.tsx` (new) —
+    `StatisticsPanel` (outer gate on `ACCESS_DASHBOARD`) +
+    `StatisticsContent` (loading/error/success, three `StatGroup`s).
+  - `src/shared/components/business/stat-card.tsx` (new) — the
+    design-system-specified KPI tile, first real caller.
+  - `src/domains/overview/pages/overview-page.tsx` (modified) — added
+    the `Statistics`/`Needs attention` page-level section headings and
+    mounted `StatisticsPanel` in its own `PanelBoundary`.
+  - `src/domains/overview/pages/overview-page.test.tsx` (modified) —
+    Statistics panel behavior, permission combinations, and isolation
+    coverage added alongside the existing Phase 1 widget tests.
+- **A real backend representation inconsistency was found and normalized
+  during Phase 2 implementation, verified LIVE against the running dev
+  database, not assumed from source alone**: `total_solde`/`total_cash`
+  are raw SQL `SUM()` aggregates (`Agent.solde`/`Agent.cash`, both
+  `decimal:2`), and Laravel's query-builder `sum()` never casts its raw
+  driver return — pgsql returns a non-empty aggregate as a STRING
+  (confirmed live: `"total_solde":"500.00"`), but `sum()`'s own body is
+  `return $result ?: 0`, so a SQL `SUM()` over ZERO rows returns `NULL`,
+  which is falsy, yielding a literal JSON INTEGER `0` instead of `"0.00"`
+  (confirmed live on a sibling `sum()` field, `debt.total_paid`, on an
+  empty table). `normalizeAggregateDecimal` (in
+  `dashboard-statistics-api.ts`) corrects ONLY this representation gap: a
+  string is returned untouched; a numeric `0` becomes `"0.00"`; any OTHER
+  non-zero number THROWS rather than being silently formatted — no
+  `Number()`/`parseFloat()`, no float reconstruction, ever. See ADR-0038.
 - **A real bug was found and fixed during Phase 1 implementation, not left
   for QA to find**: the naive "check permission, then call the query hook"
   shape would have fired an unauthorized request from every widget —
@@ -90,8 +132,23 @@ session, before writing any Phase 2 code.** See "Next task" below.
 - **FE-1 (test flake) is unchanged, still present, still non-blocking** —
   same untouched `bons-list-page.test.tsx` timing test as above. Not
   caused by Overview Phase 1.
+- **Phase 2 manual QA passed, real running backend, Super Admin session**:
+  Statistics visual hierarchy (Network health / Cash movement / Exposure,
+  clearly grouped, not an undifferentiated wall of cards), all nine
+  metrics rendering correctly, `Total Solde`/`Total Cash` matching the
+  real backend decimal values exactly (`500.00`/`0.00` — the zero case
+  confirming `normalizeAggregateDecimal`'s own fallback live, not only in
+  a test fixture), `Needs attention` remaining visually separate and
+  usable, responsive/mobile behavior (no horizontal overflow, no broken
+  card layout), and Phase 1's three widgets unaffected.
+- **Phase 2 final verification at closeout**: 53/53 focused Overview
+  Phase 2 tests; 569/569 regression (Cheques, Deposits, Grattage Invoices,
+  Agent 360, Client 360); a clean full-suite run at 1290/1290 across 64
+  files; `tsc -b`/`eslint .` (0 errors, same 4 pre-existing unrelated
+  warnings)/`prettier --check .` all clean; `vite build` succeeds.
 - **Tests: 1237/1237 across 61 files** was the count BEFORE Overview
-  Phase 1; **1269/1269 across 62 files** is the count WITH it, committed.
+  Phase 1; **1269/1269 across 62 files** after Phase 1; **1290/1290 across
+  64 files** is the count WITH Phase 2, committed.
 - **Manual validation**: Cheques' full workflow, Agent Stock Returns, all of
   M6 (Grattage Invoices, the restock-gate integration, Deposit↔Invoice
   linking, including the corrected Allocation capacity scenario), all of
@@ -144,11 +201,11 @@ session, before writing any Phase 2 code.** See "Next task" below.
 ```bash
 cd C:\Miza\frontend-v2
 git status                 # expect: clean, or only this session's own
-                            # docs checkpoint commit on top of 15a64fb
+                            # docs checkpoint commit on top of 263ad78
 git log --oneline -8        # expect a docs-only checkpoint commit, then
-                            # 15a64fb, bdb709d, a595b0a, 47ab778, 55cc33d,
-                            # 22f2ba9, c638414
-pnpm test:ci               # expect: 1269/1269 across 62 files
+                            # 263ad78, 3bca8ab, 15a64fb, bdb709d, a595b0a,
+                            # 47ab778, 55cc33d
+pnpm test:ci               # expect: 1290/1290 across 64 files
 pnpm lint && pnpm typecheck && pnpm format:check && pnpm build
 ```
 
@@ -383,86 +440,66 @@ pnpm lint && pnpm typecheck && pnpm format:check && pnpm build
   repeatedly elsewhere; no new query, no duplicate mapper, no new
   permission). See `project-status.md`'s own "M7 — Overview" section for
   the full write-up.
+- **M7 Overview Phase 2 — Statistics** — `263ad78`. COMPLETE, manual QA
+  passed against the real running backend, including responsive/mobile
+  behavior (see "Current state" above for the exact file list and the
+  `total_solde`/`total_cash` decimal-normalization finding). Nine
+  headline metrics from ONE `GET /admin/dashboard/statistics` read,
+  gated on `ACCESS_DASHBOARD` alone, grouped Network health (Active
+  Commercials/Managers, Blocked Agents, Active Cities) / Cash movement
+  (Deposits — Last 7 Days/This Month/Last Month) / Exposure (Total
+  Solde, Total Cash) — `StatCard` (`shared/components/business/`) is the
+  design-system-specified KPI tile, built at this, its first real
+  caller. `SLOW` (5 min) stale time; no invalidation-map entry (no
+  mutation touches this read). Independently `PanelBoundary`-isolated
+  from Phase 1's three widgets, both directions. See `project-status.md`'s
+  own "M7 — Overview" section for the full write-up and ADR-0038 for the
+  decimal-normalization decision.
 
 Full write-ups for every item above: `project-status.md`'s own dedicated sections.
 
-## Next task: M7 Overview Phase 2 — Statistics Tiles
+## Next task: M7 Overview Phase 3 — Network/cash charts
 
-**Overview Phase 1 is COMPLETE (`15a64fb`), manual QA passed, committed
-and pushed.** Phase 2 is next. **Do NOT write Phase 2 implementation code
-before its own discovery is (re-)reviewed and the metric selection is
-confirmed** — the same discipline every prior phase/milestone in this
-product has required before implementation starts.
+**Overview Phase 1 (`15a64fb`) and Phase 2 (`263ad78`) are both COMPLETE,
+manual QA passed, committed and pushed.** Phase 3 is next. **Do NOT write
+Phase 3 implementation code, and do NOT add a charting dependency, before
+its own discovery is run and the charting approach is explicitly
+approved** — the same discipline Phase 2 itself required before its own
+metric selection was implemented.
 
-A first discovery pass for Phase 2 ran at Phase 1's own closeout (same
-session as the `15a64fb` commit) — re-verified `DashboardController::
-index()`/`GET /admin/dashboard/statistics` from source, reviewed the
-existing `StatCard`/design-system patterns and the permission/freshness
-architecture, and produced a candidate metric list. **Re-read that
-session's own full discovery report before starting Phase 2
-implementation if the detail below is insufficient** — this file
-summarizes the outcome, not the full investigation.
+**The one standing, unresolved decision Phase 3 discovery must open
+with**: **no chart library exists in this codebase today** (verified from
+`package.json` in full during the original Overview discovery, unchanged
+since). The choice between inline SVG and a real charting dependency is
+NOT decided. CLAUDE.md's own rule applies directly: "No new dependency
+without justification and an ADR" — do not default to installing a
+library without that approval step, and do not assume inline SVG is
+automatically the safer/cheaper choice either; both need to be weighed
+explicitly against what `chart-data`/`agents-overview` actually require
+(deposits-over-time and agent-registration-trend series) before a
+decision is made.
 
-**Candidate metrics reassessed, grouped by the frozen Overview purpose
-(network health / cash movement / stock exposure):**
-
-- **Network health** — `total_commercials`, `total_managers`,
-  `total_active`, `blocked`, `total_active_cities`: real signals, no
-  ambiguity found in `index()`'s own query construction.
-- **Cash movement** — `recent_7days`, `this_month`, `last_month`: real
-  signals: verify the live JSON response's actual runtime type for each
-  (see the type-ambiguity note below) before committing to a formatting
-  approach.
-- **Exposure** — `total_solde`, `total_cash`: real signals, same
-  runtime-type caveat.
-
-**Explicitly excluded, unless a later, explicit product decision says
-otherwise:**
-- `debt.*` — an internal admin-accounting figure, not a network/cash/stock
-  signal the frozen Overview purpose names.
-- `agents.total` — redundant with, and less clear than, `agents.
-  total_active`.
-- `deposits.total_count`/`deposits.total_amount`, `cash_count`,
-  `bank_count` — reassess against the live response; do not surface
-  without a source-verified reason distinct from the metrics above.
-
-**A real, unresolved type-safety gap carried from discovery**: prior
-discovery could not statically guarantee the runtime JSON type of some
-SQL aggregate values (Laravel/PostgreSQL numeric aggregates often
-serialize as strings, not numbers, depending on the driver and column
-type) — this must be verified against the LIVE `/dashboard/statistics`
-response (or existing backend test evidence) before writing any frontend
-formatting code, not assumed from the controller's PHP type alone. **Do
-not perform frontend arithmetic on an aggregate value whose runtime type
-is unverified.**
-
-**Architecture target for Phase 2 implementation, once metrics are
-confirmed:**
-- **One** Dashboard statistics query (`useDashboardStatisticsQuery` or
-  equivalent), gated on `ACCESS_DASHBOARD` before the query even mounts —
-  same outer-gate/inner-content split Phase 1 already established for
-  every widget (`useEnabled`-less hooks composed with no route guard).
-- **One** owning statistics panel/group rendering multiple `StatCard`s
-  from that single query result — never a separate request per tile.
-- Independent `PanelBoundary` isolation from Phase 1's three decision-queue
-  widgets — a Statistics panel failure must not take down Pending Cheques/
-  Deposits/Overdue Grattage, and vice versa.
-
-**For every metric actually selected, Phase 2 implementation must define,
-before writing the component:** its authoritative meaning (traced to the
-backend query, not guessed from the field name), its UI label, its
-formatting (and confirmed runtime type), its zero/empty semantics, and
-whether it earns a headline `StatCard` placement or a smaller/secondary
-one.
+**What Phase 3 discovery should re-verify from source before any
+implementation, mirroring the discipline Phase 2's own discovery
+followed:**
+- `DashboardController::chartData()` / `GET /admin/dashboard/chart-data`
+  (`days` param, min 1/max 365, default 30) — re-confirm the exact
+  response shape (`deposits_over_time`, `deposits_by_method`,
+  `agents_by_city`, `agent_registrations`) live against the running dev
+  database, the same way Phase 2 found the `sum()`-vs-`count()` runtime
+  type split empirically rather than assuming it from PHP source alone
+  (see ADR-0038) — chart series carry the same `SUM(amount)` aggregate
+  shape (`deposits_over_time.total_amount`) that turned out to need
+  normalization for Phase 2's `total_solde`/`total_cash`.
+- Whether `agents_by_city` here duplicates `statistics.cities.breakdown`
+  (deliberately excluded from Phase 2) and/or
+  `agents-overview.agents_by_role_and_city` (a Phase 4 concern) — the
+  standing "pick one source, do not duplicate city-breakdown data across
+  multiple widgets" rule (below) still applies and must be resolved
+  explicitly, not assumed away because Phase 3 only needs "a" city chart.
 
 **Future-phase decisions/open items, unchanged, still not started:**
 
-- **Phase 3 (Network/cash charts)**: deposits-over-time and
-  agent-registration-trend charts. **No chart library exists in this
-  codebase today** (verified from `package.json` in full). The charting
-  approach — inline SVG vs. a new dependency — is **NOT decided**. Do not
-  add a charting dependency without explicit approval and an ADR (CLAUDE.md:
-  "No new dependency without justification and an ADR").
 - **Phase 4 (Recent activity + agents overview)**: `recent-activities`
   returns TWO separate, independently-ordered collections (`recent_deposits`,
   `recent_payments`) — verified from source, not assumed. They must stay
@@ -482,11 +519,30 @@ one.
   the choice between inline SVG and a real dependency is an open decision,
   not a default. CLAUDE.md's own rule: "No new dependency without
   justification and an ADR."
-- 🚫 **Do not write M7 Overview Phase 2 implementation code before its own
-  metric selection/discovery is (re-)reviewed and confirmed.** See "Next
-  task" above. Phase 1 is COMPLETE, manual QA passed, committed (`15a64fb`)
-  — this rule now gates Phase 2 discovery→implementation specifically, not
-  Phase 1's own closeout (already done).
+- 🚫 **Do not write M7 Overview Phase 3 implementation code, or add a
+  charting dependency, before Phase 3's own discovery is run and the
+  charting approach is explicitly approved.** See "Next task" above.
+  Phases 1 and 2 are COMPLETE, manual QA passed, committed (`15a64fb`,
+  `263ad78`) — this rule now gates Phase 3 discovery→implementation
+  specifically, not Phase 1/2's own closeout (already done).
+- 🚫 **Do not re-derive `total_solde`/`total_cash` (or any future
+  `SUM()`-aggregate dashboard field) through `Number()`/`parseFloat()` or
+  any other floating-point reconstruction.** `normalizeAggregateDecimal`
+  (`dashboard-statistics-api.ts`) fixes ONLY the wire's own zero-fallback
+  representation gap (a numeric `0` → `"0.00"`) — a non-zero value is
+  returned untouched, verbatim, and an unexpected non-zero NUMBER throws
+  rather than being silently formatted. See ADR-0038. Any future Phase 3
+  chart series carrying the same `SUM(amount)` shape
+  (`deposits_over_time.total_amount`) should default to reusing this same
+  discipline, re-verified live, not assumed to already be safe.
+- 🚫 **Do not add a `dashboard-statistics` entry to `invalidation-map.ts`
+  without a real mutation to justify it.** No mutation anywhere in the
+  product writes `Agent.solde`/`Agent.cash`/deposit counts in a way this
+  read needs to react to instantly — `SLOW` (5 min) staleness is the
+  approved, sufficient freshness guarantee (see "Next task" — Phase 2's
+  own closeout). Adding speculative invalidation ahead of a real mutation
+  would violate the same discipline `invalidation-map.ts`'s own docblock
+  already states for every other event.
 - 🚫 **Do not add edit mode to the M3.6 wizard**, an agent detail page, or move
   `TextField` to `shared/`. Unchanged (ADR-0014, Rule-of-Three).
 - 🚫 **Do not build a generic wizard framework.** FTA D-9. Unchanged.
@@ -635,8 +691,14 @@ one.
       committed and pushed (`15a64fb`).** Discovery is CLOSED — the prior
       backend-readiness risk is resolved (backend commit `6aa671f`, all
       four Dashboard endpoints routed on `access-dashboard`).
-- [ ] **M7 Overview widget grid — Phases 2–4 NOT started. NEXT: Phase 2
-      (Statistics tiles) discovery review, then implementation — see
+- [x] **M7 Overview widget grid — Phase 2 (Statistics) COMPLETE, manual QA
+      passed (including responsive/mobile), committed and pushed
+      (`263ad78`).** Nine metrics, one `ACCESS_DASHBOARD`-gated query,
+      `SLOW` tier, no speculative invalidation, `StatCard`'s first real
+      caller. See `project-status.md`'s own M7 — Overview section and
+      ADR-0038.
+- [ ] **M7 Overview widget grid — Phases 3–4 NOT started. NEXT: Phase 3
+      (Network/cash charts) discovery, then implementation — see
       "Next task" above.**
 - [ ] **Manager per-commercial Grattage Outstanding breakdown — accepted
       coarse capability, NOT a roadmap gap.** The frozen architecture (§6)

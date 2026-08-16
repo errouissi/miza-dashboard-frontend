@@ -1073,3 +1073,63 @@ decisions made *during implementation*.
   before this widening. A sixth cross-domain Grattage need should still
   default to Option B's private-duplicate-read pattern unless a fresh
   decision says otherwise.
+
+## ADR-0038 — Dashboard Statistics' `total_solde`/`total_cash` aggregate zero-fallback is normalized at the mapper boundary; never reconstructed through a JS number
+
+- **Date:** 2026-08-16
+- **Status:** Accepted
+- **Context:** M7 Overview Phase 2 needed to render
+  `GET /admin/dashboard/statistics`'s `agents_finance.total_solde`/
+  `total_cash` — raw SQL `SUM()` aggregates over `Agent.solde`/`Agent.cash`
+  (`decimal:2` columns), not per-row Eloquent-cast attributes. Verified
+  LIVE against the running dev database, not assumed from PHP source
+  alone (`php artisan tinker` invoking `DashboardController::index()`
+  directly): Laravel's query-builder `sum()` never casts its raw driver
+  return, and the pgsql PDO driver returns a non-empty numeric aggregate
+  as a STRING (`"total_solde":"500.00"`, confirmed live). But `sum()`'s
+  own implementation is `return $result ?: 0;` — a SQL `SUM()` over ZERO
+  matching rows returns `NULL`, which is falsy, so the fallback yields a
+  literal JSON INTEGER `0`, not `"0.00"` (confirmed live on a sibling
+  `sum()` field on the same endpoint, `debt.total_paid`, on a table with
+  no rows). This is a genuinely NEW value shape for this codebase: every
+  prior "backend-computed decimal" convention (Cheques' `amount`,
+  Grattage's `totalAmount`, Managers'/Commercials' `avanceTotal`) is
+  ALWAYS a string, never sometimes-a-bare-number.
+- **Decision:** `normalizeAggregateDecimal` (`dashboard-statistics-api.ts`)
+  corrects ONLY this wire-representation gap, at the mapper boundary,
+  before the value ever reaches a component: a string is returned
+  UNTOUCHED, verbatim; a numeric `0` becomes `"0.00"`; any OTHER non-zero
+  number THROWS rather than being silently formatted. `StatCard` then
+  renders the resulting string verbatim (`tabular-nums` only) — never
+  through `MoneyAmount`/`formatMoney`, which take a genuine `number` and
+  would round-trip a backend-computed decimal through JS floating point,
+  exactly the corruption class this domain's own existing convention
+  already forbids for `avanceTotal`/`solde`/Grattage's `totalAmount`.
+- **Rationale:** The two real values (a non-empty sum, and a sum over zero
+  rows) are the SAME fact — "no money" — expressed by the backend in two
+  different wire shapes purely as an artifact of `sum()`'s own `?: 0`
+  fallback, not two different business meanings. Normalizing the
+  representation gap is not "financial arithmetic" (no parsing, no
+  rounding, no reconstruction) — it is fixing an accidental serialization
+  inconsistency so both shapes mean the same rendered string. Throwing on
+  any OTHER non-zero number is the deliberate, narrow boundary: only the
+  one verified case (`0`) is normalized; an unverified future wire change
+  fails loud (surfacing as the Statistics panel's own retryable error
+  state) rather than silently inventing a formatting rule for a value
+  this decision never confirmed could occur. This mirrors the same
+  restraint ADR-0032/ADR-0033 already established for Allocation's
+  capacity gate and Available Grattage: never re-derive a backend-owned
+  financial number client-side, and never guess at a shape the backend
+  hasn't verified it sends.
+- **Consequences:** `DashboardStatistics.exposure.totalSolde`/`totalCash`
+  are typed as plain `string` in the UI model (the wire type is
+  `string | number`, narrowed to `string` by the mapper) — any future
+  caller reads a single, consistent type, never a union. Any future Phase
+  3 chart series carrying the same `SUM(amount)` shape
+  (`chart-data.deposits_over_time.total_amount`) should default to
+  reusing this identical discipline, RE-VERIFIED LIVE for that specific
+  field rather than assumed safe by resemblance (ADR-0022's own standing
+  rule). No `invalidation-map.ts` entry was added for this read — no
+  mutation in the product writes these aggregated fields in a way that
+  needs instant reaction; the `SLOW` (5 min) stale tier is the approved,
+  sufficient freshness guarantee.
