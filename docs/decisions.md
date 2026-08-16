@@ -1133,3 +1133,63 @@ decisions made *during implementation*.
   mutation in the product writes these aggregated fields in a way that
   needs instant reaction; the `SLOW` (5 min) stale tier is the approved,
   sufficient freshness guarantee.
+
+## ADR-0039 — M7 Overview Phase 3's two Trends charts are small, purpose-built, domain-local SVG components; no chart dependency was added
+
+- **Date:** 2026-08-16
+- **Status:** Accepted
+- **Context:** Phase 3 needed exactly two charts (Deposit Submissions,
+  Agent Registrations). Discovery verified, before any implementation:
+  zero chart libraries and zero SVG visualization primitives anywhere in
+  this codebase (`package.json` in full — no recharts/visx/d3/nivo/
+  victory/apexcharts/chart.js/plotly); the production bundle already
+  exceeded Vite's own 500KB chunk-size warning (928KB, pre-Phase-3); and
+  `@radix-ui/react-tooltip` was already a dependency with a working
+  shadcn `Tooltip` primitive (`shared/components/ui/tooltip.tsx`,
+  previously used only by the sidebar) — covering the one genuinely hard
+  interaction piece a hand-rolled chart usually needs. Neither chart
+  needs zoom, pan, brush, or more than two categorical series.
+- **Decision:** Both charts (`deposit-submissions-chart.tsx`,
+  `agent-registrations-chart.tsx`) are small, explicit, hand-rolled
+  `<svg>` components — no new dependency, no package installed. Neither
+  is a generic charting primitive: no pie support, no arbitrary-dataset
+  API, no zoom/pan/brush, no theme engine — each is built for exactly its
+  own one series shape. Both stay DOMAIN-LOCAL
+  (`domains/overview/components/`), not promoted to `shared/business/`:
+  CLAUDE.md's own rule ("promote on stable shared semantics evidenced
+  across three independent domains — never on reuse count alone") is not
+  met by two callers that both live inside the SAME domain (Overview) —
+  unlike `StatCard`, which the frozen design system itself already
+  specifies as a generic, cross-cutting KPI-tile shape (§5's "28/34 · bold
+  · tabular · stat tiles only"), no equivalent generic chart spec exists
+  yet (the design system explicitly defers its own data-visualization
+  palette to "the Reporting specification", §4 — not written). Both
+  charts render their two-role/one-series color needs via DIRECT hex
+  Tailwind utility values (`#1F6F6B` Teal, `#7A4F9E` Plum — the frozen
+  design system's own §4 brand colors), not `bg-primary`/`bg-secondary`:
+  this theme's actual `--primary`/`--secondary` CSS custom properties are
+  still the unthemed shadcn placeholder (near-black/near-white), the same
+  gap `StatusBadge`'s own M4.1 direct-hex precedent already established
+  for a documented-but-not-yet-wired-in design token set.
+- **Rationale:** The verified scope (two bounded, non-interactive-beyond-
+  tooltip series) does not justify a library's cost: bundle weight on an
+  already-flagged 928KB build, theming/override work to match this
+  Radix+Tailwind product's own accessibility floor (§1), and a new
+  transitive-dependency tree to maintain — against a genuinely small
+  amount of hand-rolled geometry code this codebase can own outright,
+  the same "duplication/small code retained by decision" trade-off
+  ADR-0012/ADR-0019 already made elsewhere. CLAUDE.md's dependency rule
+  ("No new dependency without justification and an ADR") is satisfied by
+  NOT adding one and recording why, mirroring how `next-session.md`'s own
+  standing rule already treated the decision as needing this level of
+  scrutiny before Phase 3 could proceed.
+- **Consequences:** A future chart need should default to extending this
+  same small-SVG, domain-local pattern — reusing the existing `Tooltip`
+  primitive, direct-hex data-visualization colors — unless a concrete
+  requirement these two components cannot express (zoom, pan, brush, a
+  genuinely arbitrary dataset shape, a third+ chart type) proves a
+  library is actually needed; that would be a fresh decision, not an
+  assumption this ADR already settled the general case. If a THIRD
+  independent domain ever needs comparable chart geometry, promoting a
+  shared primitive to `shared/business/` becomes a live Rule-of-Three
+  question (ADR-0006) — not before.

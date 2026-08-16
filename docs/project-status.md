@@ -116,21 +116,24 @@ decision queues: Pending Cheques, Pending Deposits, Overdue Grattage
 Invoices) is COMPLETE, manual QA passed against the real running
 backend, committed and pushed (`15a64fb`). Phase 2 (Statistics: Network
 health / Cash movement / Exposure, nine headline metrics from one
+`ACCESS_DASHBOARD`-gated read) is COMPLETE, manual QA passed against the
+real running backend including responsive/mobile behavior, committed and
+pushed (`263ad78`). Phase 3 (Trends: Deposit Submissions + Agent
+Registrations, two small purpose-built SVG charts from one
 `ACCESS_DASHBOARD`-gated read) is now ALSO COMPLETE, manual QA passed
-against the real running backend including responsive/mobile behavior,
-committed and pushed (`263ad78`).** Discovery was closed earlier this
-milestone (the prior backend-readiness blocker resolved — backend commit
-`6aa671f` routed all four Dashboard endpoints on `access-dashboard`). See
-"M7 — Overview" below for the full Phase 1/2 write-up. **Phases 3
-(Network/cash charts) and 4 (Recent activity + agents overview) remain**
-— Phase 3 discovery is the current next step; see `next-session.md`.
+against the real running backend, committed and pushed (`d11e29c`).**
+Discovery was closed earlier this milestone (the prior backend-readiness
+blocker resolved — backend commit `6aa671f` routed all four Dashboard
+endpoints on `access-dashboard`). See "M7 — Overview" below for the full
+Phase 1/2/3 write-up. **Phase 4 (Recent activity + agents overview)
+remains, not yet discovered.**
 
 M3.x (Admin/Manager/Commercial detail pages, ADR-0014) remains the only
 open M3 item, blocked by FE-2 — unaffected by M4, M5 or M6.
 
 ## Current branch
 
-`main`, level with `origin/main` at `263ad78` (pushed this session). Since
+`main`, level with `origin/main` at `d11e29c` (pushed this session). Since
 M6 shipped: Agent 360 workspace foundation (`c392a7e`), full Agent Edit
 (`21c6e05`), Money/Stock workspace panels (`2ff0d5a`), Grattage Outstanding
 panel (`69f50aa`), the zero-stock Manager reassignment guard (`1aa1d66`),
@@ -139,12 +142,16 @@ the manual-QA finalization pass (`bc54e55`), Client 360 foundation
 Grattage purchase history (`22f2ba9`), the same-Commercial reassignment
 disable fix (`55cc33d`), the Agent 360 blocked-Grattage-capacity
 clarification (`47ab778`), Overview Phase 1 — Foundation + decision
-queues (`15a64fb`), and Overview Phase 2 — Statistics (`263ad78`, manual
-QA passed against the real running backend, including responsive/mobile
-behavior). No uncommitted files remain besides this documentation pass.
-See `next-session.md` for verification commands.
+queues (`15a64fb`), Overview Phase 2 — Statistics (`263ad78`), and
+Overview Phase 3 — Trends (`d11e29c`, manual QA passed against the real
+running backend). No uncommitted files remain besides this documentation
+pass. See `next-session.md` for verification commands.
 
 ## Last completed implementation
+
+**M7 — Overview Phase 3 (Trends) — COMPLETE, manual QA passed.** See its
+own section below ("M7 — Overview") for the full write-up. The previous
+entries, kept for continuity:
 
 **M7 — Overview Phase 2 (Statistics) — COMPLETE, manual QA passed.** See
 its own section below ("M7 — Overview") for the full write-up. The
@@ -2106,7 +2113,7 @@ staying independent from the Client's current Commercial), panel
 isolation, and permission behavior were all exercised against the real
 running backend.
 
-## M7 — Overview — Phases 1 and 2 COMPLETE, manual QA passed; Phases 3–4 remain
+## M7 — Overview — Phases 1–3 COMPLETE, manual QA passed; Phase 4 remains
 
 The third and final M7 composed surface. Unlike Agent 360/Client 360,
 Overview has no single entity — it is the frozen architecture's own
@@ -2114,7 +2121,7 @@ Overview has no single entity — it is the frozen architecture's own
 not a fixed page — each stat tile, chart, or queue is one widget reading
 one endpoint... Widget visibility follows the same permission registry as
 the sidebar." M7 Overview is split into four independently-reviewed
-phases; the first two are delivered so far.
+phases; the first three are delivered so far.
 
 **Discovery (docs-only, no source changes).** Re-verified backend commit
 `6aa671f` (`feature/Update-claude`) directly from source — confirmed all
@@ -2256,16 +2263,91 @@ a clean full-suite run at 1290/1290 across 64 files; `tsc -b`/`eslint .`
 (0 errors, same 4 pre-existing unrelated warnings)/`prettier --check .`
 all clean; `vite build` succeeds.
 
-**Phases 3–4 are NOT started.** Phase 3 (Network/cash charts) discovery
-is the explicit next task — see `next-session.md`. It has an open,
-undecided charting-approach question (no chart library exists in this
-codebase — CLAUDE.md requires an ADR before adding one), and should
-re-verify `chart-data`'s own `SUM(amount)`-shaped series
-(`deposits_over_time.total_amount`) live before assuming it needs no
-normalization of its own. Phase 4 (Recent activity + agents overview)
-must keep `recent_deposits`/`recent_payments` as two separate collections
-per the verified backend contract, not merge them into one synthetic
-feed.
+**Phase 3 — Trends (`d11e29c`).** Two small, purpose-built SVG charts from ONE
+`GET /admin/dashboard/chart-data?days=30` read, gated on
+`ACCESS_DASHBOARD` alone:
+
+- **Deposit Submissions** — a single-series bar chart, zero-filled to a
+  continuous 30-day window. Titled and documented HONESTLY, not assumed
+  to mean confirmed cash: `chartData()`'s own query carries no `status`/
+  `type` filter, so pending, validated AND rejected deposits, of both
+  `rapped` and `grattage` types, are summed together. Never labeled
+  "collected cash"/"validated deposits"/"settled cash"/"confirmed cash
+  movement".
+- **Agent Registrations** — a grouped bar chart by role (with a legend),
+  also zero-filled to a continuous 30-day window, per `(date, role)`
+  ONLY for roles actually observed in the real response — never a
+  hardcoded role set.
+
+**`agents_by_city`/`deposits_by_method` were deliberately EXCLUDED**, by
+explicit product decision: `agents_by_city` is a byte-for-byte duplicate
+of `statistics.cities.breakdown` (already excluded from Phase 2 for the
+identical redundancy reason); `deposits_by_method` is an all-time
+breakdown, not a trend, out of this chart phase's own scope.
+
+**A correction to a concern Phase 2's own closeout had flagged for
+Phase 3, found during Phase 3 discovery and re-verified live**: the
+concern that `deposits_over_time.total_amount` might need the same
+zero-fallback normalization ADR-0038 found for `total_solde`/
+`total_cash` does NOT apply. `deposits_over_time` comes from a
+`GROUP BY` query, not `Illuminate\Database\Query\Builder::sum()` — a
+`GROUP BY` query never emits a row for an empty group at all (confirmed
+live: a day with zero deposits produces no array entry), so
+`total_amount` is never the bare JSON integer `0` ADR-0038's fallback
+case produces. No normalization was needed for this series.
+
+**Zero-fill is client-side visualization shaping only, never a
+fabricated backend record**: the backend omits a day/role with zero rows
+entirely (verified live). `dashboard-chart-data-api.ts` generates a
+continuous window, inserting `{count: 0, totalAmount: "0.00",
+isZeroFilled: true}` for missing days — `isZeroFilled` distinguishes a
+generated point from a real backend row (a genuine real `0.00` backend
+row is NOT flagged this way). If the ENTIRE backend series is empty,
+`TrendsPanel` shows the honest empty-state copy instead of 30
+visually-zero bars.
+
+**Financial decimal safety mirrors ADR-0038's own boundary**:
+`totalAmount` stays a `string` through the model/mapper/query layers,
+rendered verbatim in every tooltip/label. `Number(totalAmount)` is
+called ONLY inside each chart's own local geometry function (bar
+height), never stored, never reused for display — pinned by a dedicated
+test proving `"1500.10"` renders with its trailing zero intact (a naive
+`Number().toString()` round-trip would silently produce `"1500.1"`).
+
+**No chart dependency was added — ADR-0039.** Verified before
+implementation: zero chart libraries/SVG primitives existed anywhere in
+this codebase, the production bundle was already flagged by Vite for
+exceeding 500KB (928KB pre-Phase-3), and `@radix-ui/react-tooltip`
+already existed with a working `Tooltip` primitive (previously used only
+by the sidebar) — reused for both charts' own tooltips. Both charts stay
+DOMAIN-LOCAL (`domains/overview/components/`), not promoted to
+`shared/business/` — two callers inside the SAME domain does not meet
+CLAUDE.md's "three independent domains" promotion bar `StatCard` itself
+cleared. The production build confirms no dependency was pulled in:
+928.66 KB → 933.87 KB (+5KB).
+
+**Manual QA passed**, against the real running backend as Super Admin:
+Statistics cards (unaffected), Deposit Submissions chart, Agent
+Registrations chart, both tooltips, desktop layout, responsive/mobile
+layout, Needs attention (unaffected), no regressions found.
+
+**No backend changes.** ADR-0039 is the one new architectural decision
+this phase produced (the no-chart-dependency, domain-local-placement
+discipline). Verification at implementation time: 82/82 focused Overview
+tests (Phases 1+2+3 combined); 569/569 regression (Cheques, Deposits,
+Grattage Invoices, Agent 360, Client 360 — one interleaved run hit
+widespread system-load timing failures, an immediate clean rerun
+confirmed 569/569 with no code changed between runs, not a real
+regression); a clean full-suite run at 1319/1319 across 66 files;
+`tsc -b`/`eslint .` (0 errors, same 4 pre-existing unrelated
+warnings)/`prettier --check .` all clean; `vite build` succeeds.
+
+**Phase 4 (Recent activity + agents overview) is NOT started and NOT
+discovered.** See `next-session.md` for the pointer carried forward from
+the original Overview discovery (two separate `recent-activities`
+collections, never merged; the "pick one city-breakdown source" decision
+becomes live at Phase 4, since Phases 2 and 3 both already excluded
+their own city-data candidates).
 
 ## Overall progress
 
@@ -2309,7 +2391,8 @@ feed.
 | **M7 — Client 360** | ✅ **COMPLETE, manual QA passed** — foundation, Commercial relationship/assignment history, Grattage purchase history, plus two manual-QA fixes (same-Commercial reassignment disable, Agent 360 blocked-Grattage-capacity clarification) |
 | **M7 — Overview widget grid, Phase 1 (Foundation + decision queues)** | ✅ **COMPLETE, manual QA passed** — Pending Cheques, Pending Deposits, Overdue Grattage Invoices, each independently permission-gated |
 | **M7 — Overview widget grid, Phase 2 (Statistics)** | ✅ **COMPLETE, manual QA passed** — nine metrics, Network health/Cash movement/Exposure, one `ACCESS_DASHBOARD`-gated query, `StatCard`'s first real caller |
-| M7 — Overview widget grid, Phases 3–4 (Charts/Recent activity) | 🟡 not started — Phase 3 discovery is next, see `next-session.md` |
+| **M7 — Overview widget grid, Phase 3 (Trends)** | ✅ **COMPLETE, manual QA passed** — Deposit Submissions + Agent Registrations, two small SVG charts, no chart dependency (ADR-0039), one `ACCESS_DASHBOARD`-gated query |
+| M7 — Overview widget grid, Phase 4 (Recent activity + agents overview) | 🟡 not started, not discovered — see `next-session.md` |
 
 **Tests: 1237/1237 across 61 files** (was 407/23 before M3.6; 431/24 at
 M3.6's initial implementation; 442/24 after M3.6's three post-validation fix
@@ -2324,12 +2407,17 @@ four phases plus the Allocation capacity correction (1022/52), M7 Agent
 Client 360's three phases plus the two manual-QA fixes (same-Commercial
 reassignment disable, Agent 360 blocked-Grattage-capacity clarification,
 1237/61), then M7 Overview Phase 1 (Foundation + decision queues, 1269/62),
-then M7 Overview Phase 2 (Statistics), net **1290/64**). Phase 1's own
-closeout ran three times to rule out FE-1's known flake — the same
-untouched `bons-list-page.test.tsx` timing test failed on one of three
-runs, passed clean standalone and clean on the third full-suite run,
-confirming the flake rather than a regression; Phase 2's own closeout run
-was clean on the first pass.
+then M7 Overview Phase 2 (Statistics, 1290/64), then M7 Overview Phase 3
+(Trends), net **1319/66**. Phase 1's own closeout ran three times to
+rule out FE-1's known flake — the same untouched `bons-list-page.test.tsx`
+timing test failed on one of three runs, passed clean standalone and
+clean on the third full-suite run, confirming the flake rather than a
+regression; Phase 2's own closeout run was clean on the first pass;
+Phase 3 hit the same class of flake repeatedly under heavy machine load
+at both its implementation and its closeout verification (a different
+random unrelated file each run — Villes, Bons, Allocations — never
+Overview-related, always clean standalone), confirmed non-regressing by
+a clean 1319/1319 run at closeout.
 Lint ·
 typecheck · format · build all clean, re-verified fresh this session.
 

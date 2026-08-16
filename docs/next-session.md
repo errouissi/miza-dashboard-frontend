@@ -16,11 +16,14 @@ Client 360, the first two of its three composed surfaces, are both
 COMPLETE, manual QA passed, committed and pushed.** The Overview widget
 grid, the third and final M7 surface, has cleared discovery. **Phase 1
 (Foundation + decision queues) is COMPLETE — manual QA passed, committed
-(`15a64fb`) and pushed. Phase 2 (Statistics) is now ALSO COMPLETE — manual
-QA passed against the real running backend, including responsive/mobile
-behavior, committed (`263ad78`) and pushed.** **Phase 3 (Network/cash
-charts) discovery is the literal first thing to do next session, before
-writing any Phase 3 code** — see "Next task" below.
+(`15a64fb`) and pushed. Phase 2 (Statistics) is COMPLETE — manual QA
+passed, committed (`263ad78`) and pushed. Phase 3 (Trends: Deposit
+Submissions + Agent Registrations) is now ALSO COMPLETE — manual QA
+passed against the real running backend (Statistics cards, both trend
+charts, both tooltips, desktop layout, responsive/mobile layout, Needs
+attention, no regressions), committed (`d11e29c`) and pushed.** **Phase 4
+(Recent activity + agents overview) is next — it has not been discovered
+yet; see "Next task" below.**
 
 - **Overview discovery is CLOSED.** The backend blocker disclosed by the
   frozen roadmap (`chartData`/`recentActivities`/`agentsOverview` possibly
@@ -37,10 +40,10 @@ writing any Phase 3 code** — see "Next task" below.
   Foundation + decision queues (Pending Cheques, Pending Deposits, Overdue
   Grattage Invoices) — COMPLETE, manual QA passed, committed `15a64fb`.
   Phase 2 — Statistics (Network health / Cash movement / Exposure) —
-  COMPLETE, manual QA passed, committed `263ad78`.** Phase 3 — Network/cash
-  charts (discovery next, see "Next task" below). Phase 4 — Recent activity
-  + agents overview. Do not skip ahead to Phase 3 IMPLEMENTATION before its
-  own discovery is reviewed and approved.
+  COMPLETE, manual QA passed, committed `263ad78`. Phase 3 — Trends
+  (Deposit Submissions, Agent Registrations) — COMPLETE, manual QA passed,
+  committed `d11e29c`.** Phase 4 — Recent activity + agents overview, not
+  yet discovered.
 - **Phase 1's exact file list, as committed in `15a64fb`:**
   - `src/domains/overview/` (new) — `pages/overview-page.tsx` +
     its own test file, `components/pending-cheques-widget.tsx`,
@@ -100,6 +103,96 @@ writing any Phase 3 code** — see "Next task" below.
   string is returned untouched; a numeric `0` becomes `"0.00"`; any OTHER
   non-zero number THROWS rather than being silently formatted — no
   `Number()`/`parseFloat()`, no float reconstruction, ever. See ADR-0038.
+- **Phase 3's exact file list, as committed in `d11e29c`:**
+  - `src/domains/overview/model/dashboard-chart-data.ts` (new) — narrow
+    model, exactly the two approved series (`depositSubmissions`,
+    `agentRegistrations`); `agents_by_city`/`deposits_by_method` are
+    deliberately excluded (the former duplicates Statistics' own excluded
+    `cities.breakdown`; the latter is an all-time breakdown, not a trend).
+  - `src/domains/overview/api/dashboard-chart-data-api.ts` (new) —
+    `fetchDashboardChartData(days)`, plus client-side zero-fill for chart
+    continuity (see below) — no zero-fallback normalization needed here
+    (see the correction below, unlike Phase 2's `total_solde`/`total_cash`).
+  - `src/domains/overview/queries/keys.ts` (modified) — widened with
+    `dashboardChartDataKeys.detail(days)` (parameterized, unlike
+    Statistics' flat key).
+  - `src/domains/overview/queries/dashboard-chart-data-queries.ts` (new)
+    — `useDashboardChartDataQuery(days = 30)`, `SLOW` tier.
+  - `src/domains/overview/components/deposit-submissions-chart.tsx` (new)
+    — small, purpose-built SVG bar chart, no dependency.
+  - `src/domains/overview/components/agent-registrations-chart.tsx` (new)
+    — small, purpose-built SVG grouped-bar chart, no dependency, with a
+    role legend.
+  - `src/domains/overview/components/trends-panel.tsx` (new) —
+    `TrendsPanel` (outer gate on `ACCESS_DASHBOARD`) + `TrendsContent`
+    (loading/error/success, per-series honest empty state).
+  - `src/domains/overview/pages/overview-page.tsx` (modified) — added
+    the "Trends" page-level section heading, between Statistics and
+    Needs attention, and mounted `TrendsPanel` in its own `PanelBoundary`.
+  - `src/domains/overview/pages/overview-page.test.tsx` (modified) —
+    Trends panel behavior, permission combinations, and isolation
+    coverage added alongside the existing Phase 1/2 tests.
+  - `docs/decisions.md` (modified, append-only) — ADR-0039.
+- **A correction to a concern raised during Phase 2's own closeout, found
+  during Phase 3 discovery and re-verified live**: `next-session.md` had
+  flagged that `chart-data.deposits_over_time.total_amount` "carries the
+  same `SUM(amount)` aggregate shape that turned out to need
+  normalization" (ADR-0038's own concern). Tracing `chartData()`'s actual
+  query construction shows this does NOT apply — `deposits_over_time`
+  comes from a `GROUP BY` query (`->select(...)->groupBy(...)->get()`),
+  not `Illuminate\Database\Query\Builder::sum()`; a `GROUP BY` query never
+  emits a row for an empty group at all (confirmed live: a day with zero
+  deposits produces no array entry), so `total_amount` is never the bare
+  JSON integer `0` ADR-0038 found for a standalone `sum()` call — there is
+  structurally no fallback case to normalize for this series.
+- **Deposit Submissions is honestly scoped and labeled, not assumed
+  to mean confirmed cash**: `chartData()`'s own query has no `status`
+  filter and no `type` filter — pending, validated AND rejected deposits,
+  of both `rapped` and `grattage` types, are summed together. The chart
+  is titled "Deposit Submissions — Last 30 Days", never "collected cash"/
+  "validated deposits"/"settled cash"/"confirmed cash movement" — see
+  `deposit-submissions-chart.tsx`'s own docblock.
+- **Zero-fill is client-side visualization shaping only, never a
+  fabricated backend record**: the backend omits a day/role with zero
+  rows entirely (confirmed live). `dashboard-chart-data-api.ts` generates
+  a continuous `[today-29 .. today]` window, inserting
+  `{count: 0, totalAmount: "0.00", isZeroFilled: true}` for missing days
+  — `isZeroFilled` distinguishes a generated point from a real backend
+  row (tested, including the "genuine real `0.00` row vs. generated
+  zero-fill" distinction). Agent Registrations zero-fills per
+  `(date, role)` only for roles OBSERVED in the real response — never a
+  hardcoded `["manager", "commercial"]` set. If the ENTIRE backend series
+  is empty, `TrendsPanel` shows the honest empty-state copy instead of 30
+  visually-zero bars (`hasData`, computed from the real row count,
+  independent of the zero-filled array).
+- **Financial decimal safety mirrors ADR-0038's own boundary**:
+  `totalAmount` stays a `string` through the model/mapper/query layers,
+  rendered verbatim in every tooltip/label. `Number(totalAmount)` is
+  called ONLY inside each chart's own local geometry function (bar
+  height), never stored, never reused for display — pinned by a
+  dedicated test (`"1500.10"` must render with its trailing zero intact;
+  a naive `Number().toString()` round-trip would silently produce
+  `"1500.1"`).
+- **No chart dependency was added — ADR-0039.** Verified before
+  implementation: zero chart libraries/SVG primitives existed anywhere in
+  this codebase, the production bundle was already flagged by Vite for
+  exceeding 500KB (928KB pre-Phase-3), and `@radix-ui/react-tooltip`
+  already existed as a dependency with a working `Tooltip` primitive
+  (previously used only by the sidebar) — reused for both charts' own
+  tooltips. Both chart components are small, explicit, and kept
+  DOMAIN-LOCAL (`domains/overview/components/`), not promoted to
+  `shared/business/` — two callers inside the SAME domain does not meet
+  CLAUDE.md's "three independent domains" promotion bar `StatCard`
+  itself cleared. Build confirms no dependency was pulled in: bundle grew
+  928.66 KB → 933.87 KB (+5KB), not the tens-to-hundreds of KB a chart
+  library would add.
+- **`agents_by_city` was excluded by explicit product decision, not
+  discovered-and-forgotten**: verified as a byte-for-byte duplicate query
+  of `statistics.cities.breakdown` (already excluded from Phase 2 for the
+  identical reason) — rendering it in Phase 3 would have been the exact
+  redundant second city-data visualization that exclusion exists to
+  prevent. `deposits_by_method` was also excluded — an all-time method
+  breakdown, not a trend, out of this chart phase's own scope.
 - **A real bug was found and fixed during Phase 1 implementation, not left
   for QA to find**: the naive "check permission, then call the query hook"
   shape would have fired an unauthorized request from every widget —
@@ -146,9 +239,23 @@ writing any Phase 3 code** — see "Next task" below.
   Agent 360, Client 360); a clean full-suite run at 1290/1290 across 64
   files; `tsc -b`/`eslint .` (0 errors, same 4 pre-existing unrelated
   warnings)/`prettier --check .` all clean; `vite build` succeeds.
+- **Phase 3 manual QA passed, real running backend, Super Admin session**:
+  Statistics cards (unaffected), Deposit Submissions chart, Agent
+  Registrations chart, both tooltips, desktop layout, responsive/mobile
+  layout, Needs attention (unaffected), no regressions found.
+- **Phase 3 final verification, implementation session**: 82/82 focused
+  Overview tests (Phases 1+2+3 combined); 569/569 regression (one
+  interleaved run hit widespread system-load timing failures — an
+  immediate clean rerun confirmed 569/569 with no code changed between
+  runs, not a real regression); a clean full-suite run at 1319/1319
+  across 66 files; `tsc -b`/`eslint .` (0 errors, same 4 pre-existing
+  unrelated warnings)/`prettier --check .` all clean; `vite build`
+  succeeds (bundle 928.66 KB → 933.87 KB, confirming no dependency was
+  added).
 - **Tests: 1237/1237 across 61 files** was the count BEFORE Overview
   Phase 1; **1269/1269 across 62 files** after Phase 1; **1290/1290 across
-  64 files** is the count WITH Phase 2, committed.
+  64 files** after Phase 2, committed; **1319/1319 across 66 files** is
+  the count WITH Phase 3, still uncommitted.
 - **Manual validation**: Cheques' full workflow, Agent Stock Returns, all of
   M6 (Grattage Invoices, the restock-gate integration, Deposit↔Invoice
   linking, including the corrected Allocation capacity scenario), all of
@@ -201,11 +308,11 @@ writing any Phase 3 code** — see "Next task" below.
 ```bash
 cd C:\Miza\frontend-v2
 git status                 # expect: clean, or only this session's own
-                            # docs checkpoint commit on top of 263ad78
+                            # docs checkpoint commit on top of d11e29c
 git log --oneline -8        # expect a docs-only checkpoint commit, then
-                            # 263ad78, 3bca8ab, 15a64fb, bdb709d, a595b0a,
-                            # 47ab778, 55cc33d
-pnpm test:ci               # expect: 1290/1290 across 64 files
+                            # d11e29c, 5ae7ef2, 263ad78, 3bca8ab, 15a64fb,
+                            # bdb709d, a595b0a
+pnpm test:ci               # expect: 1319/1319 across 66 files
 pnpm lint && pnpm typecheck && pnpm format:check && pnpm build
 ```
 
@@ -455,61 +562,58 @@ pnpm lint && pnpm typecheck && pnpm format:check && pnpm build
   from Phase 1's three widgets, both directions. See `project-status.md`'s
   own "M7 — Overview" section for the full write-up and ADR-0038 for the
   decimal-normalization decision.
+- **M7 Overview Phase 3 — Trends** — `d11e29c`. COMPLETE, manual QA
+  passed (see "Current state" above for the exact file list, the
+  ADR-0038-concern correction, the honest "Deposit Submissions" labeling,
+  the client-side zero-fill discipline, and the financial decimal-safety
+  boundary). Two small, purpose-built SVG charts from ONE
+  `GET /admin/dashboard/chart-data?days=30` read, gated on
+  `ACCESS_DASHBOARD` alone: Deposit Submissions (single-series bar,
+  zero-filled continuous 30-day window) and Agent Registrations (grouped
+  bar by role, legend, roles derived only from what the backend actually
+  returned). `agents_by_city`/`deposits_by_method` deliberately excluded.
+  No new dependency (ADR-0039) — both charts stay domain-local
+  (`domains/overview/components/`), reusing the existing `Tooltip`
+  primitive and the frozen design system's own Teal/Plum data-viz colors
+  via direct hex (mirroring `StatusBadge`'s own precedent). See
+  `project-status.md`'s own "M7 — Overview" section for the full write-up
+  once it is added at commit time.
 
 Full write-ups for every item above: `project-status.md`'s own dedicated sections.
 
-## Next task: M7 Overview Phase 3 — Network/cash charts
+## Next task: M7 Overview Phase 4 — Recent activity + agents overview
 
-**Overview Phase 1 (`15a64fb`) and Phase 2 (`263ad78`) are both COMPLETE,
-manual QA passed, committed and pushed.** Phase 3 is next. **Do NOT write
-Phase 3 implementation code, and do NOT add a charting dependency, before
-its own discovery is run and the charting approach is explicitly
-approved** — the same discipline Phase 2 itself required before its own
-metric selection was implemented.
+**Overview Phase 1 (`15a64fb`), Phase 2 (`263ad78`) and Phase 3 (Trends,
+`d11e29c`) are all COMPLETE, manual QA passed, committed and pushed.**
+Phase 4 is next.
 
-**The one standing, unresolved decision Phase 3 discovery must open
-with**: **no chart library exists in this codebase today** (verified from
-`package.json` in full during the original Overview discovery, unchanged
-since). The choice between inline SVG and a real charting dependency is
-NOT decided. CLAUDE.md's own rule applies directly: "No new dependency
-without justification and an ADR" — do not default to installing a
-library without that approval step, and do not assume inline SVG is
-automatically the safer/cheaper choice either; both need to be weighed
-explicitly against what `chart-data`/`agents-overview` actually require
-(deposits-over-time and agent-registration-trend series) before a
-decision is made.
+Phase 4 has **not been discovered yet** — no source re-verification, no
+live contract check, no scope decision has been made for it. Only the
+pointer already carried forward from the original Overview discovery
+report is recorded below; treat it as a starting point for a fresh
+discovery pass, not as pre-approved scope:
 
-**What Phase 3 discovery should re-verify from source before any
-implementation, mirroring the discipline Phase 2's own discovery
-followed:**
-- `DashboardController::chartData()` / `GET /admin/dashboard/chart-data`
-  (`days` param, min 1/max 365, default 30) — re-confirm the exact
-  response shape (`deposits_over_time`, `deposits_by_method`,
-  `agents_by_city`, `agent_registrations`) live against the running dev
-  database, the same way Phase 2 found the `sum()`-vs-`count()` runtime
-  type split empirically rather than assuming it from PHP source alone
-  (see ADR-0038) — chart series carry the same `SUM(amount)` aggregate
-  shape (`deposits_over_time.total_amount`) that turned out to need
-  normalization for Phase 2's `total_solde`/`total_cash`.
-- Whether `agents_by_city` here duplicates `statistics.cities.breakdown`
-  (deliberately excluded from Phase 2) and/or
-  `agents-overview.agents_by_role_and_city` (a Phase 4 concern) — the
-  standing "pick one source, do not duplicate city-breakdown data across
-  multiple widgets" rule (below) still applies and must be resolved
-  explicitly, not assumed away because Phase 3 only needs "a" city chart.
+- **`recent-activities`** returns TWO separate, independently-ordered
+  collections (`recent_deposits`, `recent_payments`) — verified from
+  source during the original discovery, not assumed. They must stay two
+  separate collections/widgets; do not merge them into one synthetic
+  chronological feed the backend does not actually provide.
+- **`agents-overview`**'s Top Managers may link to Agent 360
+  (`agentDetailPath`).
+- **Do not duplicate city-breakdown data across multiple widgets** — pick
+  one source. This was flagged as redundant across
+  `statistics.cities.breakdown` (excluded from Phase 2),
+  `chart-data.agents_by_city` (excluded from Phase 3), and
+  `agents-overview.agents_by_role_and_city` — Phase 4 is the first phase
+  that would actually touch this data, so the "pick one source" decision
+  becomes live here, not before.
+- Both endpoints' exact response shapes, runtime types, and permission
+  gates should be re-verified fresh from source AND live against the
+  running dev database before any implementation — the same discipline
+  every phase so far has required (ADR-0022).
 
-**Future-phase decisions/open items, unchanged, still not started:**
-
-- **Phase 4 (Recent activity + agents overview)**: `recent-activities`
-  returns TWO separate, independently-ordered collections (`recent_deposits`,
-  `recent_payments`) — verified from source, not assumed. They must stay
-  two separate collections/widgets; do not merge them into one synthetic
-  chronological feed the backend does not actually provide. Top Managers
-  (from `agents-overview`) may link to Agent 360 (`agentDetailPath`). Do
-  not duplicate the city-breakdown data across multiple widgets — pick one
-  source (this was flagged as redundant across `statistics.cities.breakdown`,
-  `chart-data.agents_by_city`, and `agents-overview.agents_by_role_and_city`
-  during discovery).
+**Do not start Phase 4 implementation before its own discovery is run and
+reviewed** — the same discipline every prior phase required.
 
 ## Things that MUST NOT be changed without a new decision (carried, updated this session)
 
@@ -519,30 +623,55 @@ followed:**
   the choice between inline SVG and a real dependency is an open decision,
   not a default. CLAUDE.md's own rule: "No new dependency without
   justification and an ADR."
-- 🚫 **Do not write M7 Overview Phase 3 implementation code, or add a
-  charting dependency, before Phase 3's own discovery is run and the
-  charting approach is explicitly approved.** See "Next task" above.
-  Phases 1 and 2 are COMPLETE, manual QA passed, committed (`15a64fb`,
-  `263ad78`) — this rule now gates Phase 3 discovery→implementation
-  specifically, not Phase 1/2's own closeout (already done).
+- 🚫 **Do not write M7 Overview Phase 4 implementation code before its own
+  discovery is run and reviewed.** See "Next task" above. Phases 1–3 are
+  all COMPLETE, manual QA passed, committed and pushed (`15a64fb`,
+  `263ad78`, `d11e29c`).
 - 🚫 **Do not re-derive `total_solde`/`total_cash` (or any future
   `SUM()`-aggregate dashboard field) through `Number()`/`parseFloat()` or
   any other floating-point reconstruction.** `normalizeAggregateDecimal`
   (`dashboard-statistics-api.ts`) fixes ONLY the wire's own zero-fallback
   representation gap (a numeric `0` → `"0.00"`) — a non-zero value is
   returned untouched, verbatim, and an unexpected non-zero NUMBER throws
-  rather than being silently formatted. See ADR-0038. Any future Phase 3
-  chart series carrying the same `SUM(amount)` shape
-  (`deposits_over_time.total_amount`) should default to reusing this same
-  discipline, re-verified live, not assumed to already be safe.
-- 🚫 **Do not add a `dashboard-statistics` entry to `invalidation-map.ts`
-  without a real mutation to justify it.** No mutation anywhere in the
-  product writes `Agent.solde`/`Agent.cash`/deposit counts in a way this
-  read needs to react to instantly — `SLOW` (5 min) staleness is the
-  approved, sufficient freshness guarantee (see "Next task" — Phase 2's
-  own closeout). Adding speculative invalidation ahead of a real mutation
-  would violate the same discipline `invalidation-map.ts`'s own docblock
-  already states for every other event.
+  rather than being silently formatted. See ADR-0038.
+- 🚫 **Do not add a `dashboard-statistics`/`dashboard-chart-data` entry to
+  `invalidation-map.ts` without a real mutation to justify it.** No
+  mutation anywhere in the product writes `Agent.solde`/`Agent.cash`/
+  deposit counts/agent registrations in a way either read needs to react
+  to instantly — `SLOW` (5 min) staleness is the approved, sufficient
+  freshness guarantee for both. Adding speculative invalidation ahead of
+  a real mutation would violate the same discipline
+  `invalidation-map.ts`'s own docblock already states for every other
+  event.
+- 🚫 **Do not label the Deposit Submissions chart (or any future surface
+  built on `chart-data.deposits_over_time`) as "collected cash",
+  "validated deposits", "settled cash", or "confirmed cash movement".**
+  `DashboardController::chartData()`'s own query has no `status`/`type`
+  filter — pending, validated AND rejected deposits, of both `rapped` and
+  `grattage` types, are summed together. It is submission ACTIVITY, not
+  confirmed cash. See `deposit-submissions-chart.tsx`'s own docblock.
+- 🚫 **Do not add `agents_by_city`/`deposits_by_method` to Trends (or
+  anywhere else) without a fresh, explicit decision.** `agents_by_city`
+  is a byte-for-byte duplicate of `statistics.cities.breakdown` (already
+  excluded from Phase 2); `deposits_by_method` is an all-time breakdown,
+  not a trend. Both were deliberately excluded from Phase 3.
+- 🚫 **Do not fabricate a backend record when zero-filling a chart
+  series.** `dashboard-chart-data-api.ts`'s zero-fill is visualization
+  shaping only — a generated day/role point is flagged `isZeroFilled:
+  true` and never written back as if it were real data. Do not zero-fill
+  a role that was never observed in the actual backend response (Agent
+  Registrations' `roles` comes only from what the response contained).
+- 🚫 **Do not add a chart dependency for any future Overview surface
+  without a fresh, explicit decision and ADR — ADR-0039 settled Phase 3's
+  own case, not the general one.** Both Trends charts are small,
+  purpose-built, domain-local SVG components; extend that same pattern by
+  default unless a real requirement (zoom, pan, brush, a genuinely
+  arbitrary dataset, a third+ chart type) proves it insufficient.
+- 🚫 **Do not promote `deposit-submissions-chart.tsx`/
+  `agent-registrations-chart.tsx` (or a generalized chart primitive) to
+  `shared/business/` without a genuine third, independent-domain caller.**
+  Two callers inside the SAME domain (Overview) does not meet CLAUDE.md's
+  "three independent domains" promotion bar — see ADR-0039.
 - 🚫 **Do not add edit mode to the M3.6 wizard**, an agent detail page, or move
   `TextField` to `shared/`. Unchanged (ADR-0014, Rule-of-Three).
 - 🚫 **Do not build a generic wizard framework.** FTA D-9. Unchanged.
@@ -697,8 +826,17 @@ followed:**
       `SLOW` tier, no speculative invalidation, `StatCard`'s first real
       caller. See `project-status.md`'s own M7 — Overview section and
       ADR-0038.
-- [ ] **M7 Overview widget grid — Phases 3–4 NOT started. NEXT: Phase 3
-      (Network/cash charts) discovery, then implementation — see
+- [x] **M7 Overview widget grid — Phase 3 (Trends) COMPLETE, manual QA
+      passed (Statistics cards, both charts, both tooltips, desktop,
+      responsive/mobile, Needs attention, no regressions), committed and
+      pushed (`d11e29c`).** Two small, purpose-built SVG charts (Deposit
+      Submissions, Agent Registrations), no chart dependency (ADR-0039),
+      client-side zero-fill for continuity only, decimal safety mirroring
+      ADR-0038. `agents_by_city`/`deposits_by_method` deliberately
+      excluded. See "Current state" above for the full file list and
+      findings.
+- [ ] **M7 Overview widget grid — Phase 4 NOT started, NOT discovered.
+      NEXT: Phase 4 (Recent activity + agents overview) discovery — see
       "Next task" above.**
 - [ ] **Manager per-commercial Grattage Outstanding breakdown — accepted
       coarse capability, NOT a roadmap gap.** The frozen architecture (§6)
