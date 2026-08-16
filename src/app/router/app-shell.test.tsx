@@ -62,8 +62,12 @@ describe("protected routes", () => {
     expect(screen.getByRole("banner")).toBeInTheDocument();
     // The identity of the person acting, behind the logout menu.
     expect(screen.getByText("Ahmed Errouissi")).toBeInTheDocument();
-    // The authenticated landing placeholder, inside the shell.
-    expect(screen.getByRole("heading", { name: "Miza Dashboard" })).toBeInTheDocument();
+    // The authenticated landing page, inside the shell — M7 Overview
+    // (replaces the prior WelcomePlaceholder). `session` holds no
+    // permissions, so none of the three decision-queue widgets render
+    // (each is independently gated, see `overview-page.test.tsx`), but
+    // the page's own heading always shows.
+    expect(screen.getByRole("heading", { name: "Overview" })).toBeInTheDocument();
   });
 
   it("renders a logout control behind the identity menu", () => {

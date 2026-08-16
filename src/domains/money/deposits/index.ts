@@ -21,6 +21,8 @@ export {
   DEPOSIT_LIST_DEFAULTS,
   DEPOSIT_STATUS_LABELS,
   DEPOSIT_STATUS_TONES,
+  /** Widened for M7 Overview Phase 1 (`PendingDepositsWidget`) — the same domain-owned `type` vocabulary, not a second interpretation. */
+  DEPOSIT_TYPE_LABELS,
   type Deposit,
   type DepositListParams,
 } from "./model/deposit";

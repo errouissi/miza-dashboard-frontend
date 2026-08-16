@@ -4,8 +4,8 @@ import {
   NotFound,
   RouteErrorBoundary,
 } from "@/app/errors/route-error-boundary";
-import { WelcomePlaceholder } from "@/app/placeholders";
 import { RequirePermission } from "@/app/guards";
+import { OverviewPage } from "@/domains/overview";
 import { adminsRoutes } from "@/domains/network/admins";
 import { managersRoutes } from "@/domains/network/managers";
 import { commercialsRoutes } from "@/domains/network/commercials";
@@ -151,7 +151,7 @@ export const routes: RouteObject[] = [
         children: [
           {
             index: true,
-            element: <WelcomePlaceholder />,
+            element: <OverviewPage />,
           },
           ...domainRoutes,
           {
