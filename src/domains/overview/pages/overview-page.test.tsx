@@ -8,8 +8,10 @@ import { sessionManager } from "@/infrastructure/auth";
 import { createQueryClient } from "@/infrastructure/query";
 import { PERMISSIONS } from "@/infrastructure/permissions";
 import { PanelBoundary } from "@/shared/components/patterns/panel-boundary";
+import { PendingChequesWidget } from "../components/pending-cheques-widget";
 import { PendingDepositsWidget } from "../components/pending-deposits-widget";
 import { OverdueGrattageWidget } from "../components/overdue-grattage-widget";
+import { StatisticsPanel } from "../components/statistics-panel";
 import { OverviewPage } from "./overview-page";
 
 const API = "http://localhost/api/v1";
@@ -186,10 +188,63 @@ function grattageHandler(
   });
 }
 
+// ------------------------------------------------------------ Statistics
+
+function statisticsEnvelope(
+  overrides: Partial<{
+    agents: { total_commercials: number; total_managers: number; blocked: number };
+    cities: { total_active_cities: number };
+    deposits: { recent_7days: number; this_month: number; last_month: number };
+    agents_finance: { total_solde: string | number; total_cash: string | number };
+  }> = {},
+) {
+  return {
+    agents: {
+      total_commercials: 12,
+      total_managers: 4,
+      total_active: 16,
+      blocked: 2,
+      total: 18,
+      ...overrides.agents,
+    },
+    cities: {
+      total_active_cities: 5,
+      breakdown: [{ ville_actuelle: "marrakech", agent_count: 3 }],
+      ...overrides.cities,
+    },
+    deposits: {
+      total_count: 40,
+      total_amount: "12000.00",
+      cash_count: 10,
+      bank_count: 30,
+      recent_7days: 7,
+      this_month: 20,
+      last_month: 15,
+      ...overrides.deposits,
+    },
+    debt: { total_admin_debt: "0.00", admins_with_debt: 0, total_paid: 0 },
+    agents_finance: {
+      total_solde: "128450.75",
+      total_cash: "3200.10",
+      ...overrides.agents_finance,
+    },
+  };
+}
+
+function statisticsHandler(
+  onRequest?: (url: URL) => void,
+  envelope: ReturnType<typeof statisticsEnvelope> = statisticsEnvelope(),
+) {
+  return http.get(`${API}/admin/dashboard/statistics`, ({ request }) => {
+    onRequest?.(new URL(request.url));
+    return HttpResponse.json(envelope);
+  });
+}
+
 beforeEach(() => {
   window.localStorage.clear();
   signInWith(ALL_OVERVIEW_PERMISSIONS);
-  server.use(chequesHandler(), depositsHandler(), grattageHandler());
+  server.use(chequesHandler(), depositsHandler(), grattageHandler(), statisticsHandler());
 });
 
 describe("Overview page", () => {
@@ -199,12 +254,140 @@ describe("Overview page", () => {
     expect(await screen.findByRole("heading", { name: "Overview" })).toBeInTheDocument();
   });
 
-  it("mounts all three widgets independently, side by side", async () => {
+  it("renders the Statistics and Needs attention section headings", async () => {
+    renderPage();
+
+    expect(
+      await screen.findByRole("heading", { name: "Statistics" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Needs attention" })).toBeInTheDocument();
+  });
+
+  it("mounts all three decision-queue widgets independently, side by side", async () => {
     renderPage();
 
     expect(await screen.findByText("Pending Cheques")).toBeInTheDocument();
     expect(screen.getByText("Pending Deposits")).toBeInTheDocument();
     expect(screen.getByText("Overdue Grattage Invoices")).toBeInTheDocument();
+  });
+
+  it("mounts the Statistics panel alongside the decision queues", async () => {
+    renderPage();
+
+    expect(await screen.findByText("Active Commercials")).toBeInTheDocument();
+    expect(screen.getByText("Pending Cheques")).toBeInTheDocument();
+  });
+});
+
+describe("Statistics panel", () => {
+  it("hides the panel and never requests /admin/dashboard/statistics without ACCESS_DASHBOARD", async () => {
+    let requested = false;
+    signInWith([PERMISSIONS.VIEW_CHEQUES, PERMISSIONS.VIEW_DEPOSITS]);
+    server.use(statisticsHandler(() => (requested = true)));
+    renderPage();
+
+    await screen.findByText("Pending Cheques");
+    expect(screen.queryByText("Active Commercials")).not.toBeInTheDocument();
+    expect(requested).toBe(false);
+  });
+
+  it("mounts its query when ACCESS_DASHBOARD is present", async () => {
+    let requested = false;
+    server.use(statisticsHandler(() => (requested = true)));
+    renderPage();
+
+    await waitFor(() => expect(requested).toBe(true));
+  });
+
+  it("shows a loading state, then all nine approved metrics grouped Network health / Cash movement / Exposure", async () => {
+    renderPage();
+
+    expect(await screen.findByTestId("statistics-loading")).toBeInTheDocument();
+
+    expect(await screen.findByText("Active Commercials")).toBeInTheDocument();
+    expect(screen.getByText("12")).toBeInTheDocument();
+    expect(screen.getByText("Active Managers")).toBeInTheDocument();
+    expect(screen.getByText("4")).toBeInTheDocument();
+    expect(screen.getByText("Blocked Agents")).toBeInTheDocument();
+    expect(screen.getByText("2")).toBeInTheDocument();
+    expect(screen.getByText("Active Cities")).toBeInTheDocument();
+    expect(screen.getByText("5")).toBeInTheDocument();
+
+    expect(screen.getByText("Deposits — Last 7 Days")).toBeInTheDocument();
+    expect(screen.getByText("7")).toBeInTheDocument();
+    expect(screen.getByText("Deposits — This Month")).toBeInTheDocument();
+    expect(screen.getByText("20")).toBeInTheDocument();
+    expect(screen.getByText("Deposits — Last Month")).toBeInTheDocument();
+    expect(screen.getByText("15")).toBeInTheDocument();
+
+    expect(screen.getByText("Total Solde")).toBeInTheDocument();
+    expect(screen.getByText("128450.75")).toBeInTheDocument();
+    expect(screen.getByText("Total Cash")).toBeInTheDocument();
+    expect(screen.getByText("3200.10")).toBeInTheDocument();
+
+    expect(screen.getByText("Network health")).toBeInTheDocument();
+    expect(screen.getByText("Cash movement")).toBeInTheDocument();
+    expect(screen.getByText("Exposure")).toBeInTheDocument();
+  });
+
+  it("renders real aggregate zeroes as 0 / 0.00, never an absent-data dash", async () => {
+    server.use(
+      statisticsHandler(undefined, {
+        ...statisticsEnvelope(),
+        agents: {
+          total_commercials: 0,
+          total_managers: 0,
+          total_active: 0,
+          blocked: 0,
+          total: 0,
+        },
+        cities: { total_active_cities: 0, breakdown: [] },
+        deposits: {
+          total_count: 0,
+          total_amount: "0.00",
+          cash_count: 0,
+          bank_count: 0,
+          recent_7days: 0,
+          this_month: 0,
+          last_month: 0,
+        },
+        agents_finance: { total_solde: 0, total_cash: 0 },
+      }),
+    );
+    renderPage();
+
+    expect(await screen.findByText("Active Commercials")).toBeInTheDocument();
+    // Multiple zero counts render — assert at least the group is present
+    // and the decimal-normalized exposure values render as real "0.00".
+    expect(screen.getAllByText("0").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("0.00")).toHaveLength(2);
+  });
+
+  it("excludes non-approved fields — no debt, city breakdown, or total-count copy anywhere in the panel", async () => {
+    renderPage();
+
+    await screen.findByText("Active Commercials");
+    expect(screen.queryByText(/debt/i)).not.toBeInTheDocument();
+    expect(screen.queryByText("marrakech")).not.toBeInTheDocument();
+    expect(screen.queryByText("40")).not.toBeInTheDocument(); // deposits.total_count
+  });
+
+  it("shows a retryable error state and recovers", async () => {
+    let shouldFail = true;
+    server.use(
+      http.get(`${API}/admin/dashboard/statistics`, () =>
+        shouldFail
+          ? HttpResponse.json({ success: false, error: null }, { status: 500 })
+          : HttpResponse.json(statisticsEnvelope()),
+      ),
+    );
+    renderPage();
+
+    const alert = await screen.findByRole("alert", {}, { timeout: 3000 });
+    shouldFail = false;
+    fireEvent.click(within(alert).getByRole("button", { name: "Retry" }));
+
+    expect(await screen.findByText("Active Commercials")).toBeInTheDocument();
   });
 });
 
@@ -453,60 +636,70 @@ describe("Overdue Grattage Invoices widget", () => {
 });
 
 describe("permission combinations", () => {
-  it("ACCESS_DASHBOARD only: Grattage widget renders, Cheques/Deposits absent", async () => {
+  it("ACCESS_DASHBOARD only: Grattage widget AND Statistics render, Cheques/Deposits absent", async () => {
     signInWith([PERMISSIONS.ACCESS_DASHBOARD]);
     renderPage();
 
     expect(await screen.findByText("Overdue Grattage Invoices")).toBeInTheDocument();
+    expect(await screen.findByText("Active Commercials")).toBeInTheDocument();
     expect(screen.queryByText("Pending Cheques")).not.toBeInTheDocument();
     expect(screen.queryByText("Pending Deposits")).not.toBeInTheDocument();
   });
 
-  it("VIEW_CHEQUES only: Cheques widget renders, the other two are absent", async () => {
+  it("VIEW_CHEQUES only: Cheques widget renders, the other two widgets AND Statistics are absent", async () => {
     signInWith([PERMISSIONS.VIEW_CHEQUES]);
     renderPage();
 
     expect(await screen.findByText("Pending Cheques")).toBeInTheDocument();
     expect(screen.queryByText("Pending Deposits")).not.toBeInTheDocument();
     expect(screen.queryByText("Overdue Grattage Invoices")).not.toBeInTheDocument();
+    expect(screen.queryByText("Active Commercials")).not.toBeInTheDocument();
   });
 
-  it("VIEW_DEPOSITS only: Deposits widget renders, the other two are absent", async () => {
+  it("VIEW_DEPOSITS only: Deposits widget renders, the other two widgets AND Statistics are absent", async () => {
     signInWith([PERMISSIONS.VIEW_DEPOSITS]);
     renderPage();
 
     expect(await screen.findByText("Pending Deposits")).toBeInTheDocument();
     expect(screen.queryByText("Pending Cheques")).not.toBeInTheDocument();
     expect(screen.queryByText("Overdue Grattage Invoices")).not.toBeInTheDocument();
+    expect(screen.queryByText("Active Commercials")).not.toBeInTheDocument();
   });
 
-  it("all three permissions: all three widgets render", async () => {
+  it("all three permissions: all three widgets AND Statistics render", async () => {
     renderPage();
 
     expect(await screen.findByText("Pending Cheques")).toBeInTheDocument();
     expect(screen.getByText("Pending Deposits")).toBeInTheDocument();
     expect(screen.getByText("Overdue Grattage Invoices")).toBeInTheDocument();
+    expect(await screen.findByText("Active Commercials")).toBeInTheDocument();
   });
 
-  it("no relevant permissions: the shell still renders, zero queue requests fire, and the heading remains", async () => {
+  it("no relevant permissions: the shell still renders, zero requests fire (including Statistics), and both section headings remain", async () => {
     let chequesRequested = false;
     let depositsRequested = false;
     let grattageRequested = false;
+    let statisticsRequested = false;
     signInWith([]);
     server.use(
       chequesHandler([], () => (chequesRequested = true)),
       depositsHandler([], () => (depositsRequested = true)),
       grattageHandler([], () => (grattageRequested = true)),
+      statisticsHandler(() => (statisticsRequested = true)),
     );
     renderPage();
 
     expect(await screen.findByRole("heading", { name: "Overview" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Statistics" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Needs attention" })).toBeInTheDocument();
     expect(screen.queryByText("Pending Cheques")).not.toBeInTheDocument();
     expect(screen.queryByText("Pending Deposits")).not.toBeInTheDocument();
     expect(screen.queryByText("Overdue Grattage Invoices")).not.toBeInTheDocument();
+    expect(screen.queryByText("Active Commercials")).not.toBeInTheDocument();
     expect(chequesRequested).toBe(false);
     expect(depositsRequested).toBe(false);
     expect(grattageRequested).toBe(false);
+    expect(statisticsRequested).toBe(false);
   });
 });
 
@@ -553,6 +746,36 @@ describe("isolation", () => {
     expect(await screen.findByText(/Deposit Agent 1/)).toBeInTheDocument();
   });
 
+  it("a Statistics query failure does not block Cheques, Deposits, or Grattage from rendering their own data", async () => {
+    server.use(
+      chequesHandler([chequeRow(1)]),
+      depositsHandler([depositRow(1)]),
+      grattageHandler([invoiceRow(9)]),
+      http.get(`${API}/admin/dashboard/statistics`, () =>
+        HttpResponse.json({ success: false, error: null }, { status: 500 }),
+      ),
+    );
+    renderPage();
+
+    expect(await screen.findByText("CHQ-1")).toBeInTheDocument();
+    expect(await screen.findByText(/Deposit Agent 1/)).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "Invoice #9" })).toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+  });
+
+  it("a Cheques query failure does not block Statistics from rendering its own data", async () => {
+    server.use(
+      http.get(`${API}/admin/cheques`, () =>
+        HttpResponse.json({ success: false, error: null }, { status: 500 }),
+      ),
+      depositsHandler([depositRow(1)]),
+      grattageHandler([invoiceRow(9)]),
+    );
+    renderPage();
+
+    expect(await screen.findByText("Active Commercials")).toBeInTheDocument();
+  });
+
   it("a render crash in one widget is contained by its own PanelBoundary — the other two survive", async () => {
     // Mirrors OverviewPage's own composition exactly (one PanelBoundary per
     // widget, real Deposits/Grattage widgets, unmocked) with a genuinely
@@ -574,6 +797,9 @@ describe("isolation", () => {
     render(
       <MemoryRouter>
         <QueryClientProvider client={createQueryClient()}>
+          <PanelBoundary>
+            <StatisticsPanel />
+          </PanelBoundary>
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
             <PanelBoundary>
               <Bomb />
@@ -589,6 +815,55 @@ describe("isolation", () => {
       </MemoryRouter>,
     );
 
+    expect(await screen.findByText(/Deposit Agent 1/)).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "Invoice #9" })).toBeInTheDocument();
+    expect(await screen.findByText("Active Commercials")).toBeInTheDocument();
+    expect(screen.getByText("This section could not be loaded.")).toBeInTheDocument();
+
+    consoleError.mockRestore();
+  });
+
+  it("a render crash in Statistics's own position is contained by its own PanelBoundary — the decision queues survive", async () => {
+    // Bomb stands in for StatisticsPanel specifically (mirrors the first
+    // crash test's own convention of substituting one real panel with a
+    // throwing one, in its own PanelBoundary, inside the same composition
+    // shape OverviewPage uses) — proves the boundary around Statistics's
+    // OWN slot is what contains the crash, not merely that a crash
+    // elsewhere on the page is harmless.
+    function Bomb(): never {
+      throw new Error("boom");
+    }
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    server.use(
+      chequesHandler([chequeRow(1)]),
+      depositsHandler([depositRow(1)]),
+      grattageHandler([invoiceRow(9)]),
+    );
+
+    render(
+      <MemoryRouter>
+        <QueryClientProvider client={createQueryClient()}>
+          <div className="flex flex-col gap-8">
+            <PanelBoundary>
+              <Bomb />
+            </PanelBoundary>
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+              <PanelBoundary>
+                <PendingChequesWidget />
+              </PanelBoundary>
+              <PanelBoundary>
+                <PendingDepositsWidget />
+              </PanelBoundary>
+              <PanelBoundary>
+                <OverdueGrattageWidget />
+              </PanelBoundary>
+            </div>
+          </div>
+        </QueryClientProvider>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("CHQ-1")).toBeInTheDocument();
     expect(await screen.findByText(/Deposit Agent 1/)).toBeInTheDocument();
     expect(await screen.findByRole("link", { name: "Invoice #9" })).toBeInTheDocument();
     expect(screen.getByText("This section could not be loaded.")).toBeInTheDocument();

@@ -2,15 +2,16 @@ import { PanelBoundary } from "@/shared/components/patterns/panel-boundary";
 import { PendingChequesWidget } from "../components/pending-cheques-widget";
 import { PendingDepositsWidget } from "../components/pending-deposits-widget";
 import { OverdueGrattageWidget } from "../components/overdue-grattage-widget";
+import { StatisticsPanel } from "../components/statistics-panel";
 
 /**
- * M7 Overview — Phase 1 (Foundation + decision queues). Replaces
- * `WelcomePlaceholder` at the app shell's own index route (`/`) — see
- * `app/router/routes.tsx`. The frozen architecture's own widget-grid
- * module (`phase8-architecture.html` §5): "Built as a widget grid, not a
- * fixed page — each stat tile, chart, or queue is one widget reading one
- * endpoint... Widget visibility follows the same permission registry as
- * the sidebar."
+ * M7 Overview — Phase 1 (Foundation + decision queues) + Phase 2
+ * (Statistics). Replaces `WelcomePlaceholder` at the app shell's own
+ * index route (`/`) — see `app/router/routes.tsx`. The frozen
+ * architecture's own widget-grid module (`phase8-architecture.html` §5):
+ * "Built as a widget grid, not a fixed page — each stat tile, chart, or
+ * queue is one widget reading one endpoint... Widget visibility follows
+ * the same permission registry as the sidebar."
  *
  * DELIBERATELY NOT `WorkspacePage` — that shared shell is documented as
  * "entity header + panel area" for a SINGLE composed entity (Agent 360,
@@ -20,55 +21,68 @@ import { OverdueGrattageWidget } from "../components/overdue-grattage-widget";
  * components' own contracts. This page is its own minimal shell instead,
  * built from the SAME generic primitives every other page already uses
  * (`PanelBoundary`, `ListLoadingState`/`ListErrorState`/`ListEmptyState`,
- * `StatusBadge`, `MoneyAmount`, plain Tailwind grid/flex utilities) — no
- * new dashboard-specific design system.
+ * `StatusBadge`, `MoneyAmount`, `StatCard`, plain Tailwind grid/flex
+ * utilities) — no new dashboard-specific design system.
  *
- * ONLY THE THREE HIGHEST-VALUE DECISION QUEUES SHIP THIS PHASE (Pending
- * Cheques, Pending Deposits, Overdue Grattage Invoices) — Dashboard
- * statistics, chart-data, recent-activities and agents-overview are
- * explicitly OUT of scope for Phase 1 (see the M7 Overview discovery
- * report); they are later, separately-reviewed phases, not omitted by
- * oversight.
+ * TWO SECTIONS SHIP AS OF PHASE 2 — "Statistics" (nine KPI tiles, grouped
+ * Network health / Cash movement / Exposure) and "Needs attention" (the
+ * three Phase 1 decision queues, Pending Cheques / Pending Deposits /
+ * Overdue Grattage Invoices). Chart-data, recent-activities and
+ * agents-overview remain explicitly OUT of scope (Phases 3/4 — see the M7
+ * Overview discovery report); they are later, separately-reviewed phases,
+ * not omitted by oversight.
  *
- * EACH WIDGET IS AN INDEPENDENT CHILD COMPONENT — this page owns no query,
- * no permission check, and no domain type; it never imports a domain HOOK
- * itself, only each domain's own top-level widget component. Every widget
- * runs its own query (in parallel — nothing here sequences them), decides
- * its own permission gate, and renders its own loading/error/empty/
- * populated branch, exactly like every other composed workspace's own
- * panels already do. `PanelBoundary` wraps each one independently, so a
- * genuine render crash in one widget cannot blank the other two — the
- * same isolation Agent 360's Phase 2 and Client 360 already proved, now a
- * THIRD composed surface exercising the identical pattern.
+ * BOTH SECTION HEADINGS ("Statistics", "Needs attention") ARE STATIC PAGE
+ * STRUCTURE, not permission-derived — this page still owns no query, no
+ * permission check, and no domain type; it never imports a domain HOOK
+ * itself, only each domain's own top-level widget/panel component. A
+ * section heading always renders even if every panel beneath it is
+ * absent for the current session's permissions (the same "page title
+ * always shows" shape the page's own "Overview" `<h1>` already
+ * established) — this page has no way to know WHY a panel is empty, only
+ * that the heading is a structural label, not a conditional one.
  *
- * A widget renders NOTHING (not even its own frame) when its required
+ * EACH PANEL/WIDGET IS AN INDEPENDENT CHILD COMPONENT — every one runs
+ * its own query (in parallel — nothing here sequences them), decides its
+ * own permission gate, and renders its own loading/error/empty/populated
+ * branch. `PanelBoundary` wraps each one independently, so a genuine
+ * render crash in one cannot blank the others — the same isolation Agent
+ * 360's/Client 360's own panels already proved, now extended to
+ * Statistics alongside the three Phase 1 queues.
+ *
+ * A panel renders NOTHING (not even its own frame) when its required
  * permission is absent — `if (!canView) return null` before its query is
- * even constructed, inside the widget itself, mirroring every existing
+ * even constructed, inside the panel itself, mirroring every existing
  * Agent 360/Client 360 panel's own "no permission, no frame, no request"
- * discipline. This page always mounts all three unconditionally and lets
- * each one opt out; it holds no permission logic of its own. A session
- * holding none of `view-cheques`/`view-depos`/`access-dashboard` still
- * sees a well-formed page — the "Overview" heading and an otherwise-empty
- * grid, never a broken or blank shell — the same "page title always
- * shows, panels are what disappear" shape `WorkspacePage` already
- * established for Agent 360/Client 360.
+ * discipline. This page always mounts all four unconditionally and lets
+ * each one opt out.
  */
 export function OverviewPage() {
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-8">
       <h1 className="text-2xl font-bold">Overview</h1>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <section className="flex flex-col gap-3">
+        <h2 className="text-lg font-semibold">Statistics</h2>
         <PanelBoundary>
-          <PendingChequesWidget />
+          <StatisticsPanel />
         </PanelBoundary>
-        <PanelBoundary>
-          <PendingDepositsWidget />
-        </PanelBoundary>
-        <PanelBoundary>
-          <OverdueGrattageWidget />
-        </PanelBoundary>
-      </div>
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="text-lg font-semibold">Needs attention</h2>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <PanelBoundary>
+            <PendingChequesWidget />
+          </PanelBoundary>
+          <PanelBoundary>
+            <PendingDepositsWidget />
+          </PanelBoundary>
+          <PanelBoundary>
+            <OverdueGrattageWidget />
+          </PanelBoundary>
+        </div>
+      </section>
     </div>
   );
 }
