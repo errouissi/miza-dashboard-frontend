@@ -8,11 +8,19 @@ import { sessionManager } from "@/infrastructure/auth";
 import { createQueryClient } from "@/infrastructure/query";
 import { PERMISSIONS } from "@/infrastructure/permissions";
 import { PanelBoundary } from "@/shared/components/patterns/panel-boundary";
+import { toIsoDate } from "@/shared/formatters";
 import { PendingChequesWidget } from "../components/pending-cheques-widget";
 import { PendingDepositsWidget } from "../components/pending-deposits-widget";
 import { OverdueGrattageWidget } from "../components/overdue-grattage-widget";
 import { StatisticsPanel } from "../components/statistics-panel";
+import { TrendsPanel } from "../components/trends-panel";
 import { OverviewPage } from "./overview-page";
+
+function isoDaysAgo(offset: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - offset);
+  return toIsoDate(d)!;
+}
 
 const API = "http://localhost/api/v1";
 
@@ -241,10 +249,42 @@ function statisticsHandler(
   });
 }
 
+// ------------------------------------------------------------ Trends (chart-data)
+
+function chartDataEnvelope(
+  overrides: Partial<{
+    deposits_over_time: { date: string; count: number; total_amount: string }[];
+    agent_registrations: { date: string; role: string; count: number }[];
+  }> = {},
+) {
+  return {
+    deposits_over_time: overrides.deposits_over_time ?? [],
+    deposits_by_method: [{ method: "bank", count: 1, total_amount: "20.00" }],
+    agents_by_city: [{ ville_actuelle: "marrakech", count: 1 }],
+    agent_registrations: overrides.agent_registrations ?? [],
+  };
+}
+
+function chartDataHandler(
+  onRequest?: (url: URL) => void,
+  envelope: ReturnType<typeof chartDataEnvelope> = chartDataEnvelope(),
+) {
+  return http.get(`${API}/admin/dashboard/chart-data`, ({ request }) => {
+    onRequest?.(new URL(request.url));
+    return HttpResponse.json(envelope);
+  });
+}
+
 beforeEach(() => {
   window.localStorage.clear();
   signInWith(ALL_OVERVIEW_PERMISSIONS);
-  server.use(chequesHandler(), depositsHandler(), grattageHandler(), statisticsHandler());
+  server.use(
+    chequesHandler(),
+    depositsHandler(),
+    grattageHandler(),
+    statisticsHandler(),
+    chartDataHandler(),
+  );
 });
 
 describe("Overview page", () => {
@@ -254,12 +294,13 @@ describe("Overview page", () => {
     expect(await screen.findByRole("heading", { name: "Overview" })).toBeInTheDocument();
   });
 
-  it("renders the Statistics and Needs attention section headings", async () => {
+  it("renders the Statistics, Trends and Needs attention section headings", async () => {
     renderPage();
 
     expect(
       await screen.findByRole("heading", { name: "Statistics" }),
     ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Trends" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Needs attention" })).toBeInTheDocument();
   });
 
@@ -275,6 +316,16 @@ describe("Overview page", () => {
     renderPage();
 
     expect(await screen.findByText("Active Commercials")).toBeInTheDocument();
+    expect(screen.getByText("Pending Cheques")).toBeInTheDocument();
+  });
+
+  it("mounts the Trends panel alongside Statistics and the decision queues", async () => {
+    renderPage();
+
+    expect(
+      await screen.findByText("Deposit Submissions — Last 30 Days"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Active Commercials")).toBeInTheDocument();
     expect(screen.getByText("Pending Cheques")).toBeInTheDocument();
   });
 });
@@ -388,6 +439,153 @@ describe("Statistics panel", () => {
     fireEvent.click(within(alert).getByRole("button", { name: "Retry" }));
 
     expect(await screen.findByText("Active Commercials")).toBeInTheDocument();
+  });
+});
+
+describe("Trends panel", () => {
+  it("hides the panel and never requests /admin/dashboard/chart-data without ACCESS_DASHBOARD", async () => {
+    let requested = false;
+    signInWith([PERMISSIONS.VIEW_CHEQUES, PERMISSIONS.VIEW_DEPOSITS]);
+    server.use(chartDataHandler(() => (requested = true)));
+    renderPage();
+
+    await screen.findByText("Pending Cheques");
+    expect(
+      screen.queryByText("Deposit Submissions — Last 30 Days"),
+    ).not.toBeInTheDocument();
+    expect(requested).toBe(false);
+  });
+
+  it("mounts its query, requesting days=30, when ACCESS_DASHBOARD is present", async () => {
+    let url: URL | undefined;
+    server.use(chartDataHandler((u) => (url = u)));
+    renderPage();
+
+    await waitFor(() => expect(url).toBeDefined());
+    expect(url?.searchParams.get("days")).toBe("30");
+  });
+
+  it("shows a loading state, then both chart titles", async () => {
+    renderPage();
+
+    expect(await screen.findByTestId("trends-loading")).toBeInTheDocument();
+
+    expect(
+      await screen.findByText("Deposit Submissions — Last 30 Days"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Agent Registrations — Last 30 Days")).toBeInTheDocument();
+  });
+
+  it("shows the honest empty state for a completely empty Deposit Submissions series, never 30 zero bars", async () => {
+    server.use(
+      chartDataHandler(undefined, chartDataEnvelope({ deposits_over_time: [] })),
+    );
+    renderPage();
+
+    expect(
+      await screen.findByText("No deposits in the selected period."),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("img", { name: "Deposit Submissions, daily amount" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows the honest empty state for a completely empty Agent Registrations series", async () => {
+    server.use(
+      chartDataHandler(undefined, chartDataEnvelope({ agent_registrations: [] })),
+    );
+    renderPage();
+
+    expect(
+      await screen.findByText("No agent registrations in the selected period."),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("img", { name: "Agent Registrations, daily count by role" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("renders a continuous, zero-filled 30-bar Deposit Submissions series from a single real row", async () => {
+    const today = isoDaysAgo(0);
+    server.use(
+      chartDataHandler(
+        undefined,
+        chartDataEnvelope({
+          deposits_over_time: [{ date: today, count: 2, total_amount: "1500.10" }],
+        }),
+      ),
+    );
+    renderPage();
+
+    const svg = await screen.findByRole("img", {
+      name: "Deposit Submissions, daily amount",
+    });
+    expect(within(svg).getAllByRole("img")).toHaveLength(30);
+  });
+
+  it("displays the exact backend decimal string in the bar's label — never reformatted through a parsed number", async () => {
+    const today = isoDaysAgo(0);
+    server.use(
+      chartDataHandler(
+        undefined,
+        chartDataEnvelope({
+          deposits_over_time: [{ date: today, count: 2, total_amount: "1500.10" }],
+        }),
+      ),
+    );
+    renderPage();
+
+    // Number("1500.10").toString() would drop the trailing zero and read
+    // "1500.1" — asserting the full "1500.10" proves the displayed label
+    // is the verbatim wire string, not a value round-tripped through the
+    // geometry parse.
+    expect(await screen.findByRole("img", { name: /1500\.10/ })).toBeInTheDocument();
+  });
+
+  it("renders Agent Registrations grouped by role, with a legend identifying each role", async () => {
+    const today = isoDaysAgo(0);
+    server.use(
+      chartDataHandler(
+        undefined,
+        chartDataEnvelope({
+          agent_registrations: [
+            { date: today, role: "commercial", count: 3 },
+            { date: today, role: "manager", count: 1 },
+          ],
+        }),
+      ),
+    );
+    renderPage();
+
+    expect(await screen.findByText("Managers")).toBeInTheDocument();
+    expect(screen.getByText("Commercials")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /3 Commercials/ })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /1 Managers/ })).toBeInTheDocument();
+
+    const svg = screen.getByRole("img", {
+      name: "Agent Registrations, daily count by role",
+    });
+    // 30-day window x 2 observed roles.
+    expect(within(svg).getAllByRole("img")).toHaveLength(60);
+  });
+
+  it("shows a retryable error state and recovers", async () => {
+    let shouldFail = true;
+    server.use(
+      http.get(`${API}/admin/dashboard/chart-data`, () =>
+        shouldFail
+          ? HttpResponse.json({ success: false, error: null }, { status: 500 })
+          : HttpResponse.json(chartDataEnvelope()),
+      ),
+    );
+    renderPage();
+
+    const alert = await screen.findByRole("alert", {}, { timeout: 3000 });
+    shouldFail = false;
+    fireEvent.click(within(alert).getByRole("button", { name: "Retry" }));
+
+    expect(
+      await screen.findByText("No deposits in the selected period."),
+    ).toBeInTheDocument();
   });
 });
 
@@ -636,17 +834,18 @@ describe("Overdue Grattage Invoices widget", () => {
 });
 
 describe("permission combinations", () => {
-  it("ACCESS_DASHBOARD only: Grattage widget AND Statistics render, Cheques/Deposits absent", async () => {
+  it("ACCESS_DASHBOARD only: Grattage widget, Statistics AND Trends render, Cheques/Deposits absent", async () => {
     signInWith([PERMISSIONS.ACCESS_DASHBOARD]);
     renderPage();
 
     expect(await screen.findByText("Overdue Grattage Invoices")).toBeInTheDocument();
     expect(await screen.findByText("Active Commercials")).toBeInTheDocument();
+    expect(screen.getByText("Deposit Submissions — Last 30 Days")).toBeInTheDocument();
     expect(screen.queryByText("Pending Cheques")).not.toBeInTheDocument();
     expect(screen.queryByText("Pending Deposits")).not.toBeInTheDocument();
   });
 
-  it("VIEW_CHEQUES only: Cheques widget renders, the other two widgets AND Statistics are absent", async () => {
+  it("VIEW_CHEQUES only: Cheques widget renders, the other two widgets, Statistics AND Trends are absent", async () => {
     signInWith([PERMISSIONS.VIEW_CHEQUES]);
     renderPage();
 
@@ -654,9 +853,12 @@ describe("permission combinations", () => {
     expect(screen.queryByText("Pending Deposits")).not.toBeInTheDocument();
     expect(screen.queryByText("Overdue Grattage Invoices")).not.toBeInTheDocument();
     expect(screen.queryByText("Active Commercials")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Deposit Submissions — Last 30 Days"),
+    ).not.toBeInTheDocument();
   });
 
-  it("VIEW_DEPOSITS only: Deposits widget renders, the other two widgets AND Statistics are absent", async () => {
+  it("VIEW_DEPOSITS only: Deposits widget renders, the other two widgets, Statistics AND Trends are absent", async () => {
     signInWith([PERMISSIONS.VIEW_DEPOSITS]);
     renderPage();
 
@@ -664,42 +866,53 @@ describe("permission combinations", () => {
     expect(screen.queryByText("Pending Cheques")).not.toBeInTheDocument();
     expect(screen.queryByText("Overdue Grattage Invoices")).not.toBeInTheDocument();
     expect(screen.queryByText("Active Commercials")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Deposit Submissions — Last 30 Days"),
+    ).not.toBeInTheDocument();
   });
 
-  it("all three permissions: all three widgets AND Statistics render", async () => {
+  it("all three permissions: all three widgets, Statistics AND Trends render", async () => {
     renderPage();
 
     expect(await screen.findByText("Pending Cheques")).toBeInTheDocument();
     expect(screen.getByText("Pending Deposits")).toBeInTheDocument();
     expect(screen.getByText("Overdue Grattage Invoices")).toBeInTheDocument();
     expect(await screen.findByText("Active Commercials")).toBeInTheDocument();
+    expect(screen.getByText("Deposit Submissions — Last 30 Days")).toBeInTheDocument();
   });
 
-  it("no relevant permissions: the shell still renders, zero requests fire (including Statistics), and both section headings remain", async () => {
+  it("no relevant permissions: the shell still renders, zero requests fire (including Statistics/Trends), and all three section headings remain", async () => {
     let chequesRequested = false;
     let depositsRequested = false;
     let grattageRequested = false;
     let statisticsRequested = false;
+    let chartDataRequested = false;
     signInWith([]);
     server.use(
       chequesHandler([], () => (chequesRequested = true)),
       depositsHandler([], () => (depositsRequested = true)),
       grattageHandler([], () => (grattageRequested = true)),
       statisticsHandler(() => (statisticsRequested = true)),
+      chartDataHandler(() => (chartDataRequested = true)),
     );
     renderPage();
 
     expect(await screen.findByRole("heading", { name: "Overview" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Statistics" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Trends" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Needs attention" })).toBeInTheDocument();
     expect(screen.queryByText("Pending Cheques")).not.toBeInTheDocument();
     expect(screen.queryByText("Pending Deposits")).not.toBeInTheDocument();
     expect(screen.queryByText("Overdue Grattage Invoices")).not.toBeInTheDocument();
     expect(screen.queryByText("Active Commercials")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Deposit Submissions — Last 30 Days"),
+    ).not.toBeInTheDocument();
     expect(chequesRequested).toBe(false);
     expect(depositsRequested).toBe(false);
     expect(grattageRequested).toBe(false);
     expect(statisticsRequested).toBe(false);
+    expect(chartDataRequested).toBe(false);
   });
 });
 
@@ -776,6 +989,39 @@ describe("isolation", () => {
     expect(await screen.findByText("Active Commercials")).toBeInTheDocument();
   });
 
+  it("a Trends query failure does not block Cheques, Deposits, Grattage, or Statistics from rendering their own data", async () => {
+    server.use(
+      chequesHandler([chequeRow(1)]),
+      depositsHandler([depositRow(1)]),
+      grattageHandler([invoiceRow(9)]),
+      http.get(`${API}/admin/dashboard/chart-data`, () =>
+        HttpResponse.json({ success: false, error: null }, { status: 500 }),
+      ),
+    );
+    renderPage();
+
+    expect(await screen.findByText("CHQ-1")).toBeInTheDocument();
+    expect(await screen.findByText(/Deposit Agent 1/)).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "Invoice #9" })).toBeInTheDocument();
+    expect(await screen.findByText("Active Commercials")).toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+  });
+
+  it("a Cheques query failure does not block Trends from rendering its own data", async () => {
+    server.use(
+      http.get(`${API}/admin/cheques`, () =>
+        HttpResponse.json({ success: false, error: null }, { status: 500 }),
+      ),
+      depositsHandler([depositRow(1)]),
+      grattageHandler([invoiceRow(9)]),
+    );
+    renderPage();
+
+    expect(
+      await screen.findByText("Deposit Submissions — Last 30 Days"),
+    ).toBeInTheDocument();
+  });
+
   it("a render crash in one widget is contained by its own PanelBoundary — the other two survive", async () => {
     // Mirrors OverviewPage's own composition exactly (one PanelBoundary per
     // widget, real Deposits/Grattage widgets, unmocked) with a genuinely
@@ -800,6 +1046,9 @@ describe("isolation", () => {
           <PanelBoundary>
             <StatisticsPanel />
           </PanelBoundary>
+          <PanelBoundary>
+            <TrendsPanel />
+          </PanelBoundary>
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
             <PanelBoundary>
               <Bomb />
@@ -815,6 +1064,55 @@ describe("isolation", () => {
       </MemoryRouter>,
     );
 
+    expect(await screen.findByText(/Deposit Agent 1/)).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "Invoice #9" })).toBeInTheDocument();
+    expect(await screen.findByText("Active Commercials")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Deposit Submissions — Last 30 Days"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("This section could not be loaded.")).toBeInTheDocument();
+
+    consoleError.mockRestore();
+  });
+
+  it("a render crash in Trends's own position is contained by its own PanelBoundary — Statistics and the decision queues survive", async () => {
+    // Bomb stands in for TrendsPanel specifically, mirroring the
+    // Statistics-position crash test's own convention.
+    function Bomb(): never {
+      throw new Error("boom");
+    }
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    server.use(
+      chequesHandler([chequeRow(1)]),
+      depositsHandler([depositRow(1)]),
+      grattageHandler([invoiceRow(9)]),
+    );
+
+    render(
+      <MemoryRouter>
+        <QueryClientProvider client={createQueryClient()}>
+          <PanelBoundary>
+            <StatisticsPanel />
+          </PanelBoundary>
+          <PanelBoundary>
+            <Bomb />
+          </PanelBoundary>
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+            <PanelBoundary>
+              <PendingChequesWidget />
+            </PanelBoundary>
+            <PanelBoundary>
+              <PendingDepositsWidget />
+            </PanelBoundary>
+            <PanelBoundary>
+              <OverdueGrattageWidget />
+            </PanelBoundary>
+          </div>
+        </QueryClientProvider>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("CHQ-1")).toBeInTheDocument();
     expect(await screen.findByText(/Deposit Agent 1/)).toBeInTheDocument();
     expect(await screen.findByRole("link", { name: "Invoice #9" })).toBeInTheDocument();
     expect(await screen.findByText("Active Commercials")).toBeInTheDocument();
