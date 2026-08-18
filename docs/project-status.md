@@ -153,29 +153,47 @@ Agent Transfers, Allocations, Bons) also remains open, unrelated to M7.
 Neither blocks M7's own closure.
 
 **M8 — Hardening discovery/kickoff is COMPLETE; implementation has NOT
-started, and M8 is now DEFERRED until the Stock Module (below) is
-complete — an explicit product decision, not a status regression.** The
-full six-deliverable discovery pass, the approved 7-phase structure, and
-the five approved discovery-stage decisions (Playwright selected for
-E2E; a dedicated, isolated E2E Postgres environment, fail-closed;
-Phase 1A's narrow scope; the error-reporting vendor deferred to Phase 5;
-this project's first P1 working definition) all remain valid and
+started.** M8 was previously deferred pending the Stock Module's own
+core closure — **that gating condition is now satisfied, so M8 Phase
+1A is the next planned implementation work.** One small, standalone
+item was discovered while closing the Stock Module and has now been
+fully closed out first: **Scheduler Health (pre-M8 operational
+hardening) — COMPLETE, manual QA passed** — see its own section below.
+Backend implemented and pushed by the Backend Team, frontend
+implemented, automated suite green, and manual QA passed for all three
+states (`never_detected`/`healthy`/`stale`) plus recovery. **M8 has
+still NOT started** — Phase 1A is next, not yet begun. The full
+six-deliverable M8 discovery pass, the approved 7-phase structure,
+and the five approved discovery-stage decisions (Playwright selected
+for E2E; a dedicated, isolated E2E Postgres environment, fail-closed;
+Phase 1A's narrow scope; the error-reporting vendor deferred to Phase
+5; this project's first P1 working definition) all remain valid and
 unchanged, recorded in full in `next-session.md`. No M8 source code has
-been touched. **M8 Phase 1A resumes once the Stock Module below is
-closed out** — this is not a cancellation.
+been touched. Because backend and frontend history has both moved since
+this plan was written (see "Stock Module" below), **Phase 1A must be
+re-read and its own git/test freshness re-validated before any code is
+written** — the plan itself is unchanged, only the starting state
+around it has moved.
 
-**The Stock Module (`docs/future-stock-module.md`'s own discovery, now
-actively in progress) is the CURRENT work.** Backend Phase 1A
-(`GET /admin/stock`) + Phase 1B (`GET /admin/stock/movements`) are
-COMPLETE and manually QA'd — committed locally in the backend repo
-(`a2473f1307f67ae2f56ac45230ef44e16edbeecc`, "feat(stock): add admin
-inventory and movement ledger APIs"), **NOT pushed**. Two real
+**The Stock Module (`docs/future-stock-module.md`'s own discovery) — CORE
+CLOSED.** Backend Phase 1A (`GET /admin/stock`) + Phase 1B
+(`GET /admin/stock/movements`) are COMPLETE and manually QA'd. Two real
 Postman-found public-contract defects were found and fixed during
 backend QA (the `type`/`from`/`to` filters were silently ignored because
 the controller validated different internal key names; validation
 failures could redirect instead of returning JSON depending on the
 caller's `Accept` header) — both fixed, both regression-tested. Final
-focused backend Stock suite: 98/98 passed, 354 assertions.
+focused backend Stock suite: 98/98 passed, 354 assertions. The backend
+checkpoint commit (`a2473f1307f67ae2f56ac45230ef44e16edbeecc`,
+"feat(stock): add admin inventory and movement ledger APIs") is now
+**historical — an ancestor of the backend's current HEAD**, not the
+current tip: the backend branch (`feature/Update-claude`) moved on via
+an external pull that merged in unrelated teammate work
+(`b577503`, "feat(manager): add read-only client monitoring") into merge
+commit `a9bf2bd`, now the branch's HEAD, **0 ahead / 0 behind
+`origin/feature/Update-claude`** — synced with origin, working tree
+clean. That unrelated merge does not change the fact that Stock backend
+Phase 1A/1B is complete.
 
 Frontend Phase 2 planning/audit is COMPLETE (full architecture audit;
 approved page/route/filter/column decisions — see `next-session.md` for
@@ -191,46 +209,56 @@ the audit ledger Phase 2B's own "View movements" action drills into) is
 also COMPLETE and MANUALLY QA'D** — 33 new focused tests, manual QA
 passed against the real running backend (page load, all five filters,
 pagination, reference navigation, general usability). **Phase 2
-(2A + 2B + 2C) is now fully IMPLEMENTED and QA'D, all still uncommitted
-by decision, awaiting a single checkpoint commit.** A dedicated final
-review pass (this session) re-verified every Phase 2 contract fresh from
-source — see "Stock Module — Phase 2 (frontend)" below for the full
-write-up and the review's own findings (none required a source fix).
-Frontend Phase 2D (responsive polish + full regression) remains a
-separate, not-yet-started, not-yet-scoped-in-detail item — it is NOT
-part of this checkpoint. `next-session.md`'s own "Next task" now points
-at the checkpoint commit, not at further QA.
+(2A + 2B + 2C) is fully IMPLEMENTED, AUTOMATED GREEN, MANUALLY QA'D, and
+COMMITTED** — a dedicated final review pass re-verified every Phase 2
+contract fresh from source first (see "Stock Module — Phase 2
+(frontend)" below for the full write-up and the review's own findings,
+none required a source fix), then the checkpoint commit was made:
+
+```
+6a1d68a796cf820baa085c0db9781275762a6d10
+feat(stock): add Stock Overview and Stock Movements screens
+```
+
+**This commit is deliberately UNPUSHED for now** (`main` is ahead of
+`origin/main` by 1 commit) — a separate decision from Stock Module's own
+closure, not yet made. **The Stock Module's CORE is CLOSED on this
+basis**: backend 1A/1B complete, frontend 2A/2B/2C complete, automated
+suite green, both 2B and 2C manually QA'd, and the checkpoint committed.
+**Frontend Phase 2D (responsive polish + full regression) is an
+OPTIONAL future follow-up, explicitly NOT required to close the Stock
+Module** — not started, not scoped in any detail, requiring its own
+discovery/scoping pass before implementation whenever it is picked up.
+It does not block M8 either.
 
 ## Current branch
 
-`main`, level with `origin/main` at `0f16f24` ("docs(stock): checkpoint
-future stock module discovery"). Two documentation-only commits landed
-after `d11e29c` (M8 discovery checkpoint `0ff80a3`; future-stock-module
-discovery checkpoint `0f16f24`) — no source code in either, both pushed.
+`main`, **ahead of `origin/main` by 1 commit — `6a1d68a` ("feat(stock):
+add Stock Overview and Stock Movements screens"), deliberately
+UNPUSHED.** Before that, level with `origin/main` at `0f16f24`
+("docs(stock): checkpoint future stock module discovery"). Two
+documentation-only commits landed after `d11e29c` (M8 discovery
+checkpoint `0ff80a3`; future-stock-module discovery checkpoint
+`0f16f24`) — no source code in either, both pushed.
 
-**Working tree is currently NOT clean.** Frontend Stock Module Phase 2A
-+ 2B + 2C changes are implemented, automated-test green, and **both 2B
-and 2C are manually QA'd** — deliberately left uncommitted pending a
-single Phase 2 checkpoint commit (approval given, not yet executed):
+**Working tree is clean.** The Stock Module Phase 2A + 2B + 2C diff that
+was previously uncommitted is now entirely inside `6a1d68a` — nothing
+outstanding.
 
-```
- M src/app/navigation/nav.ts
- M src/app/navigation/nav.test.ts
- M src/app/router/route-authorization.test.tsx
- M src/app/router/routes.tsx
- M src/domains/reference/products/index.ts
-?? src/domains/stock/movements/
-?? src/domains/stock/overview/
-```
+The backend repo (`C:\Miza\backend`) is on branch `feature/Update-claude`,
+HEAD `a9bf2bd`, working tree clean, **0 ahead / 0 behind
+`origin/feature/Update-claude`** — synced with origin. The Stock
+checkpoint commit (`a2473f1`) is historical, an ancestor of the current
+HEAD, not the tip — see "Current milestone" above for the full
+reconciliation. See `next-session.md`'s own "Next task" for what comes
+next (M8 Phase 1A, pending its own re-validation).
 
-The backend repo (`C:\Miza\backend`) also has one local, unpushed
-checkpoint commit (`a2473f1`) — see "Current milestone" above. See
-`next-session.md`'s own "Next task" for the exact checkpoint-commit scope.
+## Stock Module — Backend Phase 1A/1B + Frontend Phase 2 (CORE CLOSED)
 
-## Stock Module — Backend Phase 1A/1B + Frontend Phase 2 (implemented and QA'd, awaiting checkpoint commit)
-
-**Backend Phase 1A + 1B — COMPLETE, manually QA'd, committed locally
-(`a2473f1`), NOT pushed.** `GET /admin/stock` (authoritative per-product
+**Backend Phase 1A + 1B — COMPLETE, manually QA'd.** Committed as
+`a2473f1`, now historical — an ancestor of the backend's current HEAD
+(`a9bf2bd`), not the tip; see "Current milestone" above for the full
+reconciliation of the backend's branch state. `GET /admin/stock` (authoritative per-product
 network aggregate: company/manager/commercial/total quantity and value,
 plus network summary totals) and `GET /admin/stock/movements`
 (paginated, newest-first audit ledger over `stock_movements`, filters
@@ -253,7 +281,8 @@ for the complete set (routes, `ACCESS_DASHBOARD` reuse, Actor omission,
 client-side Overview filters, the `product_id`-only drill-down, no
 charts/thresholds/write-workflows this phase).
 
-**Frontend Phase 2A (data/API/types/query layer) — COMPLETE, uncommitted.**
+**Frontend Phase 2A (data/API/types/query layer) — COMPLETE, committed
+as part of `6a1d68a`.**
 `domains/stock/overview/` and `domains/stock/movements/`
 (`model`/`api`/`queries`), following every existing resource's exact
 shape. `Operator`/`OPERATORS`/`isOperator` are reused from
@@ -335,22 +364,149 @@ direct page load, sidebar placement, every filter individually and
 combined, pagination, row accuracy against the backend response, empty
 state, and general usability.
 
-**Phase 2 (2A + 2B + 2C) is now fully IMPLEMENTED, AUTOMATED GREEN, and
-MANUALLY QA'D — awaiting a single checkpoint commit, approval given.**
-A dedicated final review pass re-verified every contract above fresh
-from source (not re-derived from this document) and found no genuine
-issue requiring a source fix — no accidental changes, no duplicated
-types, no incorrect exports, no mapping mistakes, no dead code. Full
-suite: 1389/1389 across 70 files (one intermittent run hit the
-pre-existing, load-dependent timing flake already documented elsewhere
-in this file — on a different, untouched list-page file each time,
-never a Stock Movements test — confirmed a flake, not a regression, by
-a clean full-suite rerun and by running every affected file standalone).
+**Phase 2 (2A + 2B + 2C) is fully IMPLEMENTED, AUTOMATED GREEN, MANUALLY
+QA'D, and COMMITTED — the Stock Module's frontend core is CLOSED.** A
+dedicated final review pass re-verified every contract above fresh from
+source (not re-derived from this document) and found no genuine issue
+requiring a source fix — no accidental changes, no duplicated types, no
+incorrect exports, no mapping mistakes, no dead code. Full suite:
+1389/1389 across 70 files (one intermittent run hit the pre-existing,
+load-dependent timing flake already documented elsewhere in this file —
+on a different, untouched list-page file each time, never a Stock
+Movements test — confirmed a flake, not a regression, by a clean
+full-suite rerun and by running every affected file standalone).
 typecheck/lint (0 errors, same 4 pre-existing warnings)/format all
 clean; `vite build` succeeds (944.40 KB, +~10.5 KB over Phase 2B's own
-937.89 KB, no new dependency). Frontend Phase 2D (responsive polish +
-full regression) is a separate, not-yet-started item, not part of this
-checkpoint.
+937.89 KB, no new dependency). Checkpoint commit:
+
+```
+6a1d68a796cf820baa085c0db9781275762a6d10
+feat(stock): add Stock Overview and Stock Movements screens
+```
+
+**Deliberately UNPUSHED for now** — `main` is ahead of `origin/main` by
+1 commit. Frontend Phase 2D (responsive polish + full regression) is an
+**optional** future follow-up, explicitly not required for this closure
+and not a blocker for M8 either — not started, not scoped, needs its own
+discovery pass whenever it is picked up. **With this closure, M8's own
+gating condition ("resumes once the Stock Module core closes out") is
+satisfied** — but one small, standalone item (Scheduler Health, below)
+is being closed out first; **M8 Phase 1A is the next planned
+implementation work after that**, pending its own git/test freshness
+re-validation (backend and frontend history has both moved since that
+plan was written) — see `next-session.md`'s own "Next task" section.
+
+## Scheduler Health (pre-M8 operational hardening) — COMPLETE, manual QA passed
+
+**Discovered while closing the Stock Module, not part of it and not
+part of M8** — a standalone item, the same categorization used
+throughout this file and `next-session.md`.
+
+**Root cause, verified from source, not the UI:** Grattage Invoice #42
+stayed `pending` past its `due_at` because nothing proved Laravel's
+scheduler (`schedule:run`) was actually being invoked locally — the
+Grattage lifecycle logic itself was already correct: manually running
+`php artisan grattage:flag-overdue` flipped the invoice to `overdue`
+immediately, and the DB evidence (`updated_at == created_at`, zero
+`overdue` rows anywhere in the table) confirmed the sweep had simply
+never run, not a business-logic defect. No cron/Task Scheduler entry
+existed anywhere in the backend repo or its docs; `production-checklist.md`
+had only a vague, unchecked "Scheduler configured if needed" line.
+
+**Backend Team implemented and pushed the fix** — commit `92d75cf`
+(`feat(ops): add scheduler liveness heartbeat`) on `feature/Update-claude`,
+now the branch's HEAD, synced with origin. A `scheduler:heartbeat`
+command runs `everyMinute()` (no `withoutOverlapping()`/`onOneServer()`
+— deliberate: the write is a tiny idempotent `updateOrCreate()`, and in
+a multi-server deployment any one server's heartbeat succeeding already
+proves the scheduler loop is alive somewhere), writing to a dedicated
+`scheduler_heartbeats` table — NOT the `Cache` facade, specifically so
+an ordinary `cache:clear` can never falsely report `never_detected`.
+Surfaced as an additive field on the existing
+`GET /api/v1/admin/dashboard/statistics`:
+```
+scheduler_health: {
+  status: "healthy" | "stale" | "never_detected",
+  last_heartbeat_at: "Y-m-d H:i:s" | null,  // plain local Africa/Casablanca — NOT ISO-8601
+  stale_after_seconds: 300
+}
+```
+`status` is computed backend-side (age ≤ 300s inclusive = `healthy`).
+Existing `grattage:flag-overdue` schedule confirmed unchanged by its
+own dedicated regression test (`1 12 * * *`, `Africa/Casablanca`,
+`withoutOverlapping`, `onOneServer`). The Backend Team's own
+`docs/api-endpoints.md` and `docs/production-checklist.md` were updated
+as part of this push — the checklist's vague scheduler line is now an
+explicit, concrete requirement (the real cron pattern, a post-deploy
+verification step reading this exact field, and the `schedule:work`
+local-dev instruction). **Verified fresh from source before any
+frontend work started** (not assumed from the original handoff): 48/48
+backend tests pass (real Postgres, not the sqlite default), and the
+live local endpoint was queried directly, returning
+`{"status":"never_detected","last_heartbeat_at":null,"stale_after_seconds":300}`
+(expected — `schedule:work` was not running locally). **Production
+still requires an external trigger invoking `php artisan schedule:run`
+every minute** — this heartbeat makes scheduler liveness observable,
+it does not configure the production scheduler itself.
+
+**Frontend integration is IMPLEMENTED, uncommitted.** `DashboardStatistics`/
+`fetchDashboardStatistics` (`domains/overview/`) widened with the new
+field — `status` rendered verbatim from the backend, never computed
+client-side; an unrecognized status throws rather than silently passing
+through, mirroring `normalizeAggregateDecimal`'s own precedent in the
+same file. A new domain-local `SchedulerHealthBanner` — a page banner
+(Design System §20, "full-width under the header... one at a time" —
+the first real caller of that pattern in this codebase) mounted on
+`OverviewPage` directly under the `<h1>`, before any titled section.
+Reuses `StatisticsPanel`'s own existing `useDashboardStatisticsQuery`
+unchanged — same query key, no new fetch, **no `refetchInterval`/polling
+added**, rides the existing 5-minute `SLOW` freshness the other nine KPI
+fields already use. `healthy` renders nothing at all; `stale` renders a
+warning-tone (amber) banner naming the last-detected heartbeat;
+`never_detected` renders a danger-tone (red) banner making no timestamp
+claim. Gated on `ACCESS_DASHBOARD`, identical to the rest of the
+Statistics read. 15 new/updated focused tests; full suite 1400/1400 (one
+intermittent run hit the same pre-existing, load-dependent timing flake
+already documented elsewhere in this file, on a different untouched
+file each time — confirmed a flake, not a regression, the same way
+every prior instance in this project was); typecheck/lint (0 errors,
+same 4 pre-existing warnings)/format/build all clean.
+
+**Manual QA PASSED, real local backend, all three states plus
+recovery** — the literal next task before this was exactly this check:
+
+- **`never_detected` — PASS.** Red danger banner, "Background scheduler
+  has not been detected.", the scheduled-automation warning line, no
+  "Last detected" timestamp rendered, rest of the Dashboard unaffected.
+- **`healthy` — PASS.** Started `php artisan schedule:work` locally;
+  once `scheduler:heartbeat` recorded and the Dashboard was refreshed,
+  the warning disappeared completely — no residual banner, no "all
+  clear" chip (matching the design decision that `healthy` renders
+  nothing).
+- **`stale` — PASS.** Stopped `schedule:work`; via local Tinker only,
+  moved the single `scheduler_heartbeats` row's `last_heartbeat_at`
+  back 6 minutes (`> stale_after_seconds`, one row affected). Amber
+  warning-tone banner, "Background scheduler not detected recently.",
+  the delayed-automation line, and "Last detected: 18/08/2026 20:08"
+  rendered — the local formatter and the backend's plain
+  `"Y-m-d H:i:s"` string handled correctly end to end.
+- **Recovery — PASS.** Restarted `schedule:work`; after the next
+  heartbeat and a Dashboard refresh, the stale warning cleared and the
+  local environment returned to `healthy` — proving the banner is
+  fully reactive to the backend's own computed state each time the
+  Statistics query resolves, not a one-way/sticky warning.
+
+**Scheduler Health (pre-M8 operational hardening) is now COMPLETE** —
+backend implemented and pushed by the Backend Team, frontend
+implemented, automated suite green (1400/1400), manual QA passed for
+all three states plus recovery. Frontend source/tests/docs remain
+uncommitted (see "Current branch" above). **Production still requires
+an external trigger invoking `php artisan schedule:run` every
+minute** — this feature makes scheduler liveness *observable*; it does
+not, and was never intended to, configure the production scheduler
+itself. **M8 has still NOT started.** M8 Phase 1A is now the next
+planned implementation work, pending its own git/test freshness
+re-validation — see `next-session.md`'s own "Next task" section.
 
 ## Last completed implementation
 

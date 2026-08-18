@@ -20,28 +20,46 @@ disclosed, non-blocking backend capability gap (BC-AE). Full M7 detail
 is preserved further down this section, unchanged from its own closeout.
 
 **M8 — Hardening ("making it trustworthy") — discovery/kickoff is
-COMPLETE, implementation has NOT started, and M8 is now DEFERRED until
-the Stock Module (below) is complete.** This is an explicit product
-decision, not a regression — the full discovery pass, the approved
-7-phase structure, and all five discovery-stage decisions (recorded in
-full under "M8 discovery — findings and approved decisions" below)
-remain valid and unchanged, and M8 Phase 1A resumes exactly where it
-left off once the Stock Module closes out.
+COMPLETE, implementation has NOT started.** M8 was previously deferred
+pending the Stock Module's own core closure — **that gating condition
+is now satisfied, so M8 Phase 1A is the next planned implementation
+work.** One small, standalone item was discovered while closing the
+Stock Module and is now fully closed out: **Scheduler Health (pre-M8
+operational hardening) — COMPLETE, manual QA passed** (backend
+implemented/pushed by the Backend Team, frontend implemented,
+automated suite green, all three states plus recovery manually
+verified against the real local backend — see "Scheduler Health —
+CLOSED" below for the full record). **M8 has still NOT started** — see
+"Next task: M8 Phase 1A" below. The full M8 discovery pass, the
+approved 7-phase structure, and all five discovery-stage decisions
+(recorded in full under "M8 discovery — findings and approved
+decisions" below) remain valid and unchanged. Because both backend and
+frontend history have moved since this plan was written, **Phase 1A
+must be re-read and its own git/test freshness re-validated before any
+code is written** — see its own "Next task" section below.
 
-**The Stock Module is the CURRENT work — see "Next task: Stock Module"
-below, not the M8 section, for what to do next.** Backend Phase 1A + 1B
-are COMPLETE and manually QA'd, committed locally in the backend repo
-(`a2473f1`), NOT pushed. Frontend Phase 2 planning is COMPLETE; Phase 2A
-(data layer) is COMPLETE; **Phase 2B (Stock Overview UI) and Phase 2C
-(Stock Movements UI) are BOTH COMPLETE, automated-test green, AND
-MANUALLY QA'D** against the real running backend. A dedicated final
-review pass re-verified every Phase 2 contract fresh from source and
-found no issue requiring a fix. **Phase 2 (2A + 2B + 2C) is fully
-IMPLEMENTED and QA'D — the only remaining step is a single checkpoint
-commit, approval already given.** Nothing is committed yet. Full detail:
-"Next task: Stock Module" below, and `project-status.md`'s own "Stock
-Module" section. Frontend Phase 2D (responsive polish + full regression)
-remains a separate, not-yet-started item, not part of this checkpoint.
+**The Stock Module — CORE CLOSED.** Backend Phase 1A + 1B are COMPLETE
+and manually QA'd. The backend checkpoint commit (`a2473f1`) is now
+historical — an ancestor of the backend's current HEAD, not the tip:
+the backend branch (`feature/Update-claude`) moved on via an external
+pull that merged in unrelated teammate work into merge commit `a9bf2bd`,
+now HEAD, **0 ahead / 0 behind `origin/feature/Update-claude`** — synced
+with origin, working tree clean. That unrelated merge does not change
+Stock backend Phase 1A/1B's own completeness. Frontend Phase 2 planning
+is COMPLETE; Phase 2A (data layer), Phase 2B (Stock Overview UI), and
+Phase 2C (Stock Movements UI) are all COMPLETE, automated-test green,
+and **both 2B and 2C are manually QA'D** against the real running
+backend. A dedicated final review pass re-verified every Phase 2
+contract fresh from source and found no issue requiring a fix. **Phase
+2 (2A + 2B + 2C) is fully IMPLEMENTED, QA'D, and COMMITTED** —
+checkpoint `6a1d68a` ("feat(stock): add Stock Overview and Stock
+Movements screens"), **deliberately UNPUSHED for now** (`main` ahead of
+`origin/main` by 1 commit). Full detail: "Next task: M8 Phase 1A" below,
+and `project-status.md`'s own "Stock Module" section. Frontend Phase 2D
+(responsive polish + full regression) is an **optional** future
+follow-up, not required for this closure and not a blocker for M8 —
+not started, not scoped, needs its own discovery pass whenever it is
+picked up.
 
 ## M8 discovery — findings and approved decisions (this session, no implementation)
 
@@ -199,22 +217,23 @@ outside E2E.
   currently-dormant architectural gap, unexercised because no nested
   route has been built.
 
-## Future work — SUPERSEDED, Stock Module is now active work
+## Future work — SUPERSEDED, Stock Module core is now closed
 
 **This section originally recorded the Stock module as a discovered-but-
-not-scheduled idea. That is no longer true — it is now the project's
-active work, ahead of M8. See "Next task: Stock Module" below.** The
-original discovery this section pointed to is still the correct
-reference for backend domain facts (`stocks`/`stock_movements`/
-`StockService`, Stock Value definition, holder classification) —
+not-scheduled idea. That is no longer true — its core is now CLOSED. See
+"Next task: M8 Phase 1A" below for what comes next.** The original
+discovery this section pointed to is still the correct reference for
+backend domain facts (`stocks`/`stock_movements`/`StockService`, Stock
+Value definition, holder classification) —
 **`docs/future-stock-module.md`** — do not re-derive those from scratch.
 Its own provisional 6-phase sequence and "NOT scheduled"/"NOT part of
-any active milestone" framing are now stale; the real phase structure is
-Backend Phase 1A/1B (done) → Frontend Phase 2A (done) → Phase 2B (done,
-manually QA'd) → Phase 2C (done, manually QA'd) → a Phase 2 checkpoint
-commit (next, approval given) → Phase 2D (responsive polish + full
-regression, separate, not yet started or scoped), tracked here and in
-`project-status.md`, not in that file.
+any active milestone" framing are now stale; the real phase structure
+was Backend Phase 1A/1B (done) → Frontend Phase 2A (done) → Phase 2B
+(done, manually QA'd) → Phase 2C (done, manually QA'd) → the Phase 2
+checkpoint commit (`6a1d68a`, done, unpushed) — **core CLOSED here.**
+Phase 2D (responsive polish + full regression) remains a separate,
+optional follow-up, not yet started or scoped, and does not block
+anything. Tracked here and in `project-status.md`, not in that file.
 
 ## M7 closure (historical, unchanged from its own closeout)
 
@@ -504,38 +523,38 @@ regression, separate, not yet started or scoped), tracked here and in
 
 ## Before anything else
 
+**The Stock Module's core is CLOSED; M8 Phase 1A is the next planned
+work — see "Next task: M8 Phase 1A" below.** Both repos' history moved
+since M8's plan was written, so this check is now M8's own starting
+point, not a stale Stock Module snapshot:
+
 ```bash
 cd C:\Miza\frontend-v2
-git log --oneline -3        # expect: 0f16f24, 0ff80a3, 153edfb
-git status                  # expect: NOT clean — Stock Module Phase 2A+2B,
-                             # uncommitted by decision, pending Phase 2B's
-                             # own manual QA:
-                             #   M src/app/navigation/nav.ts
-                             #   M src/app/router/route-authorization.test.tsx
-                             #   M src/app/router/routes.tsx
-                             #   M src/domains/reference/products/index.ts
-                             #   ?? src/domains/stock/movements/
-                             #   ?? src/domains/stock/overview/
-pnpm test:ci                # expect: 1352/1352 across 69 files
+git log --oneline -3        # expect: 6a1d68a, 0f16f24, 0ff80a3
+git status                  # expect: clean, "ahead of origin/main by 1"
+                             # (the unpushed Phase 2 checkpoint, 6a1d68a
+                             # — leave it unpushed unless separately asked)
+pnpm test:ci                 # re-run fresh and record the actual count —
+                              # do not assume 1389/1389 (this project's
+                              # last confirmed number) still holds; the
+                              # only way to know is to run it now
 pnpm lint && pnpm typecheck && pnpm format:check && pnpm build
 ```
 
 ```bash
 cd C:\Miza\backend
-git log --oneline -1        # expect: a2473f1 feat(stock): add admin
-                             # inventory and movement ledger APIs
-git status                  # expect: clean (checkpoint commit already
-                             # made); confirm still NOT pushed
+git log --oneline -3        # expect: a9bf2bd, a2473f1, b577503
+git status                  # expect: clean, "up to date with
+                             # origin/feature/Update-claude" (0 ahead / 0
+                             # behind) — a2473f1 is an ancestor, not HEAD
 ```
 
 **This is a fresh source/git freshness check, required before writing any
-code** — confirm the above still matches before doing anything else, the
-same discipline every prior session-start in this project has required.
-**Do not run `git checkout`/`git reset`/`git clean` to "clean up" the
-frontend working tree — the uncommitted Stock Module files ARE this
-session's starting point, not stray state.** **The Stock Module is the
-active work; M8 is deferred — see "Next task: Stock Module" above, not
-the M8 section below it.**
+M8 code** — confirm the above still matches before doing anything else,
+the same discipline every prior session-start in this project has
+required. If backend or frontend state has moved again since this was
+written, re-read `project-status.md`'s own "Stock Module"/"Current
+milestone" sections before assuming anything about M8's starting point.
 
 ## Last completed work
 
@@ -824,48 +843,43 @@ the M8 section below it.**
 
 Full write-ups for every item above: `project-status.md`'s own dedicated sections.
 
-## Next task: Stock Module — create the Phase 2 checkpoint commit
+## Stock Module — CORE CLOSED (checkpoint record)
 
-**This is the real next task — read this section before the M8 one
-below, which is deferred.** Backend Phase 1A + 1B (`GET /admin/stock`,
-`GET /admin/stock/movements`) are done, manually QA'd, committed locally
-in the backend repo only (`a2473f1`, not pushed). Frontend Phase 2A
-(data layer), Phase 2B (Stock Overview UI, `/stock/overview`) and
-Phase 2C (Stock Movements UI, `/stock/movements`) are all implemented,
-automated-test green, and **both 2B and 2C are manually QA'd** against
-the real running backend. A dedicated final review pass re-verified
-every contract fresh from source (Stock Overview's summary/filter/
-drill-down behavior; Stock Movements' public params, the flat-paginator
-normalizer, `movementTypeLabel`/Actor handling, URL-state and pagination
+**This is no longer a "next task" — it is a closed, historical record.
+Read "Next task: M8 Phase 1A" below for what comes next.** Backend
+Phase 1A + 1B (`GET /admin/stock`, `GET /admin/stock/movements`) are
+done, manually QA'd. Frontend Phase 2A (data layer), Phase 2B (Stock
+Overview UI, `/stock/overview`) and Phase 2C (Stock Movements UI,
+`/stock/movements`) are all implemented, automated-test green, and
+**both 2B and 2C are manually QA'd** against the real running backend.
+A dedicated final review pass re-verified every contract fresh from
+source (Stock Overview's summary/filter/drill-down behavior; Stock
+Movements' public params, the flat-paginator normalizer,
+`movementTypeLabel`/Actor handling, URL-state and pagination
 correctness; the 7-reachable-type movement filter decision; every
 reference link against its actual registered route) and found no issue
-requiring a source fix. **Nothing is committed yet — that is the one
-remaining step, approval already given.**
+requiring a source fix. **The checkpoint commit was then made:**
 
-**Before committing, do a brief source/git freshness check** — confirm
-`git status` in both repos still matches this file's own expectations
-(frontend: the diff listed under "Current state" above; backend: one
-local unpushed commit, `a2473f1`) — the same discipline every prior
-session-start in this project has required.
+```
+6a1d68a796cf820baa085c0db9781275762a6d10
+feat(stock): add Stock Overview and Stock Movements screens
+```
 
-### Step 1 — create the Phase 2 frontend checkpoint commit
+**Deliberately UNPUSHED for now** (`main` ahead of `origin/main` by 1
+commit) — a separate decision from the Stock Module's own closure. The
+backend's own checkpoint commit (`a2473f1`) is likewise historical now —
+an ancestor of the backend's current HEAD (`a9bf2bd`), not the tip; the
+backend branch moved on via an external pull merging in unrelated
+teammate work, and is synced with origin (0 ahead / 0 behind). **On this
+basis, the Stock Module's CORE is CLOSED**: backend 1A/1B complete,
+frontend 2A/2B/2C complete, automated suite green, both 2B and 2C
+manually QA'd, checkpoint committed.
 
-Stage exactly the Phase 2A + 2B + 2C diff (see "Current state" above for
-the file list) and commit with a message that names all three phases —
-see `project-status.md`'s own "Stock Module" section for the full
-per-phase write-up to draw the message from. **Do not push** unless
-separately asked. The backend's own local checkpoint commit (`a2473f1`)
-is a separate decision, not bundled into this one.
-
-### Step 2 — after the checkpoint commit
-
-Frontend Phase 2D (responsive polish + full regression) is a separate,
-not-yet-started, not-yet-scoped-in-detail item — give it its own
-discovery pass before implementation, the same discipline every phase in
-this project has required. It is not a blocker for closing out the
-Stock Module's own frontend work at Phase 2C, and M8 Phase 1A's own
-resumption (below) does not depend on it either, only on the Stock
-Module's core work (2A–2C) being closed out.
+**Frontend Phase 2D (responsive polish + full regression) is an
+OPTIONAL future follow-up** — not started, not scoped in any detail,
+requiring its own discovery/scoping pass before implementation whenever
+it is picked up. It was NOT required to close the Stock Module above,
+and it does **not** block M8 Phase 1A below either.
 
 **Manual QA record, preserved for continuity — both phases passed
 against the real running backend:**
@@ -885,22 +899,110 @@ against the real running backend:**
   movements" link, previously the app's normal in-shell 404 (expected,
   documented, not a defect), now resolves to this real page.
 
-## M8 Phase 1A — DEFERRED (resumes after the Stock Module closes out)
+## Scheduler Health — CLOSED (pre-M8 operational hardening, manual QA passed)
 
-**M7 is CLOSED. M8 discovery/kickoff is COMPLETE** (see "M8 discovery —
-findings and approved decisions" above for the full findings, the
-approved 7-phase structure, the 12-flow inventory, and all five approved
-decisions). **Nothing has been implemented yet.** This phase is on hold,
-not cancelled — do not start it before the Stock Module (above) is
-closed out, and do not let it silently drift out of scope in the
-meantime; everything below remains the approved plan for when it
-resumes.
+**Discovered while closing the Stock Module, not part of it and not part
+of M8** — a standalone, small operational-hardening item, the same
+categorization this file already used for it. Root cause: Grattage
+Invoice #42 stayed `pending` past its `due_at` because nothing proved
+Laravel's scheduler (`schedule:run`) was actually being invoked
+locally — the lifecycle logic itself was already correct (manually
+running `grattage:flag-overdue` flipped it to `overdue` immediately).
 
-**Before writing any code (once resumed), do a brief source/git
-freshness check** — confirm `git status`/`git log` still match this
-file's own expectations (see "Before anything else" below) and that
-nothing changed underneath this checkpoint since it was written, the
-same discipline every prior session-start in this project has required.
+**Backend Team implemented and pushed the fix** (backend commit
+`92d75cf`, `feat(ops): add scheduler liveness heartbeat`) — a
+`scheduler:heartbeat` command run `everyMinute()`, backed by a
+dedicated `scheduler_heartbeats` table (not Cache — a normal
+`cache:clear` must never falsely report `never_detected`), surfaced as
+an additive `scheduler_health` field on the existing
+`GET /api/v1/admin/dashboard/statistics`:
+```
+scheduler_health: {
+  status: "healthy" | "stale" | "never_detected",
+  last_heartbeat_at: "Y-m-d H:i:s" | null,   // plain local Africa/Casablanca, NOT ISO-8601
+  stale_after_seconds: 300
+}
+```
+Verified fresh from source (not assumed from the handoff) before any
+frontend work started: 48/48 backend tests pass (real Postgres), the
+existing `grattage:flag-overdue` schedule is provably unchanged
+(`1 12 * * *`, `Africa/Casablanca`, `withoutOverlapping`, `onOneServer`
+— its own dedicated regression test), and the live local endpoint was
+queried directly and returned `{"status":"never_detected","last_heartbeat_at":null,...}`
+(expected — `schedule:work` was not running locally at the time).
+**Production still requires an external trigger invoking
+`php artisan schedule:run` every minute** — this heartbeat makes
+scheduler liveness *observable*, it does not configure the production
+scheduler itself; the Backend Team's own updated
+`docs/production-checklist.md` now states this explicitly.
+
+**Frontend integration is IMPLEMENTED, uncommitted** — widened
+`DashboardStatistics`/`fetchDashboardStatistics` with the new field
+(status rendered verbatim from the backend, never computed
+client-side; an unrecognized status throws rather than passing through
+silently, mirroring `normalizeAggregateDecimal`'s own precedent in the
+same file), and a new domain-local `SchedulerHealthBanner` — a page
+banner (Design System §20, first real caller of that pattern) mounted
+on `OverviewPage` directly under the `<h1>`, reusing
+`StatisticsPanel`'s own existing `useDashboardStatisticsQuery` (same
+query key, no new fetch, no `refetchInterval`/polling added — rides
+the existing 5-minute `SLOW` freshness unchanged). `healthy` renders
+nothing; `stale` renders a warning-tone banner with the last-detected
+heartbeat; `never_detected` renders a danger-tone banner with no
+timestamp claim. Gated on `ACCESS_DASHBOARD`, same as the rest of the
+Statistics read. 15 new/updated frontend tests; full suite 1400/1400;
+typecheck/lint (0 errors, same 4 pre-existing warnings)/format/build
+all clean.
+
+**Manual QA PASSED, real local backend, all three states plus
+recovery:**
+
+- **`never_detected` — PASS.** Red danger banner, "Background scheduler
+  has not been detected.", scheduled-automation warning, no "Last
+  detected" timestamp, rest of the Dashboard unaffected.
+- **`healthy` — PASS.** `php artisan schedule:work` started locally;
+  once `scheduler:heartbeat` recorded and the Dashboard refreshed, the
+  warning disappeared completely.
+- **`stale` — PASS.** `schedule:work` stopped; via local Tinker only,
+  the single `scheduler_heartbeats` row's `last_heartbeat_at` was moved
+  back 6 minutes (one row affected). Amber warning-tone banner,
+  "Background scheduler not detected recently.", delayed-automation
+  line, and "Last detected: 18/08/2026 20:08" all rendered correctly.
+- **Recovery — PASS.** `schedule:work` restarted; after the next
+  heartbeat and a refresh, the stale warning cleared and the local
+  environment returned to `healthy` — the banner is fully reactive to
+  the backend's own computed state, not sticky.
+
+**Scheduler Health (pre-M8 operational hardening) is now COMPLETE.**
+Frontend source/tests/docs remain uncommitted. **Production still
+requires an external trigger invoking `php artisan schedule:run` every
+minute** — this feature makes scheduler liveness *observable*; it does
+not configure the production scheduler itself. **M8 has still NOT
+started** — see "Next task: M8 Phase 1A" below, now the literal next
+task.
+
+## Next task: M8 Phase 1A (gating condition satisfied — re-validate before starting)
+
+**M7 is CLOSED. The Stock Module's core is now CLOSED too (see above) —
+M8's own gating condition ("resumes once the Stock Module core closes
+out") is satisfied. M8 discovery/kickoff is COMPLETE** (see "M8
+discovery — findings and approved decisions" above for the full
+findings, the approved 7-phase structure, the 12-flow inventory, and all
+five approved decisions). **Nothing has been implemented yet.** This is
+not a scope decision still owed — the plan below is unchanged and
+already approved; it is next.
+
+**Before writing any code, do a brief source/git freshness check** —
+confirm `git status`/`git log` still match this file's own expectations
+(see "Before anything else" above) and that nothing changed underneath
+this plan since it was written. This is not optional here: both the
+backend and frontend repos have already moved once since this plan was
+first drafted (the backend via an external pull merging in unrelated
+teammate work; the frontend via the Phase 2 checkpoint commit), so
+re-confirm the actual current state rather than trusting any test count
+or commit hash recorded elsewhere in this file — the same discipline
+every prior session-start in this project has required, applied here
+with extra care because of that history.
 
 **Phase 1A's approved scope, exactly (do not expand it):**
 - Minimal Playwright install + config.
@@ -1110,11 +1212,12 @@ the verbatim list is needed again.
   requests, and do not add a page-size selector to the Movements UI.**
   Approved Phase 2 decision — the backend default (15) is used
   unconditionally.
-- 🚫 **Do not start Phase 2C (Stock Movements UI) before Phase 2B (Stock
-  Overview) has had a real manual browser QA pass.** Phase 2B is
-  automated-test green but UNAPPROVED — see "Next task: Stock Module"
-  above for the exact QA checklist. This is the literal next step, not
-  a formality to skip.
+- ✅ **RESOLVED, kept for the discipline it recorded:** Phase 2C was not
+  started until Phase 2B's own manual browser QA passed — both are now
+  done, manually QA'd, and committed (`6a1d68a`). The underlying rule
+  this bullet enforced (a phase gated on manual QA is not started before
+  that QA passes) remains the standing discipline for any future phase,
+  including Phase 2D whenever it is picked up.
 - 🚫 **Do not re-add a proactive Grattage restock-gate integration to
   `AllocationDetailPage`, and do not build a client-side Allocation capacity
   calculation.** Backend commit `9af5d00` made the team-obligation gate
@@ -1187,48 +1290,52 @@ the verbatim list is needed again.
       Postgres, fail-closed; Phase 1A's narrow scope; error-reporting
       vendor deferred to Phase 5; P1 working definition). See "M8
       discovery" above.
-- [ ] **M8 Phase 1A — NOT started, DEFERRED until the Stock Module
-      closes out (not cancelled).** Playwright foundation + isolated E2E
+- [ ] **M8 Phase 1A — NOT started. The Stock Module core has now closed,
+      so this gating condition is satisfied — Phase 1A is the next
+      planned implementation work, pending its own fresh git/test
+      re-validation.** Playwright foundation + isolated E2E
       environment/harness + one non-destructive smoke test + the
-      Playwright ADR. See "M8 Phase 1A — DEFERRED" above for the exact,
+      Playwright ADR. See "Next task: M8 Phase 1A" above for the exact,
       approved, narrow scope, unchanged.
 - [ ] **M8 Phase 1B and later (fixtures, money-path E2E, a11y,
       performance, observability, flags/ADR/P1 sweep) — NOT started,
-      NOT scoped in detail yet, DEFERRED alongside Phase 1A.** Each gets
-      its own discovery/review pass before implementation, the same
-      discipline every phase in this project has required.
-- [x] **Stock Module — Backend Phase 1A + 1B — DONE, manually QA'd,
-      committed locally in the backend repo (`a2473f1`), NOT pushed.**
+      NOT scoped in detail yet.** Each follows Phase 1A and gets its own
+      discovery/review pass before implementation, the same discipline
+      every phase in this project has required.
+- [x] **Stock Module — Backend Phase 1A + 1B — DONE, manually QA'd.**
       `GET /admin/stock`, `GET /admin/stock/movements`. Two real
       Postman-found defects fixed (public `type`/`from`/`to` filters
       silently ignored; validation-failure content-negotiation redirect
-      bug). 98/98 focused backend tests. See `project-status.md`'s own
-      "Stock Module" section.
+      bug). 98/98 focused backend tests. Committed as `a2473f1`, now
+      historical — an ancestor of the backend's current HEAD (`a9bf2bd`),
+      not the tip; the branch is synced with origin (0 ahead / 0 behind).
+      See `project-status.md`'s own "Stock Module" section.
 - [x] **Stock Module — Frontend Phase 2 planning/audit — DONE.** Full
       architecture audit + approved page/route/filter/column/sidebar
       decisions — see "Approved decisions" list at the top of this
       section's own history (or `project-status.md`).
 - [x] **Stock Module — Frontend Phase 2A (data/API/types/query layer) —
-      DONE, uncommitted.** `domains/stock/overview/`,
+      DONE, committed.** `domains/stock/overview/`,
       `domains/stock/movements/`. 18/18 new tests; full suite 1337/1337
       at that point.
 - [x] **Stock Module — Frontend Phase 2B (Stock Overview UI) — DONE,
-      MANUALLY QA'D, uncommitted.** `/stock/overview`, 4 summary cards,
+      MANUALLY QA'D, committed.** `/stock/overview`, 4 summary cards,
       2 client-side filters, 8-column inventory table, "View movements"
       drill-down. 109/109 focused tests. Manual QA passed against the
       real running backend.
 - [x] **Stock Module — Frontend Phase 2C (Stock Movements UI) — DONE,
-      MANUALLY QA'D, uncommitted.** `/stock/movements`, 5 backend-driven
+      MANUALLY QA'D, committed.** `/stock/movements`, 5 backend-driven
       filters, backend pagination, exhaustive reference navigation, the
       inbound `?product_id=` drill-down. 33 new focused tests. Manual QA
       passed against the real running backend. **Phase 2 (2A+2B+2C) is
-      now fully implemented and QA'd — see "Next task: Stock Module"
-      above for the checkpoint-commit step, the only thing left.**
+      committed as `6a1d68a` (deliberately unpushed) — the Stock
+      Module's frontend core is CLOSED.** See "Stock Module — CORE
+      CLOSED" above.
 - [ ] **Stock Module — Frontend Phase 2D (responsive polish + full
-      regression) — NOT started, not yet scoped in detail.** A separate
-      item, not a blocker for the Phase 2 checkpoint commit above — give
-      it its own discovery pass before implementation when it is picked
-      up.
+      regression) — NOT started, not yet scoped in detail. OPTIONAL.** A
+      separate follow-up, not required for the Stock Module's own
+      closure above and not a blocker for M8 either — give it its own
+      discovery pass before implementation whenever it is picked up.
 - [x] **M4 (Cheques, Deposits, Debt Payments) — fully DONE.** See `project-status.md`.
 - [x] **Freshness-rule retrofit (`useFreshConfirm`) — DONE.**
 - [x] **M5 — Stock, ALL FIVE PHASES DONE at the implementation level** (discovery,
@@ -1280,9 +1387,9 @@ the verbatim list is needed again.
       Overview widget grid (Phases 1–3 delivered, Phase 4 closed by
       decision) are all done. M7's own frozen exit criteria (zero
       boundary-lint suppressions, verified parallel panel firing,
-      independent panel-crash isolation) are all met. **The Stock Module
-      is the next active work, ahead of M8 — Hardening (deferred). See
-      "Next task: Stock Module" above.**
+      independent panel-crash isolation) are all met. **The Stock
+      Module's core followed next and is now CLOSED — see "Stock
+      Module — CORE CLOSED" above; M8 Phase 1A is next.**
 - [ ] **Stock exposure snapshot — genuine, disclosed, NON-BLOCKING
       backend capability gap (BC-AE, ADR-0040).** The frozen Overview
       purpose's own "is stock exposure normal" question has no backing
