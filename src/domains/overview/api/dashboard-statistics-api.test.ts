@@ -21,6 +21,11 @@ function statisticsEnvelope(
     cities: { total_active_cities: number };
     deposits: { recent_7days: number; this_month: number; last_month: number };
     agents_finance: { total_solde: string | number; total_cash: string | number };
+    scheduler_health: {
+      status: string;
+      last_heartbeat_at: string | null;
+      stale_after_seconds: number;
+    };
   }> = {},
 ) {
   return {
@@ -57,6 +62,12 @@ function statisticsEnvelope(
       total_cash: "0.00",
       ...overrides.agents_finance,
     },
+    scheduler_health: {
+      status: "healthy",
+      last_heartbeat_at: "2026-08-18 17:41:00",
+      stale_after_seconds: 300,
+      ...overrides.scheduler_health,
+    },
   };
 }
 
@@ -65,7 +76,7 @@ function statisticsHandler(envelope: ReturnType<typeof statisticsEnvelope>) {
 }
 
 describe("fetchDashboardStatistics", () => {
-  it("maps exactly the nine approved fields, grouped Network health / Cash movement / Exposure", async () => {
+  it("maps exactly the nine approved fields, grouped Network health / Cash movement / Exposure, plus scheduler_health", async () => {
     server.use(statisticsHandler(statisticsEnvelope()));
 
     const result = await fetchDashboardStatistics();
@@ -85,6 +96,11 @@ describe("fetchDashboardStatistics", () => {
       exposure: {
         totalSolde: "500.00",
         totalCash: "0.00",
+      },
+      schedulerHealth: {
+        status: "healthy",
+        lastHeartbeatAt: "2026-08-18 17:41:00",
+        staleAfterSeconds: 300,
       },
     });
   });
@@ -133,7 +149,12 @@ describe("fetchDashboardStatistics", () => {
 
     const result = await fetchDashboardStatistics();
 
-    expect(Object.keys(result)).toEqual(["networkHealth", "cashMovement", "exposure"]);
+    expect(Object.keys(result)).toEqual([
+      "networkHealth",
+      "cashMovement",
+      "exposure",
+      "schedulerHealth",
+    ]);
     expect(Object.keys(result.networkHealth)).toEqual([
       "activeCommercials",
       "activeManagers",
@@ -163,5 +184,92 @@ describe("fetchDashboardStatistics", () => {
 
     expect(url?.pathname).toBe("/api/v1/admin/dashboard/statistics");
     expect(url?.search).toBe("");
+  });
+});
+
+/**
+ * Scheduler Health (pre-M8 operational hardening, additive) — backend
+ * contract confirmed live against the Backend Team's own pushed
+ * implementation (`92d75cf`): `status` is one of exactly three literals,
+ * backend-computed; `last_heartbeat_at` is a plain `"Y-m-d H:i:s"` local
+ * string (Africa/Casablanca), NOT ISO-8601 — never reformatted or
+ * re-parsed here, carried verbatim like every other backend-computed
+ * string this mapper already handles.
+ */
+describe("fetchDashboardStatistics — scheduler_health", () => {
+  it("maps a healthy heartbeat verbatim", async () => {
+    server.use(
+      statisticsHandler(
+        statisticsEnvelope({
+          scheduler_health: {
+            status: "healthy",
+            last_heartbeat_at: "2026-08-18 17:41:00",
+            stale_after_seconds: 300,
+          },
+        }),
+      ),
+    );
+
+    const result = await fetchDashboardStatistics();
+
+    expect(result.schedulerHealth).toEqual({
+      status: "healthy",
+      lastHeartbeatAt: "2026-08-18 17:41:00",
+      staleAfterSeconds: 300,
+    });
+  });
+
+  it("maps a stale heartbeat verbatim", async () => {
+    server.use(
+      statisticsHandler(
+        statisticsEnvelope({
+          scheduler_health: {
+            status: "stale",
+            last_heartbeat_at: "2026-08-18 12:00:00",
+            stale_after_seconds: 300,
+          },
+        }),
+      ),
+    );
+
+    const result = await fetchDashboardStatistics();
+
+    expect(result.schedulerHealth.status).toBe("stale");
+    expect(result.schedulerHealth.lastHeartbeatAt).toBe("2026-08-18 12:00:00");
+  });
+
+  it("maps never_detected with a null last_heartbeat_at, never fabricating a timestamp", async () => {
+    server.use(
+      statisticsHandler(
+        statisticsEnvelope({
+          scheduler_health: {
+            status: "never_detected",
+            last_heartbeat_at: null,
+            stale_after_seconds: 300,
+          },
+        }),
+      ),
+    );
+
+    const result = await fetchDashboardStatistics();
+
+    expect(result.schedulerHealth.status).toBe("never_detected");
+    expect(result.schedulerHealth.lastHeartbeatAt).toBeNull();
+  });
+
+  it("throws on an unrecognized status rather than silently passing it through", async () => {
+    server.use(
+      statisticsHandler(
+        statisticsEnvelope({
+          scheduler_health: {
+            status: "unknown_future_status",
+            last_heartbeat_at: null,
+            stale_after_seconds: 300,
+          },
+        }),
+      ),
+    );
+
+    await expect(fetchDashboardStatistics()).rejects.toThrow(/scheduler_health\.status/i);
   });
 });

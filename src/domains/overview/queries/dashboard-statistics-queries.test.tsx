@@ -41,6 +41,11 @@ function statisticsEnvelope() {
     },
     debt: { total_admin_debt: "0.00", admins_with_debt: 0, total_paid: 0 },
     agents_finance: { total_solde: "500.00", total_cash: "0.00" },
+    scheduler_health: {
+      status: "healthy",
+      last_heartbeat_at: "2026-08-18 17:41:00",
+      stale_after_seconds: 300,
+    },
   };
 }
 

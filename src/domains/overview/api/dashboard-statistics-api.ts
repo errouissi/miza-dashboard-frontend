@@ -1,5 +1,9 @@
 import { httpClient } from "@/infrastructure/http";
-import type { DashboardStatistics } from "../model/dashboard-statistics";
+import type {
+  DashboardStatistics,
+  SchedulerHealth,
+  SchedulerHealthStatus,
+} from "../model/dashboard-statistics";
 
 /**
  * `GET /admin/dashboard/statistics` — `access-dashboard`, no pagination,
@@ -34,7 +38,44 @@ type DashboardStatisticsEnvelope = {
     total_solde: string | number;
     total_cash: string | number;
   };
+  scheduler_health: {
+    status: string;
+    last_heartbeat_at: string | null;
+    stale_after_seconds: number;
+  };
 };
+
+const SCHEDULER_HEALTH_STATUSES: readonly string[] = [
+  "healthy",
+  "stale",
+  "never_detected",
+];
+
+/**
+ * Fails loud on an unrecognized `status`, mirroring
+ * `normalizeAggregateDecimal`'s own precedent in this file — a wire value
+ * outside the three the backend team's contract documents means the
+ * contract changed underneath this mapper; silently passing an unknown
+ * string through would let an un-mappable state reach the banner component,
+ * which decides tone/copy by exhaustively matching these three literals.
+ */
+function toSchedulerHealthStatus(value: string): SchedulerHealthStatus {
+  if (SCHEDULER_HEALTH_STATUSES.includes(value)) {
+    return value as SchedulerHealthStatus;
+  }
+
+  throw new Error(`Unexpected scheduler_health.status: ${value}`);
+}
+
+function toSchedulerHealth(
+  data: DashboardStatisticsEnvelope["scheduler_health"],
+): SchedulerHealth {
+  return {
+    status: toSchedulerHealthStatus(data.status),
+    lastHeartbeatAt: data.last_heartbeat_at,
+    staleAfterSeconds: data.stale_after_seconds,
+  };
+}
 
 /**
  * `total_solde`/`total_cash` are raw SQL `SUM()` aggregates — Laravel's
@@ -86,6 +127,7 @@ function toDashboardStatistics(data: DashboardStatisticsEnvelope): DashboardStat
       totalSolde: normalizeAggregateDecimal(data.agents_finance.total_solde),
       totalCash: normalizeAggregateDecimal(data.agents_finance.total_cash),
     },
+    schedulerHealth: toSchedulerHealth(data.scheduler_health),
   };
 }
 

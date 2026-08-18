@@ -4,6 +4,7 @@ import { PendingDepositsWidget } from "../components/pending-deposits-widget";
 import { OverdueGrattageWidget } from "../components/overdue-grattage-widget";
 import { StatisticsPanel } from "../components/statistics-panel";
 import { TrendsPanel } from "../components/trends-panel";
+import { SchedulerHealthBanner } from "../components/scheduler-health-banner";
 
 /**
  * M7 Overview — Phase 1 (Foundation + decision queues) + Phase 2
@@ -63,13 +64,25 @@ import { TrendsPanel } from "../components/trends-panel";
  * permission is absent — `if (!canView) return null` before its query is
  * even constructed, inside the panel itself, mirroring every existing
  * Agent 360/Client 360 panel's own "no permission, no frame, no request"
- * discipline. This page always mounts all five unconditionally and lets
+ * discipline. This page always mounts all six unconditionally and lets
  * each one opt out.
+ *
+ * `SchedulerHealthBanner` (pre-M8 operational hardening, added after
+ * Phase 3) IS NOT A FOURTH SECTION — it's a page banner (Design System
+ * §20: "full-width under the header"), mounted directly below the `<h1>`,
+ * before any titled section. It reuses `StatisticsPanel`'s own
+ * `useDashboardStatisticsQuery` cache entry (same query key, no second
+ * fetch) and renders nothing at all when `scheduler_health.status` is
+ * `healthy` — see its own docblock.
  */
 export function OverviewPage() {
   return (
     <div className="flex flex-col gap-8">
       <h1 className="text-2xl font-bold">Overview</h1>
+
+      <PanelBoundary>
+        <SchedulerHealthBanner />
+      </PanelBoundary>
 
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-semibold">Statistics</h2>

@@ -8,7 +8,7 @@ import { sessionManager } from "@/infrastructure/auth";
 import { createQueryClient } from "@/infrastructure/query";
 import { PERMISSIONS } from "@/infrastructure/permissions";
 import { PanelBoundary } from "@/shared/components/patterns/panel-boundary";
-import { toIsoDate } from "@/shared/formatters";
+import { formatDateTime, toIsoDate } from "@/shared/formatters";
 import { PendingChequesWidget } from "../components/pending-cheques-widget";
 import { PendingDepositsWidget } from "../components/pending-deposits-widget";
 import { OverdueGrattageWidget } from "../components/overdue-grattage-widget";
@@ -204,6 +204,11 @@ function statisticsEnvelope(
     cities: { total_active_cities: number };
     deposits: { recent_7days: number; this_month: number; last_month: number };
     agents_finance: { total_solde: string | number; total_cash: string | number };
+    scheduler_health: {
+      status: string;
+      last_heartbeat_at: string | null;
+      stale_after_seconds: number;
+    };
   }> = {},
 ) {
   return {
@@ -235,6 +240,15 @@ function statisticsEnvelope(
       total_solde: "128450.75",
       total_cash: "3200.10",
       ...overrides.agents_finance,
+    },
+    // Default HEALTHY, matching the vast majority of this file's own tests,
+    // which are not about Scheduler Health at all — see its own dedicated
+    // describe() block below for the three-state coverage.
+    scheduler_health: {
+      status: "healthy",
+      last_heartbeat_at: "2026-08-18 17:41:00",
+      stale_after_seconds: 300,
+      ...overrides.scheduler_health,
     },
   };
 }
@@ -1167,5 +1181,137 @@ describe("isolation", () => {
     expect(screen.getByText("This section could not be loaded.")).toBeInTheDocument();
 
     consoleError.mockRestore();
+  });
+});
+
+describe("Scheduler Health banner", () => {
+  it("renders no warning at all when healthy", async () => {
+    server.use(statisticsHandler(undefined, statisticsEnvelope()));
+    renderPage();
+
+    // The rest of the page still renders normally alongside no banner.
+    expect(await screen.findByText("Active Commercials")).toBeInTheDocument();
+    expect(screen.queryByText(/background scheduler/i)).not.toBeInTheDocument();
+  });
+
+  it("renders a visible warning when stale, including the last detected heartbeat", async () => {
+    server.use(
+      statisticsHandler(
+        undefined,
+        statisticsEnvelope({
+          scheduler_health: {
+            status: "stale",
+            last_heartbeat_at: "2026-08-18 12:00:00",
+            stale_after_seconds: 300,
+          },
+        }),
+      ),
+    );
+    renderPage();
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(/background scheduler not detected recently/i);
+    expect(alert).toHaveTextContent(/may be delayed/i);
+    expect(alert).toHaveTextContent(formatDateTime("2026-08-18 12:00:00"));
+  });
+
+  it("renders a stronger warning when never_detected, and never claims a last heartbeat time", async () => {
+    server.use(
+      statisticsHandler(
+        undefined,
+        statisticsEnvelope({
+          scheduler_health: {
+            status: "never_detected",
+            last_heartbeat_at: null,
+            stale_after_seconds: 300,
+          },
+        }),
+      ),
+    );
+    renderPage();
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(/background scheduler has not been detected\./i);
+    expect(alert).toHaveTextContent(/may not be running/i);
+    expect(alert).not.toHaveTextContent(/last detected/i);
+  });
+
+  it("never renders, and never requests /admin/dashboard/statistics, without ACCESS_DASHBOARD", async () => {
+    let requested = false;
+    signInWith([PERMISSIONS.VIEW_CHEQUES, PERMISSIONS.VIEW_DEPOSITS]);
+    server.use(
+      statisticsHandler(
+        () => (requested = true),
+        statisticsEnvelope({
+          scheduler_health: {
+            status: "never_detected",
+            last_heartbeat_at: null,
+            stale_after_seconds: 300,
+          },
+        }),
+      ),
+    );
+    renderPage();
+
+    await screen.findByText("Pending Cheques");
+    expect(screen.queryByText(/background scheduler/i)).not.toBeInTheDocument();
+    expect(requested).toBe(false);
+  });
+
+  it("does not disturb the existing Overview layout — heading and section structure unaffected", async () => {
+    server.use(
+      statisticsHandler(
+        undefined,
+        statisticsEnvelope({
+          scheduler_health: {
+            status: "never_detected",
+            last_heartbeat_at: null,
+            stale_after_seconds: 300,
+          },
+        }),
+      ),
+    );
+    renderPage();
+
+    await screen.findByRole("alert");
+    expect(screen.getByRole("heading", { name: "Overview" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Statistics" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Trends" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Needs attention" })).toBeInTheDocument();
+  });
+
+  it("a Statistics query failure produces no scheduler banner, and does not block the rest of the page", async () => {
+    server.use(
+      chequesHandler([chequeRow(1)]),
+      depositsHandler([depositRow(1)]),
+      grattageHandler([invoiceRow(9)]),
+      http.get(`${API}/admin/dashboard/statistics`, () =>
+        HttpResponse.json({ success: false, error: null }, { status: 500 }),
+      ),
+    );
+    renderPage();
+
+    expect(await screen.findByText("CHQ-1")).toBeInTheDocument();
+    expect(screen.queryByText(/background scheduler/i)).not.toBeInTheDocument();
+  });
+
+  it("renders inside a plain block-level alert with no fixed width, safe for narrow viewports", async () => {
+    server.use(
+      statisticsHandler(
+        undefined,
+        statisticsEnvelope({
+          scheduler_health: {
+            status: "stale",
+            last_heartbeat_at: "2026-08-18 12:00:00",
+            stale_after_seconds: 300,
+          },
+        }),
+      ),
+    );
+    renderPage();
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.className).not.toMatch(/\bw-\[/);
+    expect(alert.className).not.toContain("fixed");
   });
 });
