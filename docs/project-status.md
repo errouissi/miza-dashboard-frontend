@@ -3,7 +3,7 @@
 **The current state of the project.** Overwrite this file after every completed
 milestone — it describes *now*, not history. History lives in `decisions.md` and git.
 
-_Last updated: 2026-08-15_
+_Last updated: 2026-08-18_
 
 ---
 
@@ -152,41 +152,205 @@ them). M5's own owed manual browser validation (Deposits, Debt Payments,
 Agent Transfers, Allocations, Bons) also remains open, unrelated to M7.
 Neither blocks M7's own closure.
 
-**M8 — Hardening is the current milestone. Discovery/kickoff is
-COMPLETE; implementation has NOT started.** A full discovery pass ran
-across all six frozen deliverables (E2E, accessibility, performance,
-observability, feature flags, ADR reconciliation), producing an approved
-7-phase structure and five approved decisions (Playwright selected for
+**M8 — Hardening discovery/kickoff is COMPLETE; implementation has NOT
+started, and M8 is now DEFERRED until the Stock Module (below) is
+complete — an explicit product decision, not a status regression.** The
+full six-deliverable discovery pass, the approved 7-phase structure, and
+the five approved discovery-stage decisions (Playwright selected for
 E2E; a dedicated, isolated E2E Postgres environment, fail-closed;
 Phase 1A's narrow scope; the error-reporting vendor deferred to Phase 5;
-this project's first P1 working definition). No source code was
-touched. Full findings, the approved phase structure, and the verified
-12-flow irreversible-money inventory are recorded in `next-session.md`
-— that file, not this one, is the durable checkpoint for M8's
-in-progress state. **Next task: M8 Phase 1A.**
+this project's first P1 working definition) all remain valid and
+unchanged, recorded in full in `next-session.md`. No M8 source code has
+been touched. **M8 Phase 1A resumes once the Stock Module below is
+closed out** — this is not a cancellation.
 
-**Unrelated to M8 — a future Stock module idea was discovered and
-recorded, NOT scheduled, NOT part of any active milestone.** See
-`docs/future-stock-module.md` for the full discovery (verified backend
-stock-ledger domain, approved future direction, provisional phase
-sequence, unresolved business decisions). This does not change M8's own
-status or next task above.
+**The Stock Module (`docs/future-stock-module.md`'s own discovery, now
+actively in progress) is the CURRENT work.** Backend Phase 1A
+(`GET /admin/stock`) + Phase 1B (`GET /admin/stock/movements`) are
+COMPLETE and manually QA'd — committed locally in the backend repo
+(`a2473f1307f67ae2f56ac45230ef44e16edbeecc`, "feat(stock): add admin
+inventory and movement ledger APIs"), **NOT pushed**. Two real
+Postman-found public-contract defects were found and fixed during
+backend QA (the `type`/`from`/`to` filters were silently ignored because
+the controller validated different internal key names; validation
+failures could redirect instead of returning JSON depending on the
+caller's `Accept` header) — both fixed, both regression-tested. Final
+focused backend Stock suite: 98/98 passed, 354 assertions.
+
+Frontend Phase 2 planning/audit is COMPLETE (full architecture audit;
+approved page/route/filter/column decisions — see `next-session.md` for
+the full approved-decisions list). **Phase 2A (the data/API/types/query
+layer for both Stock Overview and Stock Movements) is COMPLETE** — 18/18
+new tests, full suite 1337/1337 at that point. **Phase 2B (the Stock
+Overview screen, `/stock/overview`) is COMPLETE and MANUALLY QA'D** —
+109/109 focused tests at implementation time, manual QA passed against
+the real running backend (summary cards, inventory rows, both filters,
+empty states, "View movements" drill-down, responsive/permission
+behavior). **Phase 2C (the Stock Movements screen, `/stock/movements`,
+the audit ledger Phase 2B's own "View movements" action drills into) is
+also COMPLETE and MANUALLY QA'D** — 33 new focused tests, manual QA
+passed against the real running backend (page load, all five filters,
+pagination, reference navigation, general usability). **Phase 2
+(2A + 2B + 2C) is now fully IMPLEMENTED and QA'D, all still uncommitted
+by decision, awaiting a single checkpoint commit.** A dedicated final
+review pass (this session) re-verified every Phase 2 contract fresh from
+source — see "Stock Module — Phase 2 (frontend)" below for the full
+write-up and the review's own findings (none required a source fix).
+Frontend Phase 2D (responsive polish + full regression) remains a
+separate, not-yet-started, not-yet-scoped-in-detail item — it is NOT
+part of this checkpoint. `next-session.md`'s own "Next task" now points
+at the checkpoint commit, not at further QA.
 
 ## Current branch
 
-`main`, level with `origin/main` at `d11e29c` (pushed this session). Since
-M6 shipped: Agent 360 workspace foundation (`c392a7e`), full Agent Edit
-(`21c6e05`), Money/Stock workspace panels (`2ff0d5a`), Grattage Outstanding
-panel (`69f50aa`), the zero-stock Manager reassignment guard (`1aa1d66`),
-the manual-QA finalization pass (`bc54e55`), Client 360 foundation
-(`9cc464a`), Commercial relationship/assignment history (`506e992`),
-Grattage purchase history (`22f2ba9`), the same-Commercial reassignment
-disable fix (`55cc33d`), the Agent 360 blocked-Grattage-capacity
-clarification (`47ab778`), Overview Phase 1 — Foundation + decision
-queues (`15a64fb`), Overview Phase 2 — Statistics (`263ad78`), and
-Overview Phase 3 — Trends (`d11e29c`, manual QA passed against the real
-running backend). No uncommitted files remain besides this documentation
-pass. See `next-session.md` for verification commands.
+`main`, level with `origin/main` at `0f16f24` ("docs(stock): checkpoint
+future stock module discovery"). Two documentation-only commits landed
+after `d11e29c` (M8 discovery checkpoint `0ff80a3`; future-stock-module
+discovery checkpoint `0f16f24`) — no source code in either, both pushed.
+
+**Working tree is currently NOT clean.** Frontend Stock Module Phase 2A
++ 2B + 2C changes are implemented, automated-test green, and **both 2B
+and 2C are manually QA'd** — deliberately left uncommitted pending a
+single Phase 2 checkpoint commit (approval given, not yet executed):
+
+```
+ M src/app/navigation/nav.ts
+ M src/app/navigation/nav.test.ts
+ M src/app/router/route-authorization.test.tsx
+ M src/app/router/routes.tsx
+ M src/domains/reference/products/index.ts
+?? src/domains/stock/movements/
+?? src/domains/stock/overview/
+```
+
+The backend repo (`C:\Miza\backend`) also has one local, unpushed
+checkpoint commit (`a2473f1`) — see "Current milestone" above. See
+`next-session.md`'s own "Next task" for the exact checkpoint-commit scope.
+
+## Stock Module — Backend Phase 1A/1B + Frontend Phase 2 (implemented and QA'd, awaiting checkpoint commit)
+
+**Backend Phase 1A + 1B — COMPLETE, manually QA'd, committed locally
+(`a2473f1`), NOT pushed.** `GET /admin/stock` (authoritative per-product
+network aggregate: company/manager/commercial/total quantity and value,
+plus network summary totals) and `GET /admin/stock/movements`
+(paginated, newest-first audit ledger over `stock_movements`, filters
+`type`/`operator`/`product_id`/`from`/`to`/`page`, backend default
+`per_page=15`). Both `access-dashboard`-gated, read-only. Manual Postman
+QA on the movements endpoint found and fixed two real defects, both now
+regression-tested: the public `type`/`from`/`to` filters were silently
+ignored (the controller validated different internal key names); a
+validation failure could redirect instead of returning JSON depending on
+the caller's `Accept` header (`$request->validate()`'s content
+negotiation vs. an explicit `Validator`-based JSON response). 98/98
+focused backend Stock tests pass, 354 assertions.
+
+**Frontend Phase 2 planning/audit — COMPLETE.** Full architecture audit
+(routing, sidebar, shared components, API layer, formatters,
+permissions) plus a full audit of every existing Stock/reference screen,
+producing an approved page structure, routes, filters, columns, and
+sidebar placement — see `next-session.md`'s own approved-decisions list
+for the complete set (routes, `ACCESS_DASHBOARD` reuse, Actor omission,
+client-side Overview filters, the `product_id`-only drill-down, no
+charts/thresholds/write-workflows this phase).
+
+**Frontend Phase 2A (data/API/types/query layer) — COMPLETE, uncommitted.**
+`domains/stock/overview/` and `domains/stock/movements/`
+(`model`/`api`/`queries`), following every existing resource's exact
+shape. `Operator`/`OPERATORS`/`isOperator` are reused from
+`domains/reference/products` (its public surface was widened at this
+real second caller, mirroring the codebase's own established "widen at
+first real need" pattern — not a new pattern). The movements endpoint's
+response is Laravel's raw, flat `LengthAwarePaginator` shape, NOT this
+project's usual `{data, meta}` envelope — a dedicated domain-local
+normalizer handles it (`fromLaravelPage()` does not apply and must not
+be used here; see ADR-0041). `movement_type_label` is consumed verbatim
+from the backend; no frontend movement-label map exists. `actor` is not
+modelled on `StockMovement` at all — the backend never populates it.
+18/18 new tests; full suite 1337/1337 at that point.
+
+**Frontend Phase 2B (Stock Overview screen) — COMPLETE, MANUALLY QA'D.**
+Route `/stock/overview` (`ACCESS_DASHBOARD`), added as the first item in
+the existing "Stock" sidebar group (icon `Warehouse`) — the four existing
+movement-workflow screens (Agent Stock Returns/Agent Transfers/
+Allocations/Bons) are unchanged, same relative order. Four `StatCard`s
+read directly from the backend's own `summary` object (Total Units,
+Total Stock Value, Company Out of Stock, Network Out of Stock) — never
+recomputed from the per-product rows, and proven by test to stay fixed
+while the table's own filters change. Two purely client-side table
+filters (Operator; Stock state — "Out of stock" defined as
+`totalQuantity === 0`, no threshold invented) — the backend endpoint
+accepts no query parameters at all. The inventory table (`DataTable`)
+has 8 columns (Operator, Product, Company/Manager/Commercial/Total Qty,
+Total Value, Actions) with one explicit "View movements" action per row
+navigating to `/stock/movements?product_id=<id>` (no `operator` param)
+via a literal path string, ADR-0030's precedent. 109/109 focused tests;
+typecheck/lint (0 errors, 4 pre-existing unrelated warnings)/format all
+clean. **Manual QA passed against the real running backend**: summary
+cards and inventory rows cross-checked against `GET /api/v1/admin/stock`,
+Operator filter, Out-of-stock filter, filtered-empty-state, summary
+cards confirmed to stay network-wide while filtering, "View movements"
+confirmed to produce the correct `product_id` URL, responsive behavior,
+and permission/sidebar/direct-route behavior.
+
+**Frontend Phase 2C (Stock Movements screen) — COMPLETE, MANUALLY QA'D.**
+Route `/stock/movements` (`ACCESS_DASHBOARD`), inserted directly below
+Stock Overview in the sidebar (icon `History`) — the read-only,
+backend-paginated audit ledger over `GET /admin/stock/movements`, using
+Phase 2A's own data layer unchanged. Five backend-driven filters (`type`,
+`operator`, `product_id`, `from`, `to`) plus `page`, all kept in the URL;
+no `per_page` control (backend default 15, no page-size selector, by
+decision). **The Movement type filter deliberately offers only the 7
+movement types actually reachable by the backend's own write paths**
+(`supplier_ingress`, `supplier_ingress_reversal`, `agent_allocation`,
+`agent_transfer`, `agent_return`, `client_sale`, `client_sale_reversal`)
+— NOT the 4 additional legacy generic values (`sale`/`transfer`/
+`adjustment`/`return`) the validator's `in:` rule still accepts for
+backward compatibility with any pre-migration row. Re-verified fresh
+from source at this session's own final review, not assumed:
+`StockService`'s own `MOVEMENT_TYPE_LABELS` docblock states the legacy
+four have "zero real rows as of Phase 1B... no current writer produces
+them." Offering a filter option that can only ever return zero rows
+would be a control that appears to work and does not (ADR-0009's own
+discipline, applied to a reachability gap rather than a missing
+capability) — re-confirm this reasoning still holds before ever widening
+the list. The 8-column audit table (Date/Time, Movement, Product,
+Quantity, Source, Destination, Status, Reference) renders the backend's
+own `movementTypeLabel` verbatim (no frontend label map), plain-text
+Status (no new badge/tone system), and a navigable Reference cell only
+— the row itself is never clickable. Reference navigation is exhaustive
+over the five real reference types (`bon`/`allocation`/`transfer`/
+`return`/`invoice`, verified against `StockService::presentReference()`'s
+own five-way match), using literal path strings re-verified at this
+session's own review against each target domain's actual registered
+route (`/stock/bons/:id`, `/stock/allocations/:id`,
+`/stock/agent-transfers/:id`, `/stock/agent-stock-returns/:id`,
+`/grattage/invoices/:id`) — an unrecognized future type renders plain
+text, never a broken link. Stock Overview's own `?product_id=<id>`
+drill-down initializes the Product filter, survives a refresh, and
+persists across every other filter/page change. Invalid date ranges
+(`from > to`) are not duplicated as client-side validation — the
+backend's real 422 surfaces through the existing error state. 33 new
+focused tests. **Manual QA passed against the real running backend**:
+direct page load, sidebar placement, every filter individually and
+combined, pagination, row accuracy against the backend response, empty
+state, and general usability.
+
+**Phase 2 (2A + 2B + 2C) is now fully IMPLEMENTED, AUTOMATED GREEN, and
+MANUALLY QA'D — awaiting a single checkpoint commit, approval given.**
+A dedicated final review pass re-verified every contract above fresh
+from source (not re-derived from this document) and found no genuine
+issue requiring a source fix — no accidental changes, no duplicated
+types, no incorrect exports, no mapping mistakes, no dead code. Full
+suite: 1389/1389 across 70 files (one intermittent run hit the
+pre-existing, load-dependent timing flake already documented elsewhere
+in this file — on a different, untouched list-page file each time,
+never a Stock Movements test — confirmed a flake, not a regression, by
+a clean full-suite rerun and by running every affected file standalone).
+typecheck/lint (0 errors, same 4 pre-existing warnings)/format all
+clean; `vite build` succeeds (944.40 KB, +~10.5 KB over Phase 2B's own
+937.89 KB, no new dependency). Frontend Phase 2D (responsive polish +
+full regression) is a separate, not-yet-started item, not part of this
+checkpoint.
 
 ## Last completed implementation
 

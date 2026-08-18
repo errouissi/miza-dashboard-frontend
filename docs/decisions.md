@@ -1295,3 +1295,51 @@ decisions made *during implementation*.
   backend capability exists to close it; no future session should
   describe it as resolved, and no future session should build a
   client-side approximation to quiet it.
+
+## ADR-0041 — Stock Movements' flat Laravel paginator is normalized by a domain-local mapper; `fromLaravelPage()` does not apply
+
+- **Date:** 2026-08-18
+- **Status:** Accepted
+- **Context:** Stock Module Frontend Phase 2A needed to consume
+  `GET /admin/stock/movements`. Every existing paginated resource in this
+  codebase (Bons, Grattage Invoices, Villes, etc.) returns Laravel's
+  standard `JsonResource::collection()` envelope — `{data, links, meta:
+  {current_page, per_page, total, last_page}}` — which `fromLaravelPage()`
+  (`infrastructure/http/paginated.ts`) already normalizes generically.
+  `StockController::movements()` does not wrap its result in a
+  `JsonResource` collection; it returns
+  `response()->json($stock->paginateMovements($filters, $perPage))`
+  directly, where `paginateMovements()` returns a raw
+  `LengthAwarePaginator`. JSON-encoding a paginator directly produces
+  Laravel's OWN default shape instead — flat, with `current_page`/
+  `data`/`per_page`/`total`/`last_page` all at the TOP level, no `meta`
+  key at all. Confirmed directly from this session's own backend test
+  assertions (`AdminStockMovementsHttpTest.php`'s `assertJsonPath('total',
+  ...)`/`'per_page'`/`'last_page'`, all top-level).
+- **Decision:** `fetchStockMovements`
+  (`domains/stock/movements/api/stock-movements-api.ts`) has its own
+  private `fromFlatPaginator()`, reading the five flat fields this app
+  actually consumes directly into the standard `Paginated<T>` domain
+  shape. `fromLaravelPage()` is NOT used here and must not be — a mapper
+  that reached for `envelope.meta.current_page` against this response
+  would throw (`meta` does not exist), not silently misbehave, so this
+  is not a "works but wrong" trap, but it is a first-glance-looks-similar
+  contract a future session could plausibly try to "simplify" onto the
+  shared helper without re-checking the real response shape.
+- **Rationale:** This is a genuine backend-contract divergence, not a
+  frontend design choice — the same class of finding ADR-0038 already
+  established a precedent for (a wire-shape quirk, verified live/from
+  source, handled with a narrow, correctly-scoped normalizer, and
+  recorded so it is never rediscovered or "fixed" incorrectly). Kept
+  domain-local per Rule-of-Three: this is the FIRST endpoint in the
+  product found with this flat shape; promoting a second, generalized
+  paginator normalizer to `infrastructure/http/paginated.ts` ahead of a
+  second real occurrence would be exactly the premature shared
+  abstraction CLAUDE.md forbids.
+- **Consequences:** If a future endpoint is ever found to share this
+  exact flat-paginator shape, that is the real Rule-of-Three evidence to
+  revisit this decision and consider a shared `fromFlatLaravelPaginator()`
+  alongside the existing `fromLaravelPage()` — not before. Until then, do
+  not retrofit `stock-movements-api.ts` to use `fromLaravelPage()`, and
+  do not assume any other Stock/Grattage resource shares this shape
+  without re-verifying its own controller source first (ADR-0022).

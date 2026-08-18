@@ -16,6 +16,8 @@ import {
   Building2,
   Truck,
   Receipt,
+  Warehouse,
+  History,
 } from "lucide-react";
 import { PERMISSIONS, type PermissionResolver } from "@/infrastructure/permissions";
 import { ADMINS_PATH } from "@/domains/network/admins";
@@ -25,6 +27,8 @@ import { CLIENTS_PATH } from "@/domains/network/clients";
 import { CHEQUES_PATH, CHEQUES_PENDING_PATH } from "@/domains/money/cheques";
 import { DEPOSITS_PATH } from "@/domains/money/deposits";
 import { DEBT_PAYMENTS_PATH } from "@/domains/money/debt-payments";
+import { STOCK_OVERVIEW_PATH } from "@/domains/stock/overview";
+import { STOCK_MOVEMENTS_PATH } from "@/domains/stock/movements";
 import { AGENT_STOCK_RETURNS_PATH } from "@/domains/stock/agent-stock-returns";
 import { AGENT_TRANSFERS_PATH } from "@/domains/stock/agent-transfers";
 import { ALLOCATIONS_PATH } from "@/domains/stock/allocations";
@@ -186,6 +190,30 @@ export const NAV_TREE: NavGroup[] = [
   {
     label: "Stock",
     items: [
+      {
+        label: "Stock Overview",
+        to: STOCK_OVERVIEW_PATH,
+        // `access-dashboard` (Phase 2B) — the SAME coarse permission the
+        // backend actually checks (`GET /admin/stock` carries
+        // `permission:access-dashboard`, verified from source). Placed
+        // FIRST in this group by decision: a network-wide read, not a
+        // movement workflow like the four items below it.
+        permission: PERMISSIONS.ACCESS_DASHBOARD,
+        icon: Warehouse,
+      },
+      {
+        label: "Stock Movements",
+        to: STOCK_MOVEMENTS_PATH,
+        // `access-dashboard` (Phase 2C) — the SAME coarse permission the
+        // backend actually checks (`GET /admin/stock/movements` carries
+        // `permission:access-dashboard`, verified from source), mirroring
+        // Stock Overview's own posture directly above it. Placed
+        // immediately below Stock Overview by decision: both are
+        // network-wide reads, not movement workflows like the four items
+        // below them.
+        permission: PERMISSIONS.ACCESS_DASHBOARD,
+        icon: History,
+      },
       {
         label: "Agent Stock Returns",
         to: AGENT_STOCK_RETURNS_PATH,

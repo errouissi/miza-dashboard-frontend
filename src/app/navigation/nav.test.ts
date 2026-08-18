@@ -95,4 +95,17 @@ describe("the real nav tree", () => {
     );
     expect(groups.length).toBeGreaterThan(0);
   });
+
+  it("orders the Stock group with Stock Movements directly below Stock Overview (Phase 2C)", () => {
+    const stockGroup = NAV_TREE.find((group) => group.label === "Stock");
+
+    expect(stockGroup?.items.map((item) => item.label)).toEqual([
+      "Stock Overview",
+      "Stock Movements",
+      "Agent Stock Returns",
+      "Agent Transfers",
+      "Allocations",
+      "Bons",
+    ]);
+  });
 });

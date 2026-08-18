@@ -31,6 +31,8 @@ import {
   DEBT_PAYMENTS_PATH,
   DEBT_PAYMENTS_NEW_PATH,
 } from "@/domains/money/debt-payments";
+import { STOCK_OVERVIEW_PATH } from "@/domains/stock/overview";
+import { STOCK_MOVEMENTS_PATH } from "@/domains/stock/movements";
 import {
   AGENT_STOCK_RETURNS_PATH,
   AGENT_STOCK_RETURN_NEW_PATH,
@@ -276,6 +278,14 @@ describe("every contributed domain route is guarded", () => {
   // `permission:debt_cash` check, unlike Cheques'/Deposits' own split
   // view/create vocabularies. No detail path exists to test — the backend
   // route is commented out.
+  // STOCK_OVERVIEW_PATH (Phase 2B) is guarded by `access-dashboard` — the
+  // SAME coarse permission the backend actually checks
+  // (`GET /admin/stock` carries `permission:access-dashboard`, verified
+  // fresh from source), the same posture GRATTAGE_INVOICES_PATH already
+  // has, NOT one of the granular `view-agent-*`/`view-*` strings every
+  // movement-workflow Stock resource below it uses. STOCK_MOVEMENTS_PATH
+  // (Phase 2C) shares the identical `access-dashboard` posture, mirroring
+  // `GET /admin/stock/movements`'s own check, verified fresh from source.
   // AGENT_STOCK_RETURNS_PATH/AGENT_STOCK_RETURN_NEW_PATH/
   // `agentStockReturnDetailPath(1)` (roadmap M5, Phase 1 — the first Stock
   // resource) are guarded by `view-agent-stock-return`/
@@ -339,6 +349,8 @@ describe("every contributed domain route is guarded", () => {
     depositDetailPath(1),
     DEBT_PAYMENTS_PATH,
     DEBT_PAYMENTS_NEW_PATH,
+    STOCK_OVERVIEW_PATH,
+    STOCK_MOVEMENTS_PATH,
     AGENT_STOCK_RETURNS_PATH,
     AGENT_STOCK_RETURN_NEW_PATH,
     agentStockReturnDetailPath(1),
@@ -372,6 +384,39 @@ describe("every contributed domain route is guarded", () => {
 
     expect(router.state.location.pathname).toBe("/login");
     expect(router.state.location.search).toBe(`?next=${encodeURIComponent(path)}`);
+  });
+});
+
+describe("Stock Overview's drill-down URL now resolves to a real page (Phase 2C)", () => {
+  // Phase 2B shipped with Stock Movements' own route not yet built, so
+  // Overview's literal `/stock/movements?product_id=<id>` link resolved to
+  // the app's normal in-shell 404 — documented as expected, not a defect
+  // (see `project-status.md`'s own Phase 2B write-up). Phase 2C adds the
+  // real route; this proves the exact same literal URL now renders the
+  // real page instead of "Page introuvable".
+  it("renders the Stock Movements page, not the 404, for /stock/movements?product_id=<id>", async () => {
+    server.use(
+      http.get(`${API}/admin/stock/movements`, () =>
+        HttpResponse.json({
+          current_page: 1,
+          data: [],
+          per_page: 15,
+          total: 0,
+          last_page: 1,
+        }),
+      ),
+      http.get(`${API}/admin/products`, () => HttpResponse.json([])),
+    );
+
+    sessionManager.start(permittedSession);
+    const router = renderAt("/stock/movements?product_id=44");
+
+    expect(
+      await screen.findByRole("heading", { name: "Stock Movements" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/page introuvable/i)).not.toBeInTheDocument();
+    expect(router.state.location.pathname).toBe("/stock/movements");
+    expect(router.state.location.search).toBe("?product_id=44");
   });
 });
 

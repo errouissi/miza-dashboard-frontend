@@ -12,5 +12,17 @@ export { PRODUCTS_PATH, productsRoutes } from "./routes";
 export { useProductOptionsQuery } from "./queries/products-queries";
 export type { ProductOption } from "./model/product";
 
+/**
+ * The Operator vocabulary — widened at Stock Overview/Movements' own
+ * Phase 2A (`domains/stock/overview`, `domains/stock/movements`), a real
+ * second cross-domain caller: Stock's own `operator` field is the
+ * identical backend enum (`in:IAM,INWI,ORANGE`). Mirrors how
+ * `useProductOptionsQuery` was itself exported at its own first real
+ * caller (M5 Phase 1) — not ahead of one.
+ */
+export { OPERATORS, isOperator } from "./model/product";
+export type { Operator } from "./model/product";
+
 // api/, the list query, mutations, components and the page stay internal.
-// Siblings get the options picker surface above — nothing else.
+// Siblings get the options picker surface and the Operator vocabulary
+// above — nothing else.

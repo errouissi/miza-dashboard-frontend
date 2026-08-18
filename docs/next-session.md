@@ -3,7 +3,7 @@
 **Read this file first.** It is written so a session with no prior context can resume
 immediately. Overwrite it at the end of every session.
 
-_Last updated: 2026-08-16_
+_Last updated: 2026-08-18_
 
 ---
 
@@ -19,16 +19,29 @@ Phase 4 is CLOSED BY DISCOVERY/DECISION, no frontend implementation
 disclosed, non-blocking backend capability gap (BC-AE). Full M7 detail
 is preserved further down this section, unchanged from its own closeout.
 
-**M8 — Hardening ("making it trustworthy") is the current milestone.
-Discovery/kickoff is COMPLETE. Implementation has NOT started.** A full
-discovery pass ran across all six frozen M8 deliverables (E2E, a11y,
-performance, observability, feature flags, ADR reconciliation) —
-findings and approved decisions are recorded in full under "M8 discovery
-— findings and approved decisions" below. **The repository was clean
-before this checkpoint; nothing was implemented, installed, or
-modified.** **Next task: M8 Phase 1A — Playwright foundation + isolated
-E2E environment/harness.** See "Next task" below — tomorrow's session
-implements Phase 1A, it does not re-discover it.
+**M8 — Hardening ("making it trustworthy") — discovery/kickoff is
+COMPLETE, implementation has NOT started, and M8 is now DEFERRED until
+the Stock Module (below) is complete.** This is an explicit product
+decision, not a regression — the full discovery pass, the approved
+7-phase structure, and all five discovery-stage decisions (recorded in
+full under "M8 discovery — findings and approved decisions" below)
+remain valid and unchanged, and M8 Phase 1A resumes exactly where it
+left off once the Stock Module closes out.
+
+**The Stock Module is the CURRENT work — see "Next task: Stock Module"
+below, not the M8 section, for what to do next.** Backend Phase 1A + 1B
+are COMPLETE and manually QA'd, committed locally in the backend repo
+(`a2473f1`), NOT pushed. Frontend Phase 2 planning is COMPLETE; Phase 2A
+(data layer) is COMPLETE; **Phase 2B (Stock Overview UI) and Phase 2C
+(Stock Movements UI) are BOTH COMPLETE, automated-test green, AND
+MANUALLY QA'D** against the real running backend. A dedicated final
+review pass re-verified every Phase 2 contract fresh from source and
+found no issue requiring a fix. **Phase 2 (2A + 2B + 2C) is fully
+IMPLEMENTED and QA'D — the only remaining step is a single checkpoint
+commit, approval already given.** Nothing is committed yet. Full detail:
+"Next task: Stock Module" below, and `project-status.md`'s own "Stock
+Module" section. Frontend Phase 2D (responsive polish + full regression)
+remains a separate, not-yet-started item, not part of this checkpoint.
 
 ## M8 discovery — findings and approved decisions (this session, no implementation)
 
@@ -186,17 +199,22 @@ outside E2E.
   currently-dormant architectural gap, unexercised because no nested
   route has been built.
 
-## Future work (not scheduled, does not change the next task above)
+## Future work — SUPERSEDED, Stock Module is now active work
 
-**A future Stock module idea was discovered and its direction recorded
-this session — it is NOT part of M8, NOT scheduled, and does NOT change
-"Next task" above.** Full discovery (verified backend stock-ledger
-domain: `stocks`/`stock_movements`/`StockService`, approved future
-module shape, Stock Value definition, provisional 6-phase sequence,
-unresolved business decisions) is persisted in
-**`docs/future-stock-module.md`** — read that file directly if this ever
-gets picked up; do not re-derive the backend domain from scratch. **The
-active next task remains M8 Phase 1A**, unchanged.
+**This section originally recorded the Stock module as a discovered-but-
+not-scheduled idea. That is no longer true — it is now the project's
+active work, ahead of M8. See "Next task: Stock Module" below.** The
+original discovery this section pointed to is still the correct
+reference for backend domain facts (`stocks`/`stock_movements`/
+`StockService`, Stock Value definition, holder classification) —
+**`docs/future-stock-module.md`** — do not re-derive those from scratch.
+Its own provisional 6-phase sequence and "NOT scheduled"/"NOT part of
+any active milestone" framing are now stale; the real phase structure is
+Backend Phase 1A/1B (done) → Frontend Phase 2A (done) → Phase 2B (done,
+manually QA'd) → Phase 2C (done, manually QA'd) → a Phase 2 checkpoint
+commit (next, approval given) → Phase 2D (responsive polish + full
+regression, separate, not yet started or scoped), tracked here and in
+`project-status.md`, not in that file.
 
 ## M7 closure (historical, unchanged from its own closeout)
 
@@ -488,21 +506,36 @@ active next task remains M8 Phase 1A**, unchanged.
 
 ```bash
 cd C:\Miza\frontend-v2
-git status                 # expect: clean
-git log --oneline -8        # expect this M8-discovery checkpoint commit,
-                            # then 153edfb, dc0c37f, d11e29c, 5ae7ef2,
-                            # 263ad78, 3bca8ab, 15a64fb
-pnpm test:ci               # expect: 1319/1319 across 66 files (no source
-                            # changed today — M8 discovery/checkpoint is
-                            # documentation-only)
+git log --oneline -3        # expect: 0f16f24, 0ff80a3, 153edfb
+git status                  # expect: NOT clean — Stock Module Phase 2A+2B,
+                             # uncommitted by decision, pending Phase 2B's
+                             # own manual QA:
+                             #   M src/app/navigation/nav.ts
+                             #   M src/app/router/route-authorization.test.tsx
+                             #   M src/app/router/routes.tsx
+                             #   M src/domains/reference/products/index.ts
+                             #   ?? src/domains/stock/movements/
+                             #   ?? src/domains/stock/overview/
+pnpm test:ci                # expect: 1352/1352 across 69 files
 pnpm lint && pnpm typecheck && pnpm format:check && pnpm build
 ```
 
-**This is a fresh source/git freshness check, required before Phase 1A
-implementation starts** — confirm the above still matches before writing
-any code. **M7 is closed. M8 discovery is complete. Do not resume
-Overview Phase 4 work. Implement M8 Phase 1A only** — see "Next task"
-below for its exact, narrow scope.
+```bash
+cd C:\Miza\backend
+git log --oneline -1        # expect: a2473f1 feat(stock): add admin
+                             # inventory and movement ledger APIs
+git status                  # expect: clean (checkpoint commit already
+                             # made); confirm still NOT pushed
+```
+
+**This is a fresh source/git freshness check, required before writing any
+code** — confirm the above still matches before doing anything else, the
+same discipline every prior session-start in this project has required.
+**Do not run `git checkout`/`git reset`/`git clean` to "clean up" the
+frontend working tree — the uncommitted Stock Module files ARE this
+session's starting point, not stray state.** **The Stock Module is the
+active work; M8 is deferred — see "Next task: Stock Module" above, not
+the M8 section below it.**
 
 ## Last completed work
 
@@ -791,18 +824,83 @@ below for its exact, narrow scope.
 
 Full write-ups for every item above: `project-status.md`'s own dedicated sections.
 
-## Next task: M8 Phase 1A — Playwright foundation + isolated E2E environment/harness
+## Next task: Stock Module — create the Phase 2 checkpoint commit
+
+**This is the real next task — read this section before the M8 one
+below, which is deferred.** Backend Phase 1A + 1B (`GET /admin/stock`,
+`GET /admin/stock/movements`) are done, manually QA'd, committed locally
+in the backend repo only (`a2473f1`, not pushed). Frontend Phase 2A
+(data layer), Phase 2B (Stock Overview UI, `/stock/overview`) and
+Phase 2C (Stock Movements UI, `/stock/movements`) are all implemented,
+automated-test green, and **both 2B and 2C are manually QA'd** against
+the real running backend. A dedicated final review pass re-verified
+every contract fresh from source (Stock Overview's summary/filter/
+drill-down behavior; Stock Movements' public params, the flat-paginator
+normalizer, `movementTypeLabel`/Actor handling, URL-state and pagination
+correctness; the 7-reachable-type movement filter decision; every
+reference link against its actual registered route) and found no issue
+requiring a source fix. **Nothing is committed yet — that is the one
+remaining step, approval already given.**
+
+**Before committing, do a brief source/git freshness check** — confirm
+`git status` in both repos still matches this file's own expectations
+(frontend: the diff listed under "Current state" above; backend: one
+local unpushed commit, `a2473f1`) — the same discipline every prior
+session-start in this project has required.
+
+### Step 1 — create the Phase 2 frontend checkpoint commit
+
+Stage exactly the Phase 2A + 2B + 2C diff (see "Current state" above for
+the file list) and commit with a message that names all three phases —
+see `project-status.md`'s own "Stock Module" section for the full
+per-phase write-up to draw the message from. **Do not push** unless
+separately asked. The backend's own local checkpoint commit (`a2473f1`)
+is a separate decision, not bundled into this one.
+
+### Step 2 — after the checkpoint commit
+
+Frontend Phase 2D (responsive polish + full regression) is a separate,
+not-yet-started, not-yet-scoped-in-detail item — give it its own
+discovery pass before implementation, the same discipline every phase in
+this project has required. It is not a blocker for closing out the
+Stock Module's own frontend work at Phase 2C, and M8 Phase 1A's own
+resumption (below) does not depend on it either, only on the Stock
+Module's core work (2A–2C) being closed out.
+
+**Manual QA record, preserved for continuity — both phases passed
+against the real running backend:**
+
+- **Phase 2B (Stock Overview):** all four summary cards and every
+  inventory row cross-checked against a live `GET /api/v1/admin/stock`
+  response; Operator filter; Stock state ("Out of stock") filter;
+  summary cards confirmed to stay network-wide while filtering;
+  filtered-empty-state message; "View movements" confirmed to produce
+  exactly `/stock/movements?product_id=<id>`; responsive behavior;
+  permission/sidebar/direct-route behavior.
+- **Phase 2C (Stock Movements):** direct page load at `/stock/movements`;
+  sidebar placement directly below Stock Overview; all five filters
+  (movement type, operator, product, from, to) individually and
+  combined; backend pagination; row accuracy against the backend
+  response; general usability. The drill-down from Phase 2B's own "View
+  movements" link, previously the app's normal in-shell 404 (expected,
+  documented, not a defect), now resolves to this real page.
+
+## M8 Phase 1A — DEFERRED (resumes after the Stock Module closes out)
 
 **M7 is CLOSED. M8 discovery/kickoff is COMPLETE** (see "M8 discovery —
 findings and approved decisions" above for the full findings, the
 approved 7-phase structure, the 12-flow inventory, and all five approved
-decisions). **Nothing has been implemented yet — Phase 1A is next.**
+decisions). **Nothing has been implemented yet.** This phase is on hold,
+not cancelled — do not start it before the Stock Module (above) is
+closed out, and do not let it silently drift out of scope in the
+meantime; everything below remains the approved plan for when it
+resumes.
 
-**Before writing any code, do a brief source/git freshness check** —
-confirm `git status`/`git log` still match this file's own expectations
-(see "Before anything else" below) and that nothing changed underneath
-this checkpoint since it was written, the same discipline every prior
-session-start in this project has required.
+**Before writing any code (once resumed), do a brief source/git
+freshness check** — confirm `git status`/`git log` still match this
+file's own expectations (see "Before anything else" below) and that
+nothing changed underneath this checkpoint since it was written, the
+same discipline every prior session-start in this project has required.
 
 **Phase 1A's approved scope, exactly (do not expand it):**
 - Minimal Playwright install + config.
@@ -992,6 +1090,31 @@ the verbatim list is needed again.
   `useCompanyStockQuery`/`useManagerStockQuery` (ADR-0025); Return/Bons still use the
   unfiltered `useProductOptionsQuery()` by choice — changing that needs its own
   fresh decision, not an assumption of consistency.
+- 🚫 **Do not use `fromLaravelPage()` for Stock Movements.** The endpoint's
+  response is Laravel's raw, flat `LengthAwarePaginator` shape
+  (`current_page`/`per_page`/`total`/`last_page` all top-level), not this
+  project's usual `{data, meta}` envelope. `fetchStockMovements`
+  (`domains/stock/movements/api/stock-movements-api.ts`) has its own
+  domain-local `fromFlatPaginator()` for exactly this reason — see
+  ADR-0041. Do not "simplify" it to the shared helper.
+- 🚫 **Do not add an `actor` field to the `StockMovement` domain model or
+  render an Actor column on the Movements table.** The backend never
+  populates it (`stock_movements` has no `created_by`/actor column at
+  all) — a permanently-empty column would misrepresent the contract.
+  Approved Phase 2 decision, re-confirm from source before reversing it.
+- 🚫 **Do not invent a low-stock threshold for Stock Overview or
+  Movements.** No threshold model exists anywhere in the backend
+  (`future-stock-module.md` §3.6). "Out of stock" on the Overview screen
+  is `totalQuantity === 0` only — never a frontend-picked cutoff.
+- 🚫 **Do not send `per_page` explicitly on `GET /admin/stock/movements`
+  requests, and do not add a page-size selector to the Movements UI.**
+  Approved Phase 2 decision — the backend default (15) is used
+  unconditionally.
+- 🚫 **Do not start Phase 2C (Stock Movements UI) before Phase 2B (Stock
+  Overview) has had a real manual browser QA pass.** Phase 2B is
+  automated-test green but UNAPPROVED — see "Next task: Stock Module"
+  above for the exact QA checklist. This is the literal next step, not
+  a formality to skip.
 - 🚫 **Do not re-add a proactive Grattage restock-gate integration to
   `AllocationDetailPage`, and do not build a client-side Allocation capacity
   calculation.** Backend commit `9af5d00` made the team-obligation gate
@@ -1064,15 +1187,48 @@ the verbatim list is needed again.
       Postgres, fail-closed; Phase 1A's narrow scope; error-reporting
       vendor deferred to Phase 5; P1 working definition). See "M8
       discovery" above.
-- [ ] **M8 Phase 1A — NOT started. NEXT TASK.** Playwright foundation +
-      isolated E2E environment/harness + one non-destructive smoke test
-      + the Playwright ADR. See "Next task" above for the exact,
-      approved, narrow scope.
+- [ ] **M8 Phase 1A — NOT started, DEFERRED until the Stock Module
+      closes out (not cancelled).** Playwright foundation + isolated E2E
+      environment/harness + one non-destructive smoke test + the
+      Playwright ADR. See "M8 Phase 1A — DEFERRED" above for the exact,
+      approved, narrow scope, unchanged.
 - [ ] **M8 Phase 1B and later (fixtures, money-path E2E, a11y,
       performance, observability, flags/ADR/P1 sweep) — NOT started,
-      NOT scoped in detail yet.** Each gets its own discovery/review pass
-      before implementation, the same discipline every phase in this
-      project has required.
+      NOT scoped in detail yet, DEFERRED alongside Phase 1A.** Each gets
+      its own discovery/review pass before implementation, the same
+      discipline every phase in this project has required.
+- [x] **Stock Module — Backend Phase 1A + 1B — DONE, manually QA'd,
+      committed locally in the backend repo (`a2473f1`), NOT pushed.**
+      `GET /admin/stock`, `GET /admin/stock/movements`. Two real
+      Postman-found defects fixed (public `type`/`from`/`to` filters
+      silently ignored; validation-failure content-negotiation redirect
+      bug). 98/98 focused backend tests. See `project-status.md`'s own
+      "Stock Module" section.
+- [x] **Stock Module — Frontend Phase 2 planning/audit — DONE.** Full
+      architecture audit + approved page/route/filter/column/sidebar
+      decisions — see "Approved decisions" list at the top of this
+      section's own history (or `project-status.md`).
+- [x] **Stock Module — Frontend Phase 2A (data/API/types/query layer) —
+      DONE, uncommitted.** `domains/stock/overview/`,
+      `domains/stock/movements/`. 18/18 new tests; full suite 1337/1337
+      at that point.
+- [x] **Stock Module — Frontend Phase 2B (Stock Overview UI) — DONE,
+      MANUALLY QA'D, uncommitted.** `/stock/overview`, 4 summary cards,
+      2 client-side filters, 8-column inventory table, "View movements"
+      drill-down. 109/109 focused tests. Manual QA passed against the
+      real running backend.
+- [x] **Stock Module — Frontend Phase 2C (Stock Movements UI) — DONE,
+      MANUALLY QA'D, uncommitted.** `/stock/movements`, 5 backend-driven
+      filters, backend pagination, exhaustive reference navigation, the
+      inbound `?product_id=` drill-down. 33 new focused tests. Manual QA
+      passed against the real running backend. **Phase 2 (2A+2B+2C) is
+      now fully implemented and QA'd — see "Next task: Stock Module"
+      above for the checkpoint-commit step, the only thing left.**
+- [ ] **Stock Module — Frontend Phase 2D (responsive polish + full
+      regression) — NOT started, not yet scoped in detail.** A separate
+      item, not a blocker for the Phase 2 checkpoint commit above — give
+      it its own discovery pass before implementation when it is picked
+      up.
 - [x] **M4 (Cheques, Deposits, Debt Payments) — fully DONE.** See `project-status.md`.
 - [x] **Freshness-rule retrofit (`useFreshConfirm`) — DONE.**
 - [x] **M5 — Stock, ALL FIVE PHASES DONE at the implementation level** (discovery,
@@ -1124,8 +1280,9 @@ the verbatim list is needed again.
       Overview widget grid (Phases 1–3 delivered, Phase 4 closed by
       decision) are all done. M7's own frozen exit criteria (zero
       boundary-lint suppressions, verified parallel panel firing,
-      independent panel-crash isolation) are all met. **M8 — Hardening is
-      the next milestone, not yet started — see "Next task" above.**
+      independent panel-crash isolation) are all met. **The Stock Module
+      is the next active work, ahead of M8 — Hardening (deferred). See
+      "Next task: Stock Module" above.**
 - [ ] **Stock exposure snapshot — genuine, disclosed, NON-BLOCKING
       backend capability gap (BC-AE, ADR-0040).** The frozen Overview
       purpose's own "is stock exposure normal" question has no backing
