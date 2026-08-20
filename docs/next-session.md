@@ -19,24 +19,19 @@ Phase 4 is CLOSED BY DISCOVERY/DECISION, no frontend implementation
 disclosed, non-blocking backend capability gap (BC-AE). Full M7 detail
 is preserved further down this section, unchanged from its own closeout.
 
-**M8 — Hardening ("making it trustworthy") — discovery/kickoff is
-COMPLETE, implementation has NOT started.** M8 was previously deferred
-pending the Stock Module's own core closure — **that gating condition
-is now satisfied, so M8 Phase 1A is the next planned implementation
-work.** One small, standalone item was discovered while closing the
-Stock Module and is now fully closed out: **Scheduler Health (pre-M8
-operational hardening) — COMPLETE, manual QA passed** (backend
-implemented/pushed by the Backend Team, frontend implemented,
-automated suite green, all three states plus recovery manually
-verified against the real local backend — see "Scheduler Health —
-CLOSED" below for the full record). **M8 has still NOT started** — see
-"Next task: M8 Phase 1A" below. The full M8 discovery pass, the
-approved 7-phase structure, and all five discovery-stage decisions
-(recorded in full under "M8 discovery — findings and approved
-decisions" below) remain valid and unchanged. Because both backend and
-frontend history have moved since this plan was written, **Phase 1A
-must be re-read and its own git/test freshness re-validated before any
-code is written** — see its own "Next task" section below.
+**M8 — Hardening ("making it trustworthy") — Phase 1A is CLOSED,
+COMPLETE.** M8 was previously deferred pending the Stock Module's own
+core closure — that gating condition was satisfied, one standalone item
+(Scheduler Health, pre-M8 operational hardening) was closed out first
+(backend implemented/pushed by the Backend Team, frontend implemented,
+automated suite green, all three states plus recovery manually verified
+— see "Scheduler Health — CLOSED" below), and **Phase 1A (Playwright
+E2E foundation) is now implemented, automated-validated, and manually
+QA'd — CLOSED** — see "M8 Phase 1A — CLOSED, COMPLETE" below for the
+full record. The full M8 discovery pass, the approved 7-phase structure,
+and all five discovery-stage decisions (recorded in full under "M8
+discovery — findings and approved decisions" below) remain valid and
+unchanged. **Phase 1B has NOT started.**
 
 **The Stock Module — CORE CLOSED.** Backend Phase 1A + 1B are COMPLETE
 and manually QA'd. The backend checkpoint commit (`a2473f1`) is now
@@ -53,8 +48,9 @@ backend. A dedicated final review pass re-verified every Phase 2
 contract fresh from source and found no issue requiring a fix. **Phase
 2 (2A + 2B + 2C) is fully IMPLEMENTED, QA'D, and COMMITTED** —
 checkpoint `6a1d68a` ("feat(stock): add Stock Overview and Stock
-Movements screens"), **deliberately UNPUSHED for now** (`main` ahead of
-`origin/main` by 1 commit). Full detail: "Next task: M8 Phase 1A" below,
+Movements screens"), **committed and present on `origin/main`** (`main`
+is synchronized with `origin/main`, 0 ahead / 0 behind, at `36d641a`).
+Full detail: "M8 Phase 1A — CLOSED, COMPLETE" below,
 and `project-status.md`'s own "Stock Module" section. Frontend Phase 2D
 (responsive polish + full regression) is an **optional** future
 follow-up, not required for this closure and not a blocker for M8 —
@@ -221,7 +217,7 @@ outside E2E.
 
 **This section originally recorded the Stock module as a discovered-but-
 not-scheduled idea. That is no longer true — its core is now CLOSED. See
-"Next task: M8 Phase 1A" below for what comes next.** The original
+"M8 Phase 1A — CLOSED, COMPLETE" below for what comes next.** The original
 discovery this section pointed to is still the correct reference for
 backend domain facts (`stocks`/`stock_movements`/`StockService`, Stock
 Value definition, holder classification) —
@@ -230,7 +226,8 @@ Its own provisional 6-phase sequence and "NOT scheduled"/"NOT part of
 any active milestone" framing are now stale; the real phase structure
 was Backend Phase 1A/1B (done) → Frontend Phase 2A (done) → Phase 2B
 (done, manually QA'd) → Phase 2C (done, manually QA'd) → the Phase 2
-checkpoint commit (`6a1d68a`, done, unpushed) — **core CLOSED here.**
+checkpoint commit (`6a1d68a`, done, committed and pushed to
+`origin/main`) — **core CLOSED here.**
 Phase 2D (responsive polish + full regression) remains a separate,
 optional follow-up, not yet started or scoped, and does not block
 anything. Tracked here and in `project-status.md`, not in that file.
@@ -524,16 +521,18 @@ anything. Tracked here and in `project-status.md`, not in that file.
 ## Before anything else
 
 **The Stock Module's core is CLOSED; M8 Phase 1A is the next planned
-work — see "Next task: M8 Phase 1A" below.** Both repos' history moved
+work — see "M8 Phase 1A — CLOSED, COMPLETE" below.** Both repos' history moved
 since M8's plan was written, so this check is now M8's own starting
 point, not a stale Stock Module snapshot:
 
 ```bash
 cd C:\Miza\frontend-v2
-git log --oneline -3        # expect: 6a1d68a, 0f16f24, 0ff80a3
-git status                  # expect: clean, "ahead of origin/main by 1"
-                             # (the unpushed Phase 2 checkpoint, 6a1d68a
-                             # — leave it unpushed unless separately asked)
+git log --oneline -3        # expect: 36d641a, fe28fa3, 6a1d68a
+git status                  # expect: clean, "up to date with origin/main"
+                             # (0 ahead / 0 behind — all three commits,
+                             # including the Stock Phase 2 checkpoint
+                             # 6a1d68a and the Scheduler Health work, are
+                             # already committed and present on origin/main)
 pnpm test:ci                 # re-run fresh and record the actual count —
                               # do not assume 1389/1389 (this project's
                               # last confirmed number) still holds; the
@@ -846,7 +845,7 @@ Full write-ups for every item above: `project-status.md`'s own dedicated section
 ## Stock Module — CORE CLOSED (checkpoint record)
 
 **This is no longer a "next task" — it is a closed, historical record.
-Read "Next task: M8 Phase 1A" below for what comes next.** Backend
+Read "M8 Phase 1A — CLOSED, COMPLETE" below for what comes next.** Backend
 Phase 1A + 1B (`GET /admin/stock`, `GET /admin/stock/movements`) are
 done, manually QA'd. Frontend Phase 2A (data layer), Phase 2B (Stock
 Overview UI, `/stock/overview`) and Phase 2C (Stock Movements UI,
@@ -865,9 +864,10 @@ requiring a source fix. **The checkpoint commit was then made:**
 feat(stock): add Stock Overview and Stock Movements screens
 ```
 
-**Deliberately UNPUSHED for now** (`main` ahead of `origin/main` by 1
-commit) — a separate decision from the Stock Module's own closure. The
-backend's own checkpoint commit (`a2473f1`) is likewise historical now —
+**Committed and present on `origin/main`** — `main` is synchronized with
+`origin/main` (0 ahead / 0 behind) at `36d641a`, the tip of a run of
+three commits that includes this checkpoint. The backend's own
+checkpoint commit (`a2473f1`) is likewise historical now —
 an ancestor of the backend's current HEAD (`a9bf2bd`), not the tip; the
 backend branch moved on via an external pull merging in unrelated
 teammate work, and is synced with origin (0 ahead / 0 behind). **On this
@@ -936,7 +936,9 @@ scheduler liveness *observable*, it does not configure the production
 scheduler itself; the Backend Team's own updated
 `docs/production-checklist.md` now states this explicitly.
 
-**Frontend integration is IMPLEMENTED, uncommitted** — widened
+**Frontend integration is IMPLEMENTED, committed and present on
+`origin/main`** (`fe28fa3`, "feat(overview): add Scheduler Health
+monitoring (pre-M8 operational hardening)") — widened
 `DashboardStatistics`/`fetchDashboardStatistics` with the new field
 (status rendered verbatim from the backend, never computed
 client-side; an unrecognized status throws rather than passing through
@@ -974,23 +976,77 @@ recovery:**
   the backend's own computed state, not sticky.
 
 **Scheduler Health (pre-M8 operational hardening) is now COMPLETE.**
-Frontend source/tests/docs remain uncommitted. **Production still
-requires an external trigger invoking `php artisan schedule:run` every
-minute** — this feature makes scheduler liveness *observable*; it does
-not configure the production scheduler itself. **M8 has still NOT
-started** — see "Next task: M8 Phase 1A" below, now the literal next
-task.
+Frontend source/tests are committed (`fe28fa3`) and the closure/docs
+commit (`36d641a`, "docs: reconcile Stock Module closure and close
+Scheduler Health (pre-M8)") is also committed — both are present on
+`origin/main`. **Production still requires an external trigger invoking
+`php artisan schedule:run` every minute** — this feature makes scheduler
+liveness *observable*; it does not configure the production scheduler
+itself. **M8 Phase 1A is now CLOSED** — see "M8 Phase 1A — CLOSED,
+COMPLETE" below for the full record.
 
-## Next task: M8 Phase 1A (gating condition satisfied — re-validate before starting)
+## M8 Phase 1A — CLOSED, COMPLETE
 
-**M7 is CLOSED. The Stock Module's core is now CLOSED too (see above) —
-M8's own gating condition ("resumes once the Stock Module core closes
-out") is satisfied. M8 discovery/kickoff is COMPLETE** (see "M8
+**M8 Phase 1A is CLOSED.** Backend Team implemented and verified the
+isolated E2E backend foundation first (dedicated `miza_e2e` PostgreSQL
+database, migrations, roles/permissions, `AdminUserSeeder`, running on
+`http://127.0.0.1:8010`; the authoritative `GET /api/v1/e2e/status`
+preflight, backed by `App\Support\E2eEnvironmentGuard`'s boot-time
+database-name guard — verified fresh from backend source, not assumed,
+and confirmed live: `{"environment":"e2e","database_isolated":true,
+"database_connected":true}`). **No backend modification came from our
+side** — the isolated backend is entirely Backend Team owned/provided.
+
+Frontend Phase 1A foundation: `@playwright/test` installed (Chromium
+only), a two-gate fail-closed isolation design (an in-app `"e2e"` mode in
+`src/infrastructure/config/env.ts` requiring `VITE_API_BASE_URL` to equal
+exactly `http://127.0.0.1:8010/api/v1`, plus a Playwright `globalSetup`
+that calls the live `/e2e/status` endpoint and refuses to proceed unless
+it returns exactly the safe isolated shape — see ADR-0042), a real-UI
+login fixture (drives the actual login page, no direct API call, no
+localStorage injection), and exactly one smoke spec
+(`e2e/smoke/overview.spec.ts`: real login → authenticated `/` → the
+Overview page's `<h1>` visible). CI wiring is deliberately deferred (see
+ADR-0042) — not attempted, not owed for this closure.
+
+**Automated validation — PASS.** Focused negative-safety unit tests
+(`e2e/status-validate.test.ts`, `env.test.ts`'s new e2e cases) pass, full
+suite 1411/1411 (71 files), typecheck/lint/format all clean. The real
+Playwright run against the live isolated backend passed end-to-end
+(isolation preflight → Vite webServer ready → Chromium launched → real
+login → authenticated Overview assertion), after one deterministic
+frontend-only fix (Vite's dev server defaulted to binding `[::1]` only on
+this machine with no explicit `--host`, invisible to Playwright's IPv4
+probe/`baseURL`; `webServer.command` now passes `--host 127.0.0.1`
+explicitly — no safety gate, timeout, or assertion was weakened to fix
+this).
+
+**Manual visual QA — PASS.** The exact real flow was visually confirmed
+in a real, visible Chromium window, fully automated (no clicks/input from
+the operator): login page → email/password filled automatically → Sign
+in executed automatically → authenticated Overview rendered → the final
+Overview page remained visible long enough to confirm manually. Verified
+using temporary, clearly-marked instrumentation only (`slowMo` in
+`playwright.config.ts`'s `use.launchOptions`, a trailing
+`page.waitForTimeout(5000)` in the spec) — both reverted immediately
+after the visual run; the permanent committed files carry neither.
+
+**Phase 1A acceptance criteria — all met**: exactly one Playwright smoke
+spec, Chromium-only, real UI login (no direct API call, no token
+injection), no mocked backend/auth anywhere, the exact isolated API base
+enforced by two independent gates, `.env.e2e` gitignored with only
+`.env.e2e.example` committed, no destructive business operation, no CI
+wiring, ADR-0042 present.
+
+**Phase 1B has NOT started.**
+
+**Below is the original approved plan, kept for reference — implementation
+followed it without expanding scope.** M8's own gating condition
+("resumes once the Stock Module core closes out") was already satisfied
+(see above); M8 discovery/kickoff was already COMPLETE (see "M8
 discovery — findings and approved decisions" above for the full
 findings, the approved 7-phase structure, the 12-flow inventory, and all
-five approved decisions). **Nothing has been implemented yet.** This is
-not a scope decision still owed — the plan below is unchanged and
-already approved; it is next.
+five approved decisions).
 
 **Before writing any code, do a brief source/git freshness check** —
 confirm `git status`/`git log` still match this file's own expectations
@@ -1290,13 +1346,11 @@ the verbatim list is needed again.
       Postgres, fail-closed; Phase 1A's narrow scope; error-reporting
       vendor deferred to Phase 5; P1 working definition). See "M8
       discovery" above.
-- [ ] **M8 Phase 1A — NOT started. The Stock Module core has now closed,
-      so this gating condition is satisfied — Phase 1A is the next
-      planned implementation work, pending its own fresh git/test
-      re-validation.** Playwright foundation + isolated E2E
-      environment/harness + one non-destructive smoke test + the
-      Playwright ADR. See "Next task: M8 Phase 1A" above for the exact,
-      approved, narrow scope, unchanged.
+- [x] **M8 Phase 1A — CLOSED, COMPLETE.** Playwright foundation +
+      isolated E2E environment/harness (Backend Team owned) + one
+      non-destructive smoke test + ADR-0042. Automated validation PASS,
+      real Playwright run PASS, headed manual visual QA PASS. See "M8
+      Phase 1A — CLOSED, COMPLETE" above for the full record.
 - [ ] **M8 Phase 1B and later (fixtures, money-path E2E, a11y,
       performance, observability, flags/ADR/P1 sweep) — NOT started,
       NOT scoped in detail yet.** Each follows Phase 1A and gets its own
@@ -1328,9 +1382,9 @@ the verbatim list is needed again.
       filters, backend pagination, exhaustive reference navigation, the
       inbound `?product_id=` drill-down. 33 new focused tests. Manual QA
       passed against the real running backend. **Phase 2 (2A+2B+2C) is
-      committed as `6a1d68a` (deliberately unpushed) — the Stock
-      Module's frontend core is CLOSED.** See "Stock Module — CORE
-      CLOSED" above.
+      committed as `6a1d68a`, committed and present on `origin/main` —
+      the Stock Module's frontend core is CLOSED.** See "Stock Module —
+      CORE CLOSED" above.
 - [ ] **Stock Module — Frontend Phase 2D (responsive polish + full
       regression) — NOT started, not yet scoped in detail. OPTIONAL.** A
       separate follow-up, not required for the Stock Module's own
