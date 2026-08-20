@@ -24,14 +24,21 @@ dist-ssr
 *.sw?
 
 # Environment.
-# Committed (public values only, localhost): .env.example, .env.development, .env.test
-# Never committed: a bare .env, local overrides, and the deploy-supplied
-# staging/production values. Secrets never belong in frontend config (FTA §14).
+# Committed (public values only, localhost): .env.example, .env.development, .env.test,
+# .env.e2e.example
+# Never committed: a bare .env, local overrides, the deploy-supplied
+# staging/production values, and .env.e2e (local isolated-E2E-backend URL +
+# seeded test credentials — M8 Phase 1A, ADR-0042). Secrets never belong in
+# frontend config (FTA §14).
 .env
 .env.local
 .env.*.local
 .env.staging
 .env.production
+.env.e2e
 
 # Coverage / test artifacts
 coverage
+test-results
+playwright-report
+blob-report

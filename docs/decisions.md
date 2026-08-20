@@ -1343,3 +1343,96 @@ decisions made *during implementation*.
   not retrofit `stock-movements-api.ts` to use `fromLaravelPage()`, and
   do not assume any other Stock/Grattage resource shares this shape
   without re-verifying its own controller source first (ADR-0022).
+
+## ADR-0042 — Playwright selected for M8 Phase 1A real-browser E2E; fail-closed isolation gate against the shared dev database
+
+- **Date:** 2026-08-20
+- **Status:** Accepted
+- **Context:** M8 discovery (see `next-session.md`'s "M8 discovery —
+  findings and approved decisions") selected Playwright for real-browser
+  E2E and deliberately deferred writing this ADR to implementation time.
+  Phase 1A's own approved scope is narrow: minimal Playwright install/
+  config, an isolated E2E environment's fail-closed safety, deterministic
+  real authentication, exactly one non-destructive smoke test, and a CI
+  foundation only if it can honestly run the real backend + isolated
+  Postgres. The core risk this ADR exists to close: irreversible
+  automated E2E must never be able to run against the shared dev
+  PostgreSQL database that every manual QA session in this project's
+  history has used — port separation alone (an isolated backend on
+  `127.0.0.1:8010` vs. the normal dev port) proves nothing about which
+  database that process is actually connected to.
+- **Decision:**
+  - **Playwright** (`@playwright/test`) is the E2E tool, Chromium-only
+    for Phase 1A — no cross-browser matrix yet.
+  - **No MSW, no mocked backend, no mocked authentication** anywhere in
+    the E2E suite. Every test drives the real UI against a real running
+    Laravel backend with real Sanctum-token authentication
+    (`POST /auth/login`, `app: "admin"` — the bearer-token branch this
+    codebase's own login flow already uses, unchanged, per the M1-C
+    decision recorded in `auth-api.ts`).
+  - **Fail-closed isolation is enforced by two independent gates, both
+    checked before any browser opens:**
+    1. **Frontend configuration gate** — `src/infrastructure/config/env.ts`
+       gained an `"e2e"` environment. In `e2e` mode, `VITE_API_BASE_URL`
+       must equal exactly `http://127.0.0.1:8010/api/v1`; any other value
+       throws at config-load time, mirroring the existing `"test"`-mode
+       "must be localhost" precedent already in that file. `e2e/env.ts`
+       is the Node-side twin of the same check, read directly from
+       `.env.e2e` (no `process.env` merge, no fallback), used by
+       `playwright.config.ts` and the login fixture.
+    2. **Authoritative backend isolation gate** — Playwright's
+       `globalSetup` (`e2e/global-setup.ts`) calls the backend's own
+       `GET /e2e/status` before any test file runs and requires exactly
+       `{environment: "e2e", database_isolated: true,
+       database_connected: true}` at HTTP 200 (`e2e/status-validate.ts`).
+       Reaching that endpoint at all already proves the backend's own
+       boot-time guard passed (`App\Support\E2eEnvironmentGuard`,
+       verified from source: refuses to boot if `APP_ENV=e2e` and the
+       configured database is not exactly `miza_e2e`) — this frontend
+       gate is the independent, machine-checked confirmation on top of
+       that, not a substitute for it.
+  - **Playwright never starts the backend.** The isolated backend on
+    `:8010` is an explicit external prerequisite, Backend Team owned.
+    Playwright's own `webServer` manages only the frontend's Vite dev
+    server (`vite --mode e2e --port 5173 --strictPort`,
+    `reuseExistingServer: false` — deliberately never reusing an
+    already-running server on 5173, which could be a normal dev server
+    pointed at the shared dev backend and would silently bypass both
+    gates above).
+  - **Deterministic credentials reuse the existing, unchanged
+    `AdminUserSeeder`** (`active@example.com` / `password123`) — no new
+    seeder, factory, or auth shortcut was created. Documented as
+    `E2E_ADMIN_EMAIL`/`E2E_ADMIN_PASSWORD` in `.env.e2e.example`
+    (committed, non-secret) rather than hardcoded in the spec; the real
+    local `.env.e2e` is gitignored.
+  - **Phase 1A contains exactly one smoke test**
+    (`e2e/smoke/overview.spec.ts`): real browser → real login page → real
+    `POST /auth/login` → authenticated redirect to `/` → the Overview
+    page's `<h1>` heading visible. No mutation, no second test, no
+    Cheque/DebtPayment factory.
+  - **CI wiring is deferred**, not attempted. The current
+    `.github/workflows/ci.yml` has no Postgres service container and no
+    backend boot step; adding Playwright to CI now would mean either
+    weakening the real-backend requirement (an MSW-faked CI run) or a
+    materially larger CI change than Phase 1A's own approved scope. Local
+    execution against the real isolated backend is Phase 1A's complete
+    deliverable; CI is a follow-up, scoped separately when CI can
+    honestly provision the real backend + isolated Postgres.
+- **Rationale:** Every existing fail-closed precedent in this codebase
+  (the `"test"`-mode localhost guard in `env.ts`, the backend's own
+  database-name boot guard) works the same way — refuse to start rather
+  than silently fall back — so this ADR extends that idiom rather than
+  inventing a new one. Two independent checks (frontend config gate +
+  live backend preflight) rather than one, because a single check leaves
+  a single point of failure: a stale `.env.e2e` alone can't cause an
+  unsafe run (the backend preflight still catches it), and a
+  misconfigured/stopped backend alone can't either (Playwright refuses to
+  start before ever reaching the login page).
+- **Consequences:** Later M8 phases (1B fixtures, Phase 2's 12-flow
+  irreversible-money E2E inventory) inherit this same isolation
+  foundation unchanged — they do not need to re-derive it, only extend
+  the smoke-test pattern to mutating flows. CI wiring, once attempted,
+  must satisfy the same real-backend + isolated-Postgres requirement this
+  ADR established for local runs — do not relax it to make a CI checkbox
+  green. Cross-browser coverage, if ever added, is a separate decision,
+  not an automatic Phase 1A follow-on.

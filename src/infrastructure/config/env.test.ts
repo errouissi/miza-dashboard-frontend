@@ -29,6 +29,33 @@ describe("loadConfig", () => {
     ).toThrow(/never point at a real backend/i);
   });
 
+  it("accepts an e2e configuration pointed at exactly the isolated E2E backend", () => {
+    const config = loadConfig({
+      MODE: "e2e",
+      VITE_API_BASE_URL: "http://127.0.0.1:8010/api/v1",
+    });
+    expect(config.environment).toBe("e2e");
+    expect(config.apiBaseUrl).toBe("http://127.0.0.1:8010/api/v1");
+  });
+
+  it("refuses an e2e configuration pointed at the normal dev backend", () => {
+    expect(() =>
+      loadConfig({ MODE: "e2e", VITE_API_BASE_URL: "http://127.0.0.1:8000/api/v1" }),
+    ).toThrow(/must point at exactly/i);
+  });
+
+  it("refuses an e2e configuration pointed at a different port", () => {
+    expect(() =>
+      loadConfig({ MODE: "e2e", VITE_API_BASE_URL: "http://127.0.0.1:8011/api/v1" }),
+    ).toThrow(/must point at exactly/i);
+  });
+
+  it("refuses an e2e configuration pointed at production", () => {
+    expect(() =>
+      loadConfig({ MODE: "e2e", VITE_API_BASE_URL: "https://api.miza.example/api/v1" }),
+    ).toThrow(/must point at exactly/i);
+  });
+
   it("keeps production defaults conservative", () => {
     const production = loadConfig({ ...validEnv, MODE: "production" });
     expect(production.features.devtools).toBe(false);
