@@ -3,9 +3,21 @@
 **The current state of the project.** Overwrite this file after every completed
 milestone — it describes *now*, not history. History lives in `decisions.md` and git.
 
-_Last updated: 2026-08-18_
+_Last updated: 2026-08-20_
 
 ---
+
+## Current priority: Manager Demo Readiness (not M8 Phase 1B)
+
+**M8 Phase 1A is CLOSED, COMPLETE, and PUSHED** (`5f315c8`, `2fe9579`).
+**M8 Phase 1B has NOT started and is deliberately deferred, not cancelled.**
+The immediate priority is making the application Manager-Demo-Ready: collect
+the developer's full list of design/UI/behavior issues, classify it (Must fix
+before demo / Important polish / Can wait), and produce a demo-readiness plan
+before any implementation. Full protocol: `next-session.md`'s "READ THIS
+FIRST" banner. Active repo: `C:\Miza\frontend-v2` — `C:\Miza\frontend` is
+legacy/reference-only. Backend ownership is unchanged (Backend Team owns
+`C:\Miza\backend`).
 
 ## Current milestone
 
@@ -276,8 +288,9 @@ HEAD `a9bf2bd`, working tree clean, **0 ahead / 0 behind
 `origin/feature/Update-claude`** — synced with origin. The Stock
 checkpoint commit (`a2473f1`) is historical, an ancestor of the current
 HEAD, not the tip — see "Current milestone" above for the full
-reconciliation. See `next-session.md`'s own "Next task" for what comes
-next (M8 Phase 1A, pending its own re-validation).
+reconciliation. M8 Phase 1A has since closed — see `next-session.md`'s own
+"M8 Phase 1A — CLOSED, COMPLETE" section, and its "READ THIS FIRST" banner
+for the current priority (Manager Demo Readiness, not Phase 1B).
 
 ## Stock Module — Backend Phase 1A/1B + Frontend Phase 2 (CORE CLOSED)
 
@@ -418,10 +431,10 @@ and not a blocker for M8 either — not started, not scoped, needs its own
 discovery pass whenever it is picked up. **With this closure, M8's own
 gating condition ("resumes once the Stock Module core closes out") is
 satisfied** — but one small, standalone item (Scheduler Health, below)
-is being closed out first; **M8 Phase 1A is the next planned
-implementation work after that**, pending its own git/test freshness
-re-validation (backend and frontend history has both moved since that
-plan was written) — see `next-session.md`'s own "Next task" section.
+was being closed out first; **M8 Phase 1A has since closed** — see
+`next-session.md`'s own "M8 Phase 1A — CLOSED, COMPLETE" section, and its
+"READ THIS FIRST" banner for the current priority (Manager Demo
+Readiness, not Phase 1B).
 
 ## Scheduler Health (pre-M8 operational hardening) — COMPLETE, manual QA passed
 

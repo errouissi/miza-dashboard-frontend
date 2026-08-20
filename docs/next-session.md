@@ -3,7 +3,52 @@
 **Read this file first.** It is written so a session with no prior context can resume
 immediately. Overwrite it at the end of every session.
 
-_Last updated: 2026-08-18_
+_Last updated: 2026-08-20_
+
+---
+
+## READ THIS FIRST — current priority is Manager Demo Readiness, not M8 Phase 1B
+
+**The active frontend repo is `C:\Miza\frontend-v2`.** `C:\Miza\frontend` is
+legacy/reference-only — not an architecture reference, not an implementation
+reference (CLAUDE.md). A prior session in this project's own history briefly
+inspected the wrong path by mistake; verify you are in `frontend-v2` before
+running anything.
+
+**M8 Phase 1A is CLOSED, COMPLETE, and PUSHED** (commits `5f315c8`, `2fe9579`
+— see "M8 Phase 1A — CLOSED, COMPLETE" below for the full record). **M8 Phase
+1B has NOT started, and is NOT tomorrow's task.** This is a prioritization
+change, not a cancellation — Phase 1B remains fully planned exactly as
+recorded in "M8 discovery — findings and approved decisions" below (the
+7-phase structure, Phase 1B's own deterministic-fixture scope) and will
+resume once the work below is handled.
+
+**Tomorrow's actual priority: get the application Manager-Demo-Ready.** The
+developer will bring a complete list of design issues, UI polish items,
+screens/components needing visual updates, and behavior/issues noticed during
+manual use. The session's first job is protocol, not implementation:
+
+1. Read this file and `project-status.md`, verify repo state quickly
+   (`git log -3`, `git status`, both repos — see "Before anything else"
+   below for the exact current expected values).
+2. Receive the developer's full list. **Do not start fixing items one-by-one
+   while the list is still being collected** — a partial fix mid-list risks
+   solving the wrong problem or duplicating work once the full picture is in.
+3. Classify every item into exactly three buckets:
+   - **1. MUST FIX before manager demo**
+   - **2. IMPORTANT POLISH**
+   - **3. CAN WAIT until after demo**
+4. Identify dependencies and backend impacts per item — flag anything that
+   would require a backend change explicitly; **backend ownership is
+   unchanged** (CLAUDE.md, `[[Backend repo scope]]` memory): do not implement
+   backend-side fixes even for a demo-blocking item — ask/coordinate with the
+   Backend Team the same way M8 Phase 1A did for its own isolated environment.
+5. Produce the shortest safe plan to reach Manager Demo Ready from the
+   classified list.
+6. **Only after the developer approves that plan** does implementation begin.
+
+Do not skip straight to an implementation prompt just because a fresh session
+can technically start coding — the list has to exist and be classified first.
 
 ---
 
@@ -520,21 +565,21 @@ anything. Tracked here and in `project-status.md`, not in that file.
 
 ## Before anything else
 
-**The Stock Module's core is CLOSED; M8 Phase 1A is the next planned
-work — see "M8 Phase 1A — CLOSED, COMPLETE" below.** Both repos' history moved
-since M8's plan was written, so this check is now M8's own starting
-point, not a stale Stock Module snapshot:
+**M8 Phase 1A is CLOSED and pushed — this is now a quick repo-freshness
+check only, not a pre-implementation gate.** Manager Demo Readiness is the
+actual priority (see "READ THIS FIRST" at the top of this file) — do not
+treat a clean check below as license to jump into Phase 1B or into fixing
+demo-list items before the list is fully collected and classified.
 
 ```bash
 cd C:\Miza\frontend-v2
-git log --oneline -3        # expect: 36d641a, fe28fa3, 6a1d68a
+git log --oneline -3        # expect: 2fe9579, 5f315c8, 36d641a
 git status                  # expect: clean, "up to date with origin/main"
-                             # (0 ahead / 0 behind — all three commits,
-                             # including the Stock Phase 2 checkpoint
-                             # 6a1d68a and the Scheduler Health work, are
-                             # already committed and present on origin/main)
+                             # (0 ahead / 0 behind — the M8 Phase 1A
+                             # implementation + docs-closure commits are
+                             # already pushed)
 pnpm test:ci                 # re-run fresh and record the actual count —
-                              # do not assume 1389/1389 (this project's
+                              # do not assume 1411/1411 (this project's
                               # last confirmed number) still holds; the
                               # only way to know is to run it now
 pnpm lint && pnpm typecheck && pnpm format:check && pnpm build
@@ -542,18 +587,17 @@ pnpm lint && pnpm typecheck && pnpm format:check && pnpm build
 
 ```bash
 cd C:\Miza\backend
-git log --oneline -3        # expect: a9bf2bd, a2473f1, b577503
 git status                  # expect: clean, "up to date with
                              # origin/feature/Update-claude" (0 ahead / 0
-                             # behind) — a2473f1 is an ancestor, not HEAD
+                             # behind) — Backend Team owns this repo; do not
+                             # modify it even for a demo-blocking item
+                             # without explicit coordination
 ```
 
-**This is a fresh source/git freshness check, required before writing any
-M8 code** — confirm the above still matches before doing anything else,
-the same discipline every prior session-start in this project has
-required. If backend or frontend state has moved again since this was
-written, re-read `project-status.md`'s own "Stock Module"/"Current
-milestone" sections before assuming anything about M8's starting point.
+If either repo's state has moved since this was written, re-read
+`project-status.md`'s own "Current milestone" section before assuming
+anything below still holds — the same discipline every prior session-start
+in this project has required.
 
 ## Last completed work
 
