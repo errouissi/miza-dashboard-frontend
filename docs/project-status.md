@@ -7,17 +7,21 @@ _Last updated: 2026-08-20_
 
 ---
 
-## Current priority: Manager Demo Readiness (not M8 Phase 1B)
+## Current priority: Manager Demo Readiness (not M8 Phase 1B) — IN PROGRESS
 
 **M8 Phase 1A is CLOSED, COMPLETE, and PUSHED** (`5f315c8`, `2fe9579`).
 **M8 Phase 1B has NOT started and is deliberately deferred, not cancelled.**
-The immediate priority is making the application Manager-Demo-Ready: collect
-the developer's full list of design/UI/behavior issues, classify it (Must fix
-before demo / Important polish / Can wait), and produce a demo-readiness plan
-before any implementation. Full protocol: `next-session.md`'s "READ THIS
-FIRST" banner. Active repo: `C:\Miza\frontend-v2` — `C:\Miza\frontend` is
-legacy/reference-only. Backend ownership is unchanged (Backend Team owns
-`C:\Miza\backend`).
+The 9-item developer demo list was audited, then reclassified: **all 9
+items are now in scope for the demo, not split into Must-Fix/Polish/Can-Wait**
+— see `next-session.md`'s own "Manager Demo Readiness — IN PROGRESS" section
+for the full current state. **Batch 1 (Items 1, 3, 4) is implemented and
+automated-validated (1428/1428 full suite); manual QA is owed before it can
+be called complete.** Items 2 and 8/9 need Backend Team changes (a Backend
+Team handoff message covering both has been prepared/sent separately); Items
+5, 6, 7 remain frontend-only work not yet started. Active repo:
+`C:\Miza\frontend-v2` — `C:\Miza\frontend` is legacy/reference-only. Backend
+ownership is unchanged (Backend Team owns `C:\Miza\backend`); this session
+made no backend changes.
 
 ## Current milestone
 

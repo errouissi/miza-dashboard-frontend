@@ -52,9 +52,11 @@ import { ActivityList } from "./activity-list";
  * NO MONETARY TOTAL IS EVER DERIVED HERE. `ManagerStockItem` carries a
  * `value` (a product's own catalogue price) — deliberately NOT rendered,
  * and never multiplied by `availableQuantity` into an invented "stock
- * value" figure. Only `name`/`availableQuantity` are shown, matching the
- * M7 Phase 2 decision precisely ("display only backend-returned
- * product/quantity information").
+ * value" figure. Only `operator`/`name`/`availableQuantity` are shown
+ * (Manager Demo Readiness, Item 7 widened the original M7 Phase 2 decision
+ * to also surface `operator` — already on the wire, never rendered until
+ * now) — "display only backend-returned product/quantity information",
+ * `value` still excluded.
  *
  * COMMERCIAL CURRENT STOCK (M7 Agent 360 discovery item, post-completion) —
  * supersedes the earlier "no authoritative Commercial current-stock
@@ -142,12 +144,22 @@ export function AgentStockPanel({ agent }: { agent: Agent }) {
  * additionally shows a "Total stock" summary and Available Grattage
  * alongside it), so THIS is the part worth sharing, not the whole
  * component (ADR-0012 — duplication over a forced shared abstraction).
+ *
+ * OPERATOR COLUMN (Manager Demo Readiness, Item 7) — `operator` was already
+ * present on both backends' identical row shape (`product_id`/`name`/
+ * `operator`/`value`/`available_quantity`, verified from source in both
+ * `manager-stock-api.ts` and `agents-api.ts`'s own `CommercialStockItem`)
+ * but never rendered. No new query, no new field — reusing data both
+ * callers already fetch.
  */
 function StockProductTable({ items }: { items: ManagerStockItem[] }) {
   return (
     <table className="w-full text-sm">
       <thead>
         <tr className="border-b text-left">
+          <th scope="col" className="p-1 font-medium">
+            Operator
+          </th>
           <th scope="col" className="p-1 font-medium">
             Product
           </th>
@@ -159,6 +171,7 @@ function StockProductTable({ items }: { items: ManagerStockItem[] }) {
       <tbody>
         {items.map((item) => (
           <tr key={item.productId} className="border-b">
+            <td className="p-1 text-muted-foreground">{item.operator}</td>
             <td className="p-1">{item.name}</td>
             <td className="p-1 text-right tabular-nums">{item.availableQuantity}</td>
           </tr>

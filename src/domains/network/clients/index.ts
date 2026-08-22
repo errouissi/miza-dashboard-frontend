@@ -5,10 +5,20 @@ export {
   clientsRoutes,
 } from "./routes";
 
-// api/, model/, queries/, components/ and the page stay internal. The app
-// layer needs the route contributions and the path (for the nav entry) —
-// nothing else (FTA §4).
-//
-// Nothing is exported for siblings yet. No known future need has been
-// identified for a Clients picker — added then, against the real caller,
-// rather than guessed at now (FTA D-11).
+/**
+ * Widened for Agent 360's Commercial-side Clients panel (Manager Demo
+ * Readiness, Item 3) — the first cross-domain caller of Clients' own public
+ * surface (mechanism 1, FTA §4: the Network/Agents domain imports this
+ * export, Clients learns nothing about Agents). Mirrors how
+ * `domains/grattage/invoices/index.ts` widened for Client 360's own
+ * cross-domain panel.
+ */
+export { useClientsQuery } from "./queries/clients-queries";
+export {
+  CLIENT_LIST_DEFAULTS,
+  CLIENT_STATUS_LABELS,
+  CLIENT_STATUS_TONES,
+  type Client,
+} from "./model/client";
+
+// api/, components/ and the page stay internal.

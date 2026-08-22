@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DEPOSIT_METHODS, DEPOSIT_PROOF_TYPES, DEPOSIT_TYPES } from "./deposit";
+import { DEPOSIT_PROOF_TYPES, DEPOSIT_TYPES, type DepositProofType } from "./deposit";
 
 /**
  * The Create Deposit form (roadmap M4.3 Phase 4) — `POST /admin/depos`.
@@ -16,10 +16,18 @@ import { DEPOSIT_METHODS, DEPOSIT_PROOF_TYPES, DEPOSIT_TYPES } from "./deposit";
  *   'proof_type'     => 'nullable|in:bank_receipt,whatsapp_confirmation', // defaults 'bank_receipt'
  *   'bank_name'      => 'nullable|string|max:255',
  *
- * `bank_name` STAYS ALWAYS VISIBLE, deliberately NOT conditioned on
- * `depositMethod` — confirmed decision: the backend does not couple the
- * two either, and adding a UI-only conditional would be inventing UX
- * behavior neither Product nor the backend asked for.
+ * `bank_name`/`receipt_number`/`proof_type` ARE NOW CONDITIONED ON
+ * `depositMethod` (Manager Demo Readiness, Item 4 — this SUPERSEDES the
+ * prior "always visible, never conditioned" decision recorded above the
+ * page's own docblock; see `decisions.md`). The backend still does not
+ * couple these fields to `deposit_method` itself (verified fresh from
+ * `DepoController::store`'s validator — no `required_if`/`prohibited_if`
+ * exists), so this is a FRONTEND-ONLY UX decision layered on top of an
+ * unchanged, uncoupled backend contract: Cash hides Receipt Number/Bank
+ * Name and fixes Proof Type to "Bank receipt"; Bank shows both and fixes
+ * Proof Type to "WhatsApp confirmation". See `CREATABLE_DEPOSIT_METHODS`
+ * below and `pages/create-deposit-page.tsx`'s own docblock for the full
+ * behavior.
  *
  * `amount` IS NOT FREELY EDITABLE — the real constraint `store()` enforces
  * is an EXACT match (rapped: the agent's current `cash`; grattage: the
@@ -37,6 +45,35 @@ export const MAX_PROOF_SIZE_BYTES = 5 * 1024 * 1024;
 export const DEPOSIT_PROOF_MIME_TYPES = ["image/jpeg", "image/png"] as const;
 export const DEPOSIT_PROOF_ACCEPT = ".jpg,.jpeg,.png,image/jpeg,image/png";
 
+/**
+ * Manager Demo Readiness, Item 4 — the create form offers only two of the
+ * backend's three accepted `deposit_method` values (`deposit.ts`'s own
+ * `DEPOSIT_METHODS` docblock: `required|in:bank,cash,other`). This is a
+ * CREATE-FORM-LOCAL restriction, not a narrowing of the domain-wide enum —
+ * `DEPOSIT_METHODS`/`DEPOSIT_METHOD_LABELS` stay a full three values so the
+ * list filter and detail page can still display/filter a historical
+ * `"other"` deposit correctly.
+ */
+export const CREATABLE_DEPOSIT_METHODS = ["cash", "bank"] as const;
+export type CreatableDepositMethod = (typeof CREATABLE_DEPOSIT_METHODS)[number];
+
+/**
+ * Manager Demo Readiness, Item 4 — each creatable method fixes Proof Type
+ * to exactly one value (the select renders only this one option per
+ * method; see the create page). Corrected mapping, per manual-QA
+ * correction (the original Item 4 wording had this reversed): Cash ->
+ * "WhatsApp confirmation", Bank -> "Bank receipt". Verified fresh from
+ * `DepoController::store`'s validator before this correction: neither
+ * pairing is coupled to `deposit_method` server-side
+ * (`proof_type => nullable|in:bank_receipt,whatsapp_confirmation`, no
+ * `required_if`/`prohibited_if`), so both combinations are safely
+ * frontend-only.
+ */
+export const PROOF_TYPE_FOR_METHOD: Record<CreatableDepositMethod, DepositProofType> = {
+  cash: "whatsapp_confirmation",
+  bank: "bank_receipt",
+};
+
 const shape = {
   /** A Manager or Commercial id — see `create-deposit-agent-field.tsx`. */
   agentId: z.string().trim(),
@@ -47,8 +84,8 @@ const shape = {
    * the module docblock.
    */
   amount: z.string().trim(),
-  /** No default exists server-side (unlike `type`/`proofType`) — starts unselected (""). */
-  depositMethod: z.union([z.enum(DEPOSIT_METHODS), z.literal("")]),
+  /** No default exists server-side (unlike `type`/`proofType`) — starts unselected (""). Narrowed to the two creatable values — see `CREATABLE_DEPOSIT_METHODS` above. */
+  depositMethod: z.union([z.enum(CREATABLE_DEPOSIT_METHODS), z.literal("")]),
   receiptNumber: z.string().trim(),
   bankName: z.string().trim(),
   proofType: z.enum(DEPOSIT_PROOF_TYPES),

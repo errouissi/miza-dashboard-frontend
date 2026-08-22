@@ -35,6 +35,22 @@ export function isOperator(value: string | null): value is Operator {
 }
 
 /**
+ * The ONE deterministic name-generation rule (Manager Demo Readiness, Item
+ * 1 — and its own manual-QA correction): `"{OPERATOR} {VALUE}DH"`, e.g.
+ * `generateProductName("IAM", 10) === "IAM 10DH"`. Name is NOT independent
+ * business data — it is always fully determined by (operator, value) — so
+ * this is the single function BOTH `ProductFormSheet`'s create and edit
+ * paths call, never two copies of the same template string. `DH` is a
+ * literal uppercase suffix, never derived from user input, so it can never
+ * drift to the lowercase `"...dh"` a legacy pre-this-feature row might
+ * carry (see the form's own docblock for why a legacy name is left alone
+ * until that product is next edited — no bulk migration here).
+ */
+export function generateProductName(operator: Operator, value: number): string {
+  return `${operator} ${value}DH`;
+}
+
+/**
  * The list query surface — one optional filter, which is the whole of what
  * `ProductController::index` accepts (`$request->filled('operator')`).
  *

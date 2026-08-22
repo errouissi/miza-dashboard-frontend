@@ -288,7 +288,7 @@ describe("Manager stock panel", () => {
     expect(commercialReadRequested).toBe(false);
   });
 
-  it("shows the authoritative current-stock table — product/quantity only, no derived total", async () => {
+  it("shows the authoritative current-stock table — operator/product/quantity only, no derived total", async () => {
     server.use(
       managerStockHandler([
         {
@@ -304,6 +304,7 @@ describe("Manager stock panel", () => {
     renderPanel(managerAgent);
 
     expect(await screen.findByText("Recharge 50")).toBeInTheDocument();
+    expect(screen.getByText("Orange")).toBeInTheDocument();
     expect(screen.getByText("20")).toBeInTheDocument();
     // No monetary total anywhere near the table (value * quantity is never computed).
     expect(screen.queryByText("1000")).not.toBeInTheDocument();
@@ -538,7 +539,7 @@ describe("Commercial stock panel", () => {
     await waitFor(() => expect(requested).toBe(true));
   });
 
-  it("renders exactly one product row with the exact Product / Available quantity values", async () => {
+  it("renders exactly one product row with the exact Operator / Product / Available quantity values", async () => {
     signInWith([PERMISSIONS.ACCESS_DASHBOARD]);
     server.use(
       stockQuantityHandler(1, undefined, "0.00", [stockRow(9, "IAM 10dh", 1)]),
@@ -549,22 +550,24 @@ describe("Commercial stock panel", () => {
     renderPanel(commercialAgent);
 
     expect(
-      await screen.findByRole("columnheader", { name: "Product" }),
+      await screen.findByRole("columnheader", { name: "Operator" }),
     ).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Product" })).toBeInTheDocument();
     expect(
       screen.getByRole("columnheader", { name: "Available quantity" }),
     ).toBeInTheDocument();
     const row = screen.getByText("IAM 10dh").closest("tr")!;
+    expect(within(row).getByText("IAM")).toBeInTheDocument();
     expect(within(row).getByText("1")).toBeInTheDocument();
     expect(screen.getAllByRole("row")).toHaveLength(2); // header + 1 data row
   });
 
-  it("renders multiple product rows, each with its own name and quantity", async () => {
+  it("renders multiple product rows, each with its own operator, name and quantity", async () => {
     signInWith([PERMISSIONS.ACCESS_DASHBOARD]);
     server.use(
       stockQuantityHandler(3, undefined, "0.00", [
         stockRow(1, "IAM 10dh", 1),
-        stockRow(2, "Orange 5dh", 2),
+        { ...stockRow(2, "Orange 5dh", 2), operator: "Orange" },
       ]),
       gateHandler(12),
       agentTransfersHandler([]),
@@ -574,7 +577,9 @@ describe("Commercial stock panel", () => {
 
     const iamRow = (await screen.findByText("IAM 10dh")).closest("tr")!;
     const orangeRow = screen.getByText("Orange 5dh").closest("tr")!;
+    expect(within(iamRow).getByText("IAM")).toBeInTheDocument();
     expect(within(iamRow).getByText("1")).toBeInTheDocument();
+    expect(within(orangeRow).getByText("Orange")).toBeInTheDocument();
     expect(within(orangeRow).getByText("2")).toBeInTheDocument();
     expect(screen.getAllByRole("row")).toHaveLength(3); // header + 2 data rows
   });
@@ -591,6 +596,9 @@ describe("Commercial stock panel", () => {
 
     expect(await screen.findByText("No stock currently held.")).toBeInTheDocument();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("columnheader", { name: "Operator" }),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("columnheader", { name: "Product" }),
     ).not.toBeInTheDocument();

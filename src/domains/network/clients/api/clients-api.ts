@@ -112,6 +112,7 @@ export async function fetchClients(params: ClientListParams): Promise<Paginated<
       ...(params.status ? { status: params.status } : {}),
       ...(params.assigned ? { assigned: params.assigned } : {}),
       ...(params.ville ? { ville_comercial: params.ville } : {}),
+      ...(params.agentId !== undefined ? { agent_id: params.agentId } : {}),
       // No `sort`, no `date_from`/`date_to`: the endpoint accepts none of them.
     },
   });

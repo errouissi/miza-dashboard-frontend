@@ -24,11 +24,15 @@ import { clientAssignmentHistoryKeys, clientsKeys } from "./keys";
  * SLOW tier, per ADR-0007 — clients are already named explicitly there
  * ("agent and client lists"), so no new cache-tier decision is needed.
  */
-export function useClientsQuery(params: ClientListParams) {
+export function useClientsQuery(
+  params: ClientListParams,
+  options: { enabled?: boolean } = {},
+) {
   return useQuery({
     queryKey: clientsKeys.list(params),
     queryFn: () => fetchClients(params),
     staleTime: STALE_TIMES.SLOW,
+    enabled: options.enabled ?? true,
   });
 }
 

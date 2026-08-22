@@ -145,11 +145,13 @@ export const CLIENT_STATUS_TONES: Record<ClientStatus, StatusTone> = {
  * Commercials' `secteur` (BC-V): no foreign key, zero seeded secteurs, no
  * options source to build a select from.
  *
- * NO `agent_id` FIELD — filtering by a specific agent is part of the
- * assignment-management concern (viewing one agent's client book), which
- * this milestone explicitly excludes alongside assign/reassign/bulk-assign.
- * Building the filter without the feature it serves would misrepresent scope
- * creep as a a plain list control.
+ * `agentId` (Manager Demo Readiness, Item 3) — `ClientController::index`
+ * already validates and applies an `agent_id` filter (`sometimes|integer|
+ * exists:agents,id`); this was previously undocumented here because no
+ * screen used it yet. Now consumed by Agent 360's Commercial-side Clients
+ * panel (`AgentClientsPanel`) to scope the list to one Commercial's own
+ * clients — optional and omitted from `CLIENT_LIST_DEFAULTS` since the
+ * main Clients list page never scopes by agent.
  */
 export type ClientListParams = {
   page: number;
@@ -162,6 +164,8 @@ export type ClientListParams = {
   assigned: "" | "true" | "false";
   /** EXACT match server-side (`where('ville', …)` via `scopeByVille`). */
   ville: string;
+  /** Optional — see the docblock above. Absent = unscoped, matching every existing caller. */
+  agentId?: number;
 };
 
 /**

@@ -12,6 +12,7 @@ import {
 import {
   MIN_VALUE,
   OPERATORS,
+  generateProductName,
   isOperator,
   type Operator,
   type Product,
@@ -80,7 +81,14 @@ export function ProductFormSheet({ open, onOpenChange, product }: ProductFormShe
   useEffect(() => {
     if (open) {
       form.reset({
-        name: product?.name ?? "",
+        // NEITHER mode renders a Name input (see the manual-QA correction
+        // below) — "auto" is an internal placeholder only, satisfying the
+        // schema's min-length rule; it is never shown or submitted. A
+        // pre-existing product's OWN name (however it was spelled, e.g. a
+        // legacy "IAM 10dh") is deliberately NOT seeded here — Name is not
+        // independent data to preserve, it is re-derived from
+        // operator/value at submit time either way (see onSubmit).
+        name: "auto",
         operator: product?.operator ?? "",
         // Held as a string throughout: the field is one, and the schema validates
         // string-then-coerces (see above).
@@ -92,11 +100,37 @@ export function ProductFormSheet({ open, onOpenChange, product }: ProductFormShe
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, product?.id]);
 
+  // Live preview only — computed straight from the watched raw fields, never
+  // from the hidden "name" field above. `value` is coerced to a whole number
+  // here so a leading zero or stray whitespace never leaks into the preview.
+  // SAME FOR CREATE AND EDIT (manual-QA correction — see the module
+  // docblock): Name is not independent business data, so editing Operator
+  // or Value must visibly regenerate the preview in both modes, not just
+  // create's.
+  const watchedOperator = form.watch("operator");
+  const watchedValueRaw = form.watch("value");
+  const previewValue = (() => {
+    const trimmed = watchedValueRaw.trim();
+    if (trimmed === "") return null;
+    const parsed = Number(trimmed);
+    return Number.isInteger(parsed) && parsed >= MIN_VALUE ? parsed : null;
+  })();
+  const generatedName =
+    isOperator(watchedOperator) && previewValue !== null
+      ? generateProductName(watchedOperator, previewValue)
+      : null;
+
   const onSubmit = form.handleSubmit((values) => {
     // `values` is the VALIDATED output: `value` is already a number, and
-    // `operator` has passed the isOperator refine.
+    // `operator` has passed the isOperator refine. NEITHER mode trusts the
+    // hidden "name" field — the name is ALWAYS deterministically generated
+    // from the just-validated operator + value, the one shared
+    // `generateProductName` rule (manual-QA correction: editing Value or
+    // Operator on an existing product — including one with a stale legacy
+    // name — must regenerate the name to match the FINAL operator/value,
+    // never leave it stale).
     const input = {
-      name: values.name,
+      name: generateProductName(values.operator as Operator, values.value),
       operator: values.operator as Operator,
       value: values.value,
     };
@@ -116,14 +150,21 @@ export function ProductFormSheet({ open, onOpenChange, product }: ProductFormShe
   const nameError = isAppError(error) ? error.fieldErrors?.name?.[0] : undefined;
   const operatorError = isAppError(error) ? error.fieldErrors?.operator?.[0] : undefined;
   const valueError = isAppError(error) ? error.fieldErrors?.value?.[0] : undefined;
+  // Neither mode renders a Name field to attach a name-conflict 422 to — the
+  // conflict is really about the operator+value pair the name was generated
+  // from, so it surfaces as a top-level message instead of a field error.
+  const nameConflictMessage = nameError
+    ? "A product with this operator and value already exists."
+    : undefined;
   const generalError =
-    isAppError(error) &&
+    nameConflictMessage ??
+    (isAppError(error) &&
     !nameError &&
     !operatorError &&
     !valueError &&
     error.kind !== "validation"
       ? "Something went wrong. Please try again."
-      : undefined;
+      : undefined);
 
   return (
     <FormDrawer
@@ -139,20 +180,24 @@ export function ProductFormSheet({ open, onOpenChange, product }: ProductFormShe
       isPending={mutation.isPending}
       errorMessage={generalError}
     >
+      {/* Generated, never user-editable, in EITHER mode — matches the demo
+          requirement "{OPERATOR} {VALUE}DH" and the manual-QA correction
+          that Name must never be independently editable data (it would
+          otherwise go stale the moment Operator/Value change on an
+          existing product). Purely a live preview: the submitted name is
+          always recomputed from the validated form values in onSubmit
+          (`generateProductName`), never read from this field. */}
       <div className="flex flex-col gap-1.5">
-        <label htmlFor="name" className="text-sm font-medium">
+        <label htmlFor="generatedName" className="text-sm font-medium">
           Name
         </label>
         <Input
-          id="name"
-          autoFocus
-          aria-invalid={!!form.formState.errors.name || !!nameError}
-          {...form.register("name")}
+          id="generatedName"
+          value={generatedName ?? ""}
+          placeholder="Select an operator and enter a value…"
+          disabled
+          readOnly
         />
-        {form.formState.errors.name ? (
-          <p className="text-destructive text-xs">{form.formState.errors.name.message}</p>
-        ) : null}
-        {nameError ? <p className="text-destructive text-xs">{nameError}</p> : null}
       </div>
 
       <div className="flex flex-col gap-1.5">
@@ -161,6 +206,7 @@ export function ProductFormSheet({ open, onOpenChange, product }: ProductFormShe
         </label>
         <select
           id="operator"
+          autoFocus
           aria-invalid={!!form.formState.errors.operator || !!operatorError}
           className="border-input focus-visible:border-ring focus-visible:ring-ring/50 h-9 w-full rounded-md border bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-[3px] disabled:opacity-50"
           {...form.register("operator")}

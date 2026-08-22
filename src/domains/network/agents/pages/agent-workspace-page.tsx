@@ -11,6 +11,7 @@ import { Skeleton } from "@/shared/components/ui/skeleton";
 import { ListErrorState } from "@/shared/components/patterns/list-states";
 import { PanelBoundary } from "@/shared/components/patterns/panel-boundary";
 import { WorkspacePage } from "@/shared/components/patterns/workspace-page";
+import { AgentClientsPanel } from "../components/agent-clients-panel";
 import { AgentEditDrawer } from "../components/agent-edit-drawer";
 import { AgentMoneyPanel } from "../components/agent-money-panel";
 import { AgentOutstandingPanel } from "../components/agent-outstanding-panel";
@@ -65,6 +66,12 @@ import { AGENT_STATUS_LABELS, AGENT_STATUS_TONES } from "../model/agent";
  * completion item, small polish) — `agentDetailPath(agent.manager.id)`,
  * the same route helper this page's own callers already use; no new
  * surface, `AgentManagerSummary.id` was already in hand.
+ *
+ * CLIENTS PANEL (Manager Demo Readiness, Item 3) — `AgentClientsPanel`,
+ * Commercial-only, its own `PanelBoundary`, gated independently on
+ * `view-clients` (Clients' own permission, not this page's `view-agents`).
+ * Composes Clients' widened public surface (mechanism 1) — the first
+ * cross-domain caller of its `agentId` list filter.
  */
 export function AgentWorkspacePage() {
   const navigate = useNavigate();
@@ -282,6 +289,9 @@ export function AgentWorkspacePage() {
       </PanelBoundary>
       <PanelBoundary>
         <AgentOutstandingPanel agent={agent} />
+      </PanelBoundary>
+      <PanelBoundary>
+        <AgentClientsPanel agent={agent} />
       </PanelBoundary>
 
       <AgentStatusDialog

@@ -3,7 +3,110 @@
 **Read this file first.** It is written so a session with no prior context can resume
 immediately. Overwrite it at the end of every session.
 
-_Last updated: 2026-08-20_
+_Last updated: 2026-08-22_
+
+---
+
+## Manager Demo Readiness — IN PROGRESS (all 9 items in scope, not just Batch 1)
+
+**Decision confirmed this session: ALL 9 developer-requested items must ship
+before the demo — nothing is deferred.** This supersedes the earlier
+audit's Must-Fix/Polish/Can-Wait split for Items 5–9 specifically (Items
+1–4 were already classified Must-Fix). The goal is a full end-to-end test
+of the real business flow, not a visual-only preview.
+
+**Batch 1 (Items 1, 3, 4) — implemented, automated validation complete,
+MANUAL QA NOT YET PERFORMED. Do not mark Batch 1 complete until manual QA
+passes.**
+
+- **Item 1 — Product creation UX.** `product-form-sheet.tsx`: Name is no
+  longer a user-entered field on CREATE — only Operator + Value are asked
+  for, and the name is generated deterministically as `{OPERATOR}
+  {VALUE}DH` at submit time from the validated form values (not from the
+  live preview field, which is display-only). A disabled, read-only
+  preview input shows the generated name live as Operator/Value are
+  filled in. EDIT mode is completely unchanged — Name stays a normal,
+  user-editable, required field there, seeded from the product's real
+  name. The backend contract is unchanged (`ProductController::store`/
+  `update` — verified fresh from source — has no opinion on name format,
+  only a composite `(operator, name)` uniqueness rule); a 422 uniqueness
+  conflict on create now surfaces as a top-level message ("A product with
+  this operator and value already exists.") instead of a Name-field error,
+  since there is no Name field to attach it to. No backend change.
+- **Item 3 — Commercial Details clients table.** New `AgentClientsPanel`
+  (`domains/network/agents/components/agent-clients-panel.tsx`), mounted
+  in `AgentWorkspacePage` inside its own `PanelBoundary`, Commercial-role
+  only (returns `null` for a Manager). Gated independently on
+  `view-clients` (Clients' own permission), not `view-agents`. Reuses the
+  EXISTING `GET /admin/clients` endpoint with its EXISTING `agent_id`
+  filter (`ClientController::index` already validates and applies it —
+  confirmed fresh from source; the frontend simply never sent it before).
+  `ClientListParams` widened with an optional `agentId` field
+  (`model/client.ts`); `useClientsQuery` widened with an `enabled` option
+  (backward compatible); `clients/index.ts` widened to export
+  `useClientsQuery`/`Client`/`CLIENT_LIST_DEFAULTS`/
+  `CLIENT_STATUS_LABELS`/`CLIENT_STATUS_TONES` for this first cross-domain
+  caller (mechanism 1, FTA §4 — Clients still knows nothing about Agents).
+  Table columns: Phone, Status, Sector, Joined, View (navigates to the
+  existing Client 360 route). No backend change — this closes a real gap
+  where the frontend's own code comments incorrectly claimed the
+  `agent_id` filter didn't exist.
+- **Item 4 — Create Deposit conditional UX.** `create-deposit-page.tsx` +
+  `model/create-deposit.ts`. The create form's Deposit Method now offers
+  only Cash/Bank (`CREATABLE_DEPOSIT_METHODS`, a create-form-local subset —
+  the domain-wide `DEPOSIT_METHODS`/`DEPOSIT_METHOD_LABELS`, all three
+  values, are UNCHANGED so the list filter and detail page can still
+  display/filter a historical `"other"` deposit). Cash hides Receipt
+  Number/Bank Name and forces Proof Type to "Bank receipt"; Bank shows
+  both and forces Proof Type to "WhatsApp confirmation"
+  (`PROOF_TYPE_FOR_METHOD`). Switching away from Bank clears
+  `receiptNumber`/`bankName` via an effect so a hidden, stale value can
+  never reach the submitted payload — verified this is safe fresh from
+  `DepoController::store`'s validator before implementing: the backend
+  does not couple `receipt_number`/`bank_name`/`proof_type` to
+  `deposit_method` at all (no `required_if`/`prohibited_if` anywhere), so
+  this is a frontend-only UX layer over an unchanged backend contract.
+  **This supersedes a previously-recorded decision** in this same file's
+  docblock that `bank_name` stays "always visible, never conditioned on
+  deposit method" — both docblocks now note the supersession; no
+  `decisions.md` entry was added for this (an implementation-detail UX
+  reversal on explicit developer instruction, not an architectural
+  decision in the ADR sense). No backend change.
+
+**What Batch 1 did NOT touch, on explicit instruction:** Items 2, 5, 6, 7,
+8, 9 — none implemented this session. Item 2 (Manager → Commercial cards)
+and Items 8/9 (grattage margin/commission) need a small and a large
+Backend Team change respectively; that coordination is **underway
+separately** (a Backend Team handoff message was prepared covering both).
+M8 Phase 1B remains deferred, not started.
+
+**Automated validation, this session:** 61/61 new/updated focused tests
+(Items 1, 3, 4) — full suite **1428/1428 across 72 files** (a clean,
+uncontended run; two earlier runs each hit the pre-existing, load-dependent
+FE-1-class timing flake on a different untouched file each time —
+`agent-transfers-list-page.test.tsx` once, then
+`grattage-invoice-detail-page.test.tsx`/`debt-payments-list-page.test.tsx`/
+`agent-transfers-list-page.test.tsx`/`bons-list-page.test.tsx` together
+during an accidental concurrent test run — every one of those files passed
+clean standalone and on the final uncontended full run; none is anywhere
+near the files this batch touched). `tsc -b` clean. `eslint .`: 0 errors,
+same 4 pre-existing `react-hooks/incompatible-library` warnings as before
+(one is on the very file this batch edited, `create-deposit-page.tsx`, but
+it is the same pre-existing `form.watch()` warning, not new — it already
+existed on this file before this session). `prettier --check .` clean
+(after running `--write` on the 4 files this batch created/edited).
+`vite build` succeeds, 949.22 KB (+~5 KB over the last recorded 944.40 KB,
+consistent with the new code added, no new dependency).
+
+**Manual QA — NOT YET DONE, owed before Batch 1 can be called complete.**
+Walk through Items 1 → 3 → 4 in that order against the real running
+backend, one at a time, with explicit approval between each before moving
+to the next.
+
+**Next actions:** (1) manual QA Items 1/3/4 in order; (2) once approved,
+mark Batch 1 complete and update `project-status.md`; (3) proceed to the
+remaining items once the Backend Team responds on Items 2/8/9, or start
+Items 5–7 (frontend-only, no backend dependency) in the meantime.
 
 ---
 

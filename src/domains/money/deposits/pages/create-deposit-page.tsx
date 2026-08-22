@@ -16,20 +16,19 @@ import {
 } from "../queries/deposits-queries";
 import { DEPOSITS_PATH } from "../routes";
 import {
-  DEPOSIT_METHODS,
   DEPOSIT_METHOD_LABELS,
-  DEPOSIT_PROOF_TYPES,
   DEPOSIT_PROOF_TYPE_LABELS,
   DEPOSIT_TYPES,
   DEPOSIT_TYPE_LABELS,
-  type DepositMethod,
-  type DepositProofType,
   type DepositType,
 } from "../model/deposit";
 import {
+  CREATABLE_DEPOSIT_METHODS,
   DEPOSIT_PROOF_ACCEPT,
+  PROOF_TYPE_FOR_METHOD,
   createDepositSchema,
   defaultCreateDepositValues,
+  type CreatableDepositMethod,
   type CreateDepositFormValues,
 } from "../model/create-deposit";
 
@@ -64,10 +63,28 @@ const SELECT_CLASS =
  * match at submission time regardless, so a stale read here can only ever
  * produce an honest 422, never a silently wrong deposit.
  *
- * `bank_name` STAYS ALWAYS VISIBLE, NOT CONDITIONED ON `deposit_method` —
- * the confirmed decision: the backend does not couple the two either, and
- * a UI-only conditional would invent behavior neither Product nor the
- * backend asked for.
+ * DEPOSIT METHOD IS NOW CASH/BANK ONLY, WITH CONDITIONAL FIELDS (Manager
+ * Demo Readiness, Item 4 — supersedes the prior "bank_name always visible,
+ * never conditioned" decision; see `model/create-deposit.ts`'s own
+ * docblock). Verified fresh from `DepoController::store`'s validator
+ * before making this change: the backend does not couple
+ * `receipt_number`/`bank_name`/`proof_type` to `deposit_method` at all
+ * (`bank_name`/`receipt_number` stay `nullable` regardless, `proof_type`
+ * accepts either value regardless) — so narrowing the CREATE FORM to
+ * Cash/Bank and driving these three fields off the selection is a
+ * frontend-only UX layer over an unchanged backend contract, not a
+ * workaround for one. Cash hides Receipt Number/Bank Name and forces Proof
+ * Type to "WhatsApp confirmation"; Bank shows both and forces Proof Type to
+ * "Bank receipt" — corrected mapping (manual-QA correction; the original
+ * Item 4 wording had this reversed — see `model/create-deposit.ts`'s own
+ * docblock). Switching AWAY FROM Bank clears
+ * `receiptNumber`/`bankName` so a hidden, stale value can never reach the
+ * submitted payload — the same "clear stale state when it stops applying"
+ * discipline the amount-reset effect below already follows for the
+ * type/agent switch case. The domain-wide `DEPOSIT_METHODS` (all three
+ * values) is UNCHANGED — the list filter and detail page still need it to
+ * display/filter a historical `"other"` deposit; only this create form is
+ * narrowed, via `CREATABLE_DEPOSIT_METHODS`.
  *
  * A BUSINESS-RULE 422 (`{"error": "..."}`, cash mismatch or a grattage
  * reconciliation exception) is a DIFFERENT case from a field-validation 422
@@ -95,6 +112,9 @@ export function CreateDepositPage() {
 
   const agentId = form.watch("agentId");
   const type = form.watch("type");
+  const depositMethod = form.watch("depositMethod");
+  const forcedProofType =
+    PROOF_TYPE_FOR_METHOD[depositMethod === "bank" ? "bank" : "cash"];
 
   const agentCashQuery = useAgentCashQuery(agentId, {
     enabled: !!agentId && type === "rapped",
@@ -126,6 +146,20 @@ export function CreateDepositPage() {
       });
     }
   }, [type, grattageQuery.data, form]);
+
+  // Item 4: Receipt Number/Bank Name are Bank-only — clearing them the
+  // moment the method leaves "bank" is what keeps a hidden, stale value out
+  // of the submitted payload (never just a CSS/render hide). Proof Type is
+  // fully determined by the method either way, so both branches force it.
+  useEffect(() => {
+    if (depositMethod === "cash") {
+      form.setValue("receiptNumber", "");
+      form.setValue("bankName", "");
+    }
+    if (depositMethod === "cash" || depositMethod === "bank") {
+      form.setValue("proofType", forcedProofType, { shouldValidate: true });
+    }
+  }, [depositMethod, forcedProofType, form]);
 
   const createMutation = useCreateDepositMutation();
 
@@ -292,15 +326,17 @@ export function CreateDepositPage() {
           id="depositMethod"
           aria-invalid={!!form.formState.errors.depositMethod || !!depositMethodError}
           className={SELECT_CLASS}
-          value={form.watch("depositMethod")}
+          value={depositMethod}
           onChange={(event) =>
-            form.setValue("depositMethod", event.target.value as DepositMethod | "", {
-              shouldValidate: true,
-            })
+            form.setValue(
+              "depositMethod",
+              event.target.value as CreatableDepositMethod | "",
+              { shouldValidate: true },
+            )
           }
         >
           <option value="">Select a method</option>
-          {DEPOSIT_METHODS.map((method) => (
+          {CREATABLE_DEPOSIT_METHODS.map((method) => (
             <option key={method} value={method}>
               {DEPOSIT_METHOD_LABELS[method]}
             </option>
@@ -318,58 +354,62 @@ export function CreateDepositPage() {
         ) : null}
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="receiptNumber" className="text-sm font-medium">
-          Receipt number
-        </label>
-        <Input
-          id="receiptNumber"
-          aria-invalid={!!receiptNumberError}
-          {...form.register("receiptNumber")}
-        />
-        {receiptNumberError ? (
-          <p role="alert" className="text-destructive text-xs">
-            {receiptNumberError}
-          </p>
-        ) : null}
-      </div>
+      {depositMethod === "bank" ? (
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="receiptNumber" className="text-sm font-medium">
+            Receipt number
+          </label>
+          <Input
+            id="receiptNumber"
+            aria-invalid={!!receiptNumberError}
+            {...form.register("receiptNumber")}
+          />
+          {receiptNumberError ? (
+            <p role="alert" className="text-destructive text-xs">
+              {receiptNumberError}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="bankName" className="text-sm font-medium">
-          Bank name
-        </label>
-        <Input
-          id="bankName"
-          aria-invalid={!!bankNameError}
-          {...form.register("bankName")}
-        />
-        {bankNameError ? (
-          <p role="alert" className="text-destructive text-xs">
-            {bankNameError}
-          </p>
-        ) : null}
-      </div>
+      {depositMethod === "bank" ? (
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="bankName" className="text-sm font-medium">
+            Bank name
+          </label>
+          <Input
+            id="bankName"
+            aria-invalid={!!bankNameError}
+            {...form.register("bankName")}
+          />
+          {bankNameError ? (
+            <p role="alert" className="text-destructive text-xs">
+              {bankNameError}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="flex flex-col gap-1.5">
         <label htmlFor="proofType" className="text-sm font-medium">
           Proof type
         </label>
+        {/* Fully determined by the deposit method (see the effect above) —
+            disabled rather than removed, so the chosen proof type stays
+            visible and legible even though there is nothing to choose.
+            Derived directly from `depositMethod`, the same value the
+            effect writes into the form, so the option displayed here can
+            never lag one render behind the actual submitted value. */}
         <select
           id="proofType"
+          disabled
           aria-invalid={!!proofTypeError}
           className={SELECT_CLASS}
-          value={form.watch("proofType")}
-          onChange={(event) =>
-            form.setValue("proofType", event.target.value as DepositProofType, {
-              shouldValidate: true,
-            })
-          }
+          value={forcedProofType}
         >
-          {DEPOSIT_PROOF_TYPES.map((proofType) => (
-            <option key={proofType} value={proofType}>
-              {DEPOSIT_PROOF_TYPE_LABELS[proofType]}
-            </option>
-          ))}
+          <option value={forcedProofType}>
+            {DEPOSIT_PROOF_TYPE_LABELS[forcedProofType]}
+          </option>
         </select>
         {proofTypeError ? (
           <p role="alert" className="text-destructive text-xs">

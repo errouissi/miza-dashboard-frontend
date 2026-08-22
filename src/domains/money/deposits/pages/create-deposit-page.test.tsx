@@ -199,7 +199,10 @@ beforeEach(() => {
 });
 
 describe("rendering", () => {
-  it("renders the backend-supported fields, defaulting Type to rapped and Proof type to bank receipt", async () => {
+  it("renders the backend-supported fields, defaulting Type to rapped, Proof type to WhatsApp confirmation, and Bank-only fields hidden until Bank is chosen", async () => {
+    // Manual-QA correction: with no method chosen yet, the form treats the
+    // unset state like Cash (see the page's own docblock) — so the default
+    // Proof Type is the CORRECTED Cash mapping, WhatsApp confirmation.
     server.use(managersHandler(), commercialsHandler());
     renderPage();
 
@@ -208,15 +211,32 @@ describe("rendering", () => {
     expect(screen.getByLabelText(/amount/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/amount/i)).toHaveAttribute("readonly");
     expect(screen.getByLabelText(/deposit method/i)).toHaveValue("");
-    expect(screen.getByLabelText(/receipt number/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/bank name/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/proof type/i)).toHaveValue("bank_receipt");
+    expect(screen.queryByLabelText(/receipt number/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/bank name/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/proof type/i)).toHaveValue("whatsapp_confirmation");
+    expect(screen.getByLabelText(/proof type/i)).toBeDisabled();
     expect(screen.getByLabelText("Proof image")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Create Deposit" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
   });
+});
 
-  it("bank name is always visible regardless of deposit method — no UI-only conditional", async () => {
+describe("Item 4 — conditional deposit method fields", () => {
+  it("offers only Cash and Bank — Other is removed from the create form", async () => {
+    server.use(managersHandler(), commercialsHandler());
+    renderPage();
+
+    const methodSelect = await screen.findByLabelText(/deposit method/i);
+    const optionLabels = within(methodSelect)
+      .getAllByRole("option")
+      .map((option) => option.textContent);
+
+    expect(optionLabels).toEqual(["Select a method", "Cash", "Bank"]);
+  });
+
+  it("Cash hides Receipt Number and Bank Name, and fixes Proof Type to WhatsApp confirmation", async () => {
+    // Manual-QA correction: the original Item 4 wording had Cash/Bank's
+    // Proof Type mapping reversed. Corrected: Cash -> WhatsApp confirmation.
     server.use(managersHandler(), commercialsHandler());
     renderPage();
 
@@ -224,7 +244,130 @@ describe("rendering", () => {
       target: { value: "cash" },
     });
 
+    expect(screen.queryByLabelText(/receipt number/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/bank name/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/proof type/i)).toHaveValue("whatsapp_confirmation");
+    expect(screen.getByLabelText(/proof type/i)).toHaveTextContent(
+      "WhatsApp confirmation",
+    );
+  });
+
+  it("Bank shows Receipt Number and Bank Name, and fixes Proof Type to Bank receipt", async () => {
+    // Manual-QA correction: corrected mapping — Bank -> Bank receipt.
+    server.use(managersHandler(), commercialsHandler());
+    renderPage();
+
+    fireEvent.change(await screen.findByLabelText(/deposit method/i), {
+      target: { value: "bank" },
+    });
+
+    expect(screen.getByLabelText(/receipt number/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/bank name/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/proof type/i)).toHaveValue("bank_receipt");
+    expect(screen.getByLabelText(/proof type/i)).toHaveTextContent("Bank receipt");
+  });
+
+  it("switching Bank -> Cash clears the entered Receipt Number and Bank Name so they cannot leak into the payload", async () => {
+    const postSpy = vi
+      .spyOn(httpClient, "post")
+      .mockResolvedValue({ data: CREATE_DEPOSIT_ENVELOPE });
+    server.use(managersHandler(), commercialsHandler(), agentCashHandler(10, "500.00"));
+    renderPage();
+
+    await selectAgent();
+    await waitFor(() => expect(screen.getByLabelText(/amount/i)).toHaveValue("500.00"));
+    fireEvent.change(screen.getByLabelText(/deposit method/i), {
+      target: { value: "bank" },
+    });
+    fireEvent.change(screen.getByLabelText(/receipt number/i), {
+      target: { value: "REC-STALE" },
+    });
+    fireEvent.change(screen.getByLabelText(/bank name/i), {
+      target: { value: "Stale Bank" },
+    });
+
+    fireEvent.change(screen.getByLabelText(/deposit method/i), {
+      target: { value: "cash" },
+    });
+
+    expect(screen.queryByLabelText(/receipt number/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/bank name/i)).not.toBeInTheDocument();
+
+    // Switch back to Bank: the cleared values must not have survived hidden.
+    fireEvent.change(screen.getByLabelText(/deposit method/i), {
+      target: { value: "bank" },
+    });
+    expect(screen.getByLabelText(/receipt number/i)).toHaveValue("");
+    expect(screen.getByLabelText(/bank name/i)).toHaveValue("");
+
+    fireEvent.change(screen.getByLabelText("Proof image"), {
+      target: { files: [validImage()] },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Create Deposit" }));
+
+    await waitFor(() => expect(postSpy).toHaveBeenCalled());
+    const [, body] = postSpy.mock.calls[0] as [string, FormData];
+    expect(body.get("receipt_number")).toBeNull();
+    expect(body.get("bank_name")).toBeNull();
+    postSpy.mockRestore();
+  });
+
+  it("submits the Cash payload with method cash and proof_type whatsapp_confirmation, no receipt/bank fields", async () => {
+    const postSpy = vi
+      .spyOn(httpClient, "post")
+      .mockResolvedValue({ data: CREATE_DEPOSIT_ENVELOPE });
+    server.use(managersHandler(), commercialsHandler(), agentCashHandler(10, "500.00"));
+    renderPage();
+
+    await selectAgent();
+    await waitFor(() => expect(screen.getByLabelText(/amount/i)).toHaveValue("500.00"));
+    fireEvent.change(screen.getByLabelText(/deposit method/i), {
+      target: { value: "cash" },
+    });
+    fireEvent.change(screen.getByLabelText("Proof image"), {
+      target: { files: [validImage()] },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Create Deposit" }));
+
+    await waitFor(() => expect(postSpy).toHaveBeenCalled());
+    const [, body] = postSpy.mock.calls[0] as [string, FormData];
+    expect(body.get("deposit_method")).toBe("cash");
+    expect(body.get("proof_type")).toBe("whatsapp_confirmation");
+    expect(body.get("receipt_number")).toBeNull();
+    expect(body.get("bank_name")).toBeNull();
+    postSpy.mockRestore();
+  });
+
+  it("submits the Bank payload with method bank and proof_type bank_receipt, including receipt/bank fields", async () => {
+    const postSpy = vi
+      .spyOn(httpClient, "post")
+      .mockResolvedValue({ data: CREATE_DEPOSIT_ENVELOPE });
+    server.use(managersHandler(), commercialsHandler(), agentCashHandler(10, "500.00"));
+    renderPage();
+
+    await selectAgent();
+    await waitFor(() => expect(screen.getByLabelText(/amount/i)).toHaveValue("500.00"));
+    fireEvent.change(screen.getByLabelText(/deposit method/i), {
+      target: { value: "bank" },
+    });
+    fireEvent.change(screen.getByLabelText(/receipt number/i), {
+      target: { value: "REC-9001" },
+    });
+    fireEvent.change(screen.getByLabelText(/bank name/i), {
+      target: { value: "Attijariwafa" },
+    });
+    fireEvent.change(screen.getByLabelText("Proof image"), {
+      target: { files: [validImage()] },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Create Deposit" }));
+
+    await waitFor(() => expect(postSpy).toHaveBeenCalled());
+    const [, body] = postSpy.mock.calls[0] as [string, FormData];
+    expect(body.get("deposit_method")).toBe("bank");
+    expect(body.get("proof_type")).toBe("bank_receipt");
+    expect(body.get("receipt_number")).toBe("REC-9001");
+    expect(body.get("bank_name")).toBe("Attijariwafa");
+    postSpy.mockRestore();
   });
 });
 
@@ -327,6 +470,9 @@ describe("submission — FormData payload and success", () => {
     expect(body.get("deposit_method")).toBe("bank");
     expect(body.get("amount")).toBe("500.00");
     expect(body.get("type")).toBe("rapped");
+    // Item 4: `fillValidRappedForm` selects Bank, which forces Proof Type
+    // to "bank_receipt" — see the "Item 4" describe block below for the
+    // Cash-forces-whatsapp_confirmation counterpart.
     expect(body.get("proof_type")).toBe("bank_receipt");
     expect(body.get("proof_image")).toBeInstanceOf(File);
     // Optional fields left blank are OMITTED, not sent empty.

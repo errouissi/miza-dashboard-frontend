@@ -272,21 +272,20 @@ describe("create / edit / delete", () => {
     return screen.findByRole("dialog");
   }
 
-  it("creates a product from the raw 201 envelope", async () => {
+  it("creates a product from the raw 201 envelope, generating the name from operator + value", async () => {
+    // Item 1 (Manager Demo Readiness): Name is no longer user-entered on
+    // create — it is deterministically generated as "{OPERATOR} {VALUE}DH".
     let created: unknown;
     server.use(
       productsHandler([]),
       http.post(`${API}/admin/products`, async ({ request }) => {
         created = await request.json();
-        return HttpResponse.json(row(9, "Card 20", "IAM", 20), { status: 201 });
+        return HttpResponse.json(row(9, "IAM 20DH", "IAM", 20), { status: 201 });
       }),
     );
     renderPage();
 
     const dialog = await openCreateForm();
-    fireEvent.change(within(dialog).getByLabelText(/name/i), {
-      target: { value: "Card 20" },
-    });
     fireEvent.change(within(dialog).getByLabelText(/operator/i), {
       target: { value: "IAM" },
     });
@@ -296,8 +295,34 @@ describe("create / edit / delete", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: /save/i }));
 
     await waitFor(() =>
-      expect(created).toEqual({ name: "Card 20", operator: "IAM", value: 20 }),
+      expect(created).toEqual({ name: "IAM 20DH", operator: "IAM", value: 20 }),
     );
+  });
+
+  it("does not render an editable Name field on create — only a read-only generated preview", async () => {
+    server.use(productsHandler([]));
+    renderPage();
+
+    const dialog = await openCreateForm();
+    const nameField = within(dialog).getByLabelText(/name/i);
+
+    expect(nameField).toBeDisabled();
+    expect(nameField).toHaveValue("");
+  });
+
+  it("live-previews the generated name as operator and value are filled in", async () => {
+    server.use(productsHandler([]));
+    renderPage();
+
+    const dialog = await openCreateForm();
+    fireEvent.change(within(dialog).getByLabelText(/operator/i), {
+      target: { value: "INWI" },
+    });
+    fireEvent.change(within(dialog).getByLabelText(/value/i), {
+      target: { value: "50" },
+    });
+
+    expect(within(dialog).getByLabelText(/name/i)).toHaveValue("INWI 50DH");
   });
 
   it("offers exactly the three backend operators", async () => {
@@ -324,7 +349,6 @@ describe("create / edit / delete", () => {
     renderPage();
 
     const dialog = await openCreateForm();
-    fireEvent.change(within(dialog).getByLabelText(/name/i), { target: { value: "X" } });
     fireEvent.change(within(dialog).getByLabelText(/value/i), {
       target: { value: "10" },
     });
@@ -349,7 +373,6 @@ describe("create / edit / delete", () => {
     renderPage();
 
     const dialog = await openCreateForm();
-    fireEvent.change(within(dialog).getByLabelText(/name/i), { target: { value: "X" } });
     fireEvent.change(within(dialog).getByLabelText(/operator/i), {
       target: { value: "IAM" },
     });
@@ -371,7 +394,6 @@ describe("create / edit / delete", () => {
     renderPage();
 
     const dialog = await openCreateForm();
-    fireEvent.change(within(dialog).getByLabelText(/name/i), { target: { value: "X" } });
     fireEvent.change(within(dialog).getByLabelText(/operator/i), {
       target: { value: "IAM" },
     });
@@ -384,8 +406,10 @@ describe("create / edit / delete", () => {
     expect(posted).toBe(false);
   });
 
-  it("maps the composite-unique 422 onto the name field", async () => {
-    // Uniqueness is name PER operator, reported by Laravel against `name`.
+  it("remaps the composite-unique 422 to a top-level operator/value message on create", async () => {
+    // Uniqueness is name PER operator, reported by Laravel against `name` —
+    // but create mode has no Name field to attach it to (Item 1), so it
+    // surfaces as a general message about the operator+value pair instead.
     server.use(
       productsHandler([]),
       http.post(`${API}/admin/products`, () =>
@@ -401,9 +425,6 @@ describe("create / edit / delete", () => {
     renderPage();
 
     const dialog = await openCreateForm();
-    fireEvent.change(within(dialog).getByLabelText(/name/i), {
-      target: { value: "Card 10" },
-    });
     fireEvent.change(within(dialog).getByLabelText(/operator/i), {
       target: { value: "IAM" },
     });
@@ -412,22 +433,38 @@ describe("create / edit / delete", () => {
     });
     fireEvent.click(within(dialog).getByRole("button", { name: /save/i }));
 
-    expect(await screen.findByText(/already been taken/i)).toBeInTheDocument();
+    expect(await screen.findByText(/already exists/i)).toBeInTheDocument();
+    expect(screen.queryByText(/already been taken/i)).not.toBeInTheDocument();
   });
 
-  it("seeds the edit drawer with name, operator and value", async () => {
-    server.use(productsHandler([row(1, "Card 50", "INWI", 50)]));
+  it("seeds the edit drawer with operator/value, and previews the CANONICAL name even for a legacy-spelled product", async () => {
+    // Manual-QA correction: an existing "IAM 10dh"/IAM/10 row must preview
+    // its canonical "IAM 10DH" form, not its own stored (possibly stale or
+    // differently-cased) name.
+    server.use(productsHandler([row(1, "IAM 10dh", "IAM", 10)]));
     renderPage();
 
-    fireEvent.click(await screen.findByRole("button", { name: /edit card 50/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /edit iam 10dh/i }));
 
     const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByLabelText(/name/i)).toHaveValue("Card 50");
-    expect(within(dialog).getByLabelText(/operator/i)).toHaveValue("INWI");
-    expect(within(dialog).getByLabelText(/value/i)).toHaveValue(50);
+    expect(within(dialog).getByLabelText(/operator/i)).toHaveValue("IAM");
+    expect(within(dialog).getByLabelText(/value/i)).toHaveValue(10);
+    expect(within(dialog).getByLabelText(/name/i)).toHaveValue("IAM 10DH");
   });
 
-  it("sends the update through the wrapped envelope, resending all three fields", async () => {
+  it("Name cannot be independently edited on an existing product — it stays a disabled, read-only preview", async () => {
+    server.use(productsHandler([row(1, "IAM 10dh", "IAM", 10)]));
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: /edit iam 10dh/i }));
+    const dialog = await screen.findByRole("dialog");
+
+    expect(within(dialog).getByLabelText(/name/i)).toBeDisabled();
+  });
+
+  it("resends operator/value unchanged and REGENERATES the name to canonical form, even when nothing was touched", async () => {
+    // Requirement: editing a product always saves the canonical name, not
+    // whatever it was previously stored as.
     let updated: unknown;
     server.use(
       productsHandler([row(1, "Card 50", "INWI", 50)]),
@@ -436,7 +473,7 @@ describe("create / edit / delete", () => {
         return HttpResponse.json({
           status: "success",
           message: "Product updated successfully",
-          data: row(1, "Card 50 Plus", "INWI", 50),
+          data: row(1, "INWI 50DH", "INWI", 50),
         });
       }),
     );
@@ -444,15 +481,96 @@ describe("create / edit / delete", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: /edit card 50/i }));
     const dialog = await screen.findByRole("dialog");
-    fireEvent.change(within(dialog).getByLabelText(/name/i), {
-      target: { value: "Card 50 Plus" },
-    });
     fireEvent.click(within(dialog).getByRole("button", { name: /save/i }));
 
-    // All three are `required` on update — unchanged fields must still be sent.
     await waitFor(() =>
-      expect(updated).toEqual({ name: "Card 50 Plus", operator: "INWI", value: 50 }),
+      expect(updated).toEqual({ name: "INWI 50DH", operator: "INWI", value: 50 }),
     );
+  });
+
+  it("regenerates the name from the NEW value on edit — IAM 10dh / IAM / 10, value changed to 15 -> IAM 15DH", async () => {
+    // The exact bug reported in manual QA: editing Value must not leave a
+    // stale name behind.
+    let updated: unknown;
+    server.use(
+      productsHandler([row(1, "IAM 10dh", "IAM", 10)]),
+      http.put(`${API}/admin/products/1`, async ({ request }) => {
+        updated = await request.json();
+        return HttpResponse.json({
+          status: "success",
+          message: "Product updated successfully",
+          data: row(1, "IAM 15DH", "IAM", 15),
+        });
+      }),
+    );
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: /edit iam 10dh/i }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText(/value/i), {
+      target: { value: "15" },
+    });
+
+    expect(within(dialog).getByLabelText(/name/i)).toHaveValue("IAM 15DH");
+
+    fireEvent.click(within(dialog).getByRole("button", { name: /save/i }));
+
+    await waitFor(() =>
+      expect(updated).toEqual({ name: "IAM 15DH", operator: "IAM", value: 15 }),
+    );
+  });
+
+  it("regenerates the name from the NEW operator on edit — IAM 15DH / IAM / 15, operator changed to INWI -> INWI 15DH", async () => {
+    let updated: unknown;
+    server.use(
+      productsHandler([row(1, "IAM 15DH", "IAM", 15)]),
+      http.put(`${API}/admin/products/1`, async ({ request }) => {
+        updated = await request.json();
+        return HttpResponse.json({
+          status: "success",
+          message: "Product updated successfully",
+          data: row(1, "INWI 15DH", "INWI", 15),
+        });
+      }),
+    );
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: /edit iam 15dh/i }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText(/operator/i), {
+      target: { value: "INWI" },
+    });
+
+    expect(within(dialog).getByLabelText(/name/i)).toHaveValue("INWI 15DH");
+
+    fireEvent.click(within(dialog).getByRole("button", { name: /save/i }));
+
+    await waitFor(() =>
+      expect(updated).toEqual({ name: "INWI 15DH", operator: "INWI", value: 15 }),
+    );
+  });
+
+  it("remaps the composite-unique 422 to a top-level message on edit too", async () => {
+    server.use(
+      productsHandler([row(1, "IAM 15DH", "IAM", 15)]),
+      http.put(`${API}/admin/products/1`, () =>
+        HttpResponse.json(
+          {
+            message: "The given data was invalid.",
+            errors: { name: ["The name has already been taken."] },
+          },
+          { status: 422 },
+        ),
+      ),
+    );
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: /edit iam 15dh/i }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /save/i }));
+
+    expect(await screen.findByText(/already exists/i)).toBeInTheDocument();
+    expect(screen.queryByText(/already been taken/i)).not.toBeInTheDocument();
   });
 
   it("names the product in the delete confirmation", async () => {
